@@ -1744,6 +1744,18 @@ struct AppointmentsView: View {
         Double(todaysAppointmentsCount) * 55.0
     }
 
+    var pendingCount: Int {
+        store.leads.filter { $0.status == "pending" }.count
+    }
+
+    var contactedCount: Int {
+        store.leads.filter { $0.status == "contacted" }.count
+    }
+
+    var completedCount: Int {
+        store.leads.filter { $0.status == "completed" }.count
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -1950,15 +1962,15 @@ struct AppointmentsView: View {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                     filterStatus = "all"
                                 }
-                                FilterChipWithIcon(title: "Pendientes (\(store.leads.filter { $0.status == \"pending\" }.count))", icon: "clock.fill", isSelected: filterStatus == "pending") {
+                                FilterChipWithIcon(title: "Pendientes (\(pendingCount))", icon: "clock.fill", isSelected: filterStatus == "pending") {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                     filterStatus = "pending"
                                 }
-                                FilterChipWithIcon(title: "Contactados (\(store.leads.filter { $0.status == \"contacted\" }.count))", icon: "person.fill", isSelected: filterStatus == "contacted") {
+                                FilterChipWithIcon(title: "Contactados (\(contactedCount))", icon: "person.fill", isSelected: filterStatus == "contacted") {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                     filterStatus = "contacted"
                                 }
-                                FilterChipWithIcon(title: "Completados (\(store.leads.filter { $0.status == \"completed\" }.count))", icon: "checkmark.circle.fill", isSelected: filterStatus == "completed") {
+                                FilterChipWithIcon(title: "Completados (\(completedCount))", icon: "checkmark.circle.fill", isSelected: filterStatus == "completed") {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                     filterStatus = "completed"
                                 }
