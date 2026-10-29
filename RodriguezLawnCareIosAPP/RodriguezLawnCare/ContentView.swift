@@ -1554,7 +1554,7 @@ struct LeadDetailSheet: View {
     @State private var amountText: String = ""
     @State private var notesText: String = ""
     @State private var showInvoiceSheet: Bool = false
-    @State private var showCalendarScheduleSheet: Bool = ""
+    @State private var showCalendarScheduleSheet: Bool = false
 
     let statuses = [
         ("pending", "Pendiente"),
