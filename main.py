@@ -456,18 +456,17 @@ def parse_job_details(text: str):
 # ----------------- IPA AUTO DELIVERY HELPER -----------------
 def get_ipa_file_path():
     cfg = load_cloud_config()
-    version_str = cfg.get("app_version", "1.7.2")
-    build_num = cfg.get("app_build", 20)
+    version_str = cfg.get("app_version", "2.2.0")
+    build_num = cfg.get("app_build", 27)
     candidates = [
+        os.path.join(BASE_DIR, "ipa nuevo", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
+        os.path.join(BASE_DIR, "ipa online", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
         os.path.join(BASE_DIR, "ipa here", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
-        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare_Actualizado.ipa"),
-        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare_v1.7.2_Build20.ipa"),
-        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare.ipa"),
+        os.path.join(BASE_DIR, "ipa nuevo", "rodriguezlawncareios.ipa"),
         os.path.join(BASE_DIR, "ipa online", "rodriguezlawncareios.ipa"),
+        os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa nuevo", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
+        os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa online", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
         os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa here", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
-        os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa here", "RodriguezLawnCare_Actualizado.ipa"),
-        os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa online", "rodriguezlawncareios.ipa"),
-        os.path.join(BASE_DIR, "ipa here", "rodriguezlawncareios.ipa"),
     ]
     for p in candidates:
         if os.path.exists(p) and os.path.getsize(p) > 100000:
