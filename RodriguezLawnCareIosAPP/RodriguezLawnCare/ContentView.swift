@@ -436,8 +436,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "2.1.0"
-    let currentAppBuild: Int = 26
+    let currentAppVersion: String = "2.2.0"
+    let currentAppBuild: Int = 27
 
     @Published var calendarData: CalendarData = CalendarData(day_status: [:], appointments: [])
     @Published var activePromo: FlashPromotion? = nil
@@ -1382,11 +1382,70 @@ class LawnCareStore: ObservableObject {
     ]
 }
 
+// MARK: - TOP-LEFT DROPDOWN MENU (MATCHING EXACT SCREENSHOT DESIGN)
+struct TopLeftDropdownMenuView: View {
+    var onSelect: (String) -> Void
+    
+    let menuItems: [(id: String, icon: String, title: String, isGreen: Bool)] = [
+        ("home", "house.fill", "Inicio", true),
+        ("citas", "calendar.badge.clock", "Citas & Cotizaciones", false),
+        ("clientes", "person.2.fill", "Clientes", false),
+        ("trabajos", "list.bullet.clipboard.fill", "Trabajos", false),
+        ("calendario", "calendar", "Calendario", false),
+        ("enruta", "paperplane.fill", "En Ruta", false),
+        ("tracker", "location.north.circle.fill", "Lawn Tracker", false),
+        ("lluvia", "cloud.rain.fill", "Alerta Lluvia", false),
+        ("checklist", "checklist", "Checklist", false),
+        ("calculadora", "function", "Calculadora", false),
+        ("reportes", "chart.bar.fill", "Reportes", false),
+        ("promos", "megaphone.fill", "Promociones", false),
+        ("ajustes", "gearshape.fill", "Ajustes", false)
+    ]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            ForEach(menuItems, id: \.id) { item in
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    onSelect(item.id)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: item.icon)
+                            .font(.system(size: 15))
+                            .foregroundStyle(item.isGreen ? Brand.primary : .white.opacity(0.85))
+                            .frame(width: 22, alignment: .center)
+                        
+                        Text(item.title)
+                            .font(.system(size: 13, weight: item.isGreen ? .bold : .medium))
+                            .foregroundStyle(item.isGreen ? Brand.primary : .white)
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7.5)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 8)
+        .frame(width: 215)
+        .background(Color(red: 0.05, green: 0.12, blue: 0.09))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Brand.primary.opacity(0.45), lineWidth: 1.5)
+                .shadow(color: Brand.primary.opacity(0.25), radius: 8)
+        )
+        .shadow(color: Color.black.opacity(0.9), radius: 25, y: 12)
+    }
+}
+
 // MARK: - MAIN ROOT VIEW WITH LIVE NOTIFICATION BANNER & 5 TABS
 struct ContentView: View {
     @StateObject private var store = LawnCareStore()
     @State private var selectedTab = 0
-    @State private var showPatronDrawerMenu: Bool = false
+    @State private var showTopLeftMenu: Bool = false
     @Environment(\.scenePhase) private var scenePhase
     
     // Sheets triggered directly from Master Dropdown Menu
@@ -1417,54 +1476,76 @@ struct ContentView: View {
                 LivingParticlesBackgroundView()
 
                 VStack(spacing: 0) {
-                    // BARRA SUPERIOR PERSISTENTE CON BOTÓN DE 3 LÍNEAS (MENÚ HAMBURGUESA)
-                    HStack(spacing: 12) {
+                    // BARRA SUPERIOR PERSISTENTE (DISEÑO EXACTO SCREENSHOT)
+                    HStack(alignment: .center, spacing: 12) {
+                        // BOTÓN DE 3 LÍNEAS HAMBURGUESA
                         Button {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                                showPatronDrawerMenu.toggle()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showTopLeftMenu.toggle()
                             }
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                         } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: showPatronDrawerMenu ? "xmark" : "line.3.horizontal")
-                                    .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(.white)
-                                Text("MENÚ")
-                                    .font(.system(size: 11, weight: .black))
-                                    .foregroundStyle(Brand.primary)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(Brand.card)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(Brand.primary.opacity(0.4), lineWidth: 1))
+                            Image(systemName: showTopLeftMenu ? "xmark" : "line.3.horizontal")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 42, height: 42)
+                                .background(Color(red: 0.07, green: 0.15, blue: 0.11))
+                                .clipShape(RoundedRectangle(cornerRadius: 11))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 11)
+                                        .stroke(Brand.primary.opacity(0.8), lineWidth: 1.5)
+                                        .shadow(color: Brand.primary.opacity(0.5), radius: 4)
+                                )
                         }
 
                         Spacer()
 
+                        // LOGO CENTRAL OFICIAL RODRIGUEZ LAWN CARE
                         VStack(spacing: 1) {
-                            Text("RODRIGUEZ LAWN CARE")
-                                .font(.system(size: 12, weight: .black))
+                            HStack(spacing: 4) {
+                                Image(systemName: "leaf.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Color(red: 0.25, green: 0.95, blue: 0.45))
+                                Text("RODRIGUEZ")
+                                    .font(.system(size: 17, weight: .black, design: .rounded))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [Color.white, Color(red: 0.85, green: 0.95, blue: 0.88)],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        )
+                                    )
+                            }
+                            Text("LAWN CARE")
+                                .font(.system(size: 10, weight: .black))
                                 .foregroundStyle(Brand.primary)
-                            Text("SUITE DEL PATRÓN PRO")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(.white.opacity(0.8))
+                                .tracking(3)
+                            Text("QUALITY LAWNS • HAPPY HOMES")
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .tracking(1.2)
                         }
 
                         Spacer()
 
-                        HStack(spacing: 4) {
+                        // PILL STATUS: ONLINE ⌵
+                        HStack(spacing: 5) {
                             Circle()
                                 .fill(store.isOnline ? Color.green : Color.red)
-                                .frame(width: 7, height: 7)
-                            Text(store.isOnline ? "ONLINE" : "OFF")
+                                .frame(width: 8, height: 8)
+                                .shadow(color: store.isOnline ? Color.green : Color.red, radius: 4)
+                            Text(store.isOnline ? "Online" : "Offline")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(.white)
+                            Image(systemName: "chevron.down")
                                 .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(store.isOnline ? .green : .red)
+                                .foregroundStyle(.gray)
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(Brand.card)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .background(Color(red: 0.07, green: 0.14, blue: 0.10))
                         .clipShape(Capsule())
+                        .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
@@ -1505,32 +1586,31 @@ struct ContentView: View {
             }
             .accentColor(Brand.primary)
 
-            // DROPDOWN MASTER DRAWER MENU (CATEGORIZED CUADRITOS DEL PATRÓN)
-            if showPatronDrawerMenu {
-                Color.black.opacity(0.65)
+            // TOP-LEFT DROPDOWN MENU (MATCHING EXACT SCREENSHOT DESIGN)
+            if showTopLeftMenu {
+                Color.black.opacity(0.55)
                     .ignoresSafeArea()
                     .onTapGesture {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                            showPatronDrawerMenu = false
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showTopLeftMenu = false
                         }
                     }
 
-                PatronMasterDrawerMenuView(
-                    store: store,
-                    onClose: {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                            showPatronDrawerMenu = false
+                VStack(alignment: .leading, spacing: 0) {
+                    TopLeftDropdownMenuView(
+                        onSelect: { action in
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showTopLeftMenu = false
+                            }
+                            handleDropdownAction(action)
                         }
-                    },
-                    onSelectAction: { action in
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                            showPatronDrawerMenu = false
-                        }
-                        handleDrawerAction(action)
-                    }
-                )
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .zIndex(100)
+                    )
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.top, 56)
+                .padding(.leading, 12)
+                .zIndex(200)
+                .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .topLeading)))
             }
 
             // HEADS-UP NOTIFICATION BANNER
@@ -1637,7 +1717,7 @@ struct ContentView: View {
     }
 }
 
-// MARK: - TAB 1: APPOINTMENTS & REAL-TIME LEADS VIEW
+// MARK: - TAB 1: APPOINTMENTS & REAL-TIME LEADS VIEW (MATCHING IMAGE 1 SCREENSHOT)
 struct AppointmentsView: View {
     @ObservedObject var store: LawnCareStore
     @State private var filterStatus = "all"
@@ -1646,7 +1726,8 @@ struct AppointmentsView: View {
     @State private var showTrackerSheet = false
     @State private var showRainAlertSheet = false
     @State private var showChecklistSheet = false
-    @State private var showVipLoyaltySheet = false
+    @State private var showCalcSheet = false
+    @State private var showRadarSheet = false
 
     var filteredLeads: [Lead] {
         if filterStatus == "all" {
@@ -1655,105 +1736,418 @@ struct AppointmentsView: View {
         return store.leads.filter { $0.status == filterStatus }
     }
 
+    var todaysAppointmentsCount: Int {
+        store.leads.filter { $0.status == "confirmed" || $0.status == "pending" }.count
+    }
+
+    var todaysRevenue: Double {
+        Double(todaysAppointmentsCount) * 55.0
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
                 Brand.background.ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    // Header Ribbon with Live Stats
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("RODRIGUEZ LAWNCARE")
-                                .font(.caption.bold())
-                                .foregroundStyle(Brand.primary)
-                            Text("Citas & Cotizaciones")
-                                .font(.title3.bold())
-                                .foregroundStyle(.white)
-                        }
-
-                        Spacer()
-
-                        HStack(spacing: 8) {
-                            HStack(spacing: 4) {
-                                Circle()
-                                    .fill(store.isOnline ? Color.green : Color.red)
-                                    .frame(width: 8, height: 8)
-                                Text(store.isOnline ? "Online" : "Offline")
-                                    .font(.caption2.bold())
-                                    .foregroundStyle(store.isOnline ? .green : .red)
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 14) {
+                        // Title Row (Image 1): Citas & Cotizaciones + Refresh Button
+                        HStack(alignment: .center) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 5) {
+                                    Text("Citas &")
+                                        .font(.system(size: 24, weight: .black))
+                                        .foregroundStyle(.white)
+                                    Text("Cotizaciones")
+                                        .font(.system(size: 24, weight: .black))
+                                        .foregroundStyle(Brand.primary)
+                                }
+                                Text("Gestiona tus trabajos y clientes")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(.gray)
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Brand.card)
-                            .clipShape(Capsule())
-
+                            
+                            Spacer()
+                            
                             Button {
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                                 Task { await store.refreshAll() }
                             } label: {
                                 Image(systemName: "arrow.clockwise")
-                                    .font(.caption.bold())
+                                    .font(.system(size: 15, weight: .bold))
                                     .foregroundStyle(.white)
-                                    .padding(8)
-                                    .background(Brand.card)
+                                    .frame(width: 40, height: 40)
+                                    .background(Color(red: 0.08, green: 0.16, blue: 0.12))
                                     .clipShape(Circle())
+                                    .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
                             }
                         }
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 10)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 10)
 
-                    // Daily Operations HUD Dashboard (Feature 17)
-                    DailyOperationsDashboardRibbon(
-                        store: store,
-                        onOpenTracker: { showTrackerSheet = true },
-                        onOpenRainAlert: { showRainAlertSheet = true },
-                        onOpenChecklist: { showChecklistSheet = true },
-                        onOpenVip: { showVipLoyaltySheet = true }
-                    )
-                    .padding(.horizontal)
-                    .padding(.bottom, 8)
-
-                    // Filter Segmented Chips
-                    ScrollView(.horizontal, showsIndicators: false) {
+                        // 3 Stats Cards (Image 1)
                         HStack(spacing: 8) {
-                            FilterChip(title: "Todos (\(store.leads.count))", isSelected: filterStatus == "all") { filterStatus = "all" }
-                            FilterChip(title: "Pendientes (\(store.leads.filter { $0.status == "pending" }.count))", isSelected: filterStatus == "pending", highlight: true) { filterStatus = "pending" }
-                            FilterChip(title: "Contactados", isSelected: filterStatus == "contacted") { filterStatus = "contacted" }
-                            FilterChip(title: "Confirmados", isSelected: filterStatus == "confirmed") { filterStatus = "confirmed" }
-                            FilterChip(title: "Completados", isSelected: filterStatus == "completed") { filterStatus = "completed" }
-                        }
-                        .padding(.horizontal)
-                        .padding(.bottom, 8)
-                    }
-
-                    // Leads List
-                    if filteredLeads.isEmpty {
-                        VStack(spacing: 12) {
-                            Spacer()
-                            Image(systemName: "tray.fill")
-                                .font(.system(size: 48))
-                                .foregroundStyle(.gray.opacity(0.5))
-                            Text("No hay citas registradas en este estado.")
-                                .font(.subheadline)
-                                .foregroundStyle(.gray)
-                            Spacer()
-                        }
-                    } else {
-                        List {
-                            ForEach(filteredLeads) { lead in
-                                LeadCardView(lead: lead)
-                                    .listRowBackground(Color.clear)
-                                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                                    .onTapGesture {
-                                        selectedLead = lead
+                            // Card 1: HOY ESTIMADO
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 5) {
+                                    ZStack {
+                                        Circle().fill(Color.green.opacity(0.2)).frame(width: 20, height: 20)
+                                        Text("$")
+                                            .font(.system(size: 10, weight: .black))
+                                            .foregroundStyle(Brand.primary)
                                     }
+                                    Text("HOY ESTIMADO")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundStyle(.gray)
+                                }
+                                HStack(alignment: .bottom) {
+                                    Text("$\(Int(todaysRevenue))")
+                                        .font(.system(size: 19, weight: .black))
+                                        .foregroundStyle(.white)
+                                    Spacer()
+                                    HStack(alignment: .bottom, spacing: 2) {
+                                        Rectangle().fill(Brand.primary.opacity(0.4)).frame(width: 3, height: 6)
+                                        Rectangle().fill(Brand.primary.opacity(0.7)).frame(width: 3, height: 10)
+                                        Rectangle().fill(Brand.primary).frame(width: 3, height: 14)
+                                    }
+                                }
+                            }
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(red: 0.06, green: 0.12, blue: 0.09))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
+
+                            // Card 2: EN RUTA
+                            Button {
+                                showTrackerSheet = true
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack(spacing: 5) {
+                                        ZStack {
+                                            Circle().fill(Color.cyan.opacity(0.2)).frame(width: 20, height: 20)
+                                            Image(systemName: "house.fill").font(.system(size: 9)).foregroundStyle(Color.cyan)
+                                        }
+                                        Text("EN RUTA")
+                                            .font(.system(size: 8, weight: .bold))
+                                            .foregroundStyle(.gray)
+                                    }
+                                    HStack {
+                                        Text("\(todaysAppointmentsCount) Casas")
+                                            .font(.system(size: 15, weight: .bold))
+                                            .foregroundStyle(.white)
+                                        Spacer()
+                                        Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(.gray)
+                                    }
+                                }
+                                .padding(10)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color(red: 0.06, green: 0.12, blue: 0.09))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+
+                            // Card 3: CLIMA KILLEEN
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "sun.max.fill")
+                                        .font(.system(size: 15))
+                                        .foregroundStyle(Color.yellow)
+                                    Text("CLIMA KILLEEN")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundStyle(.gray)
+                                }
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("74°F")
+                                        .font(.system(size: 16, weight: .black))
+                                        .foregroundStyle(.white)
+                                    Text("Soleado")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(.gray)
+                                }
+                            }
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(red: 0.06, green: 0.12, blue: 0.09))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                        }
+                        .padding(.horizontal, 14)
+
+                        // 4 Quick Tactical Action Cards (Image 1)
+                        HStack(spacing: 8) {
+                            Button { showTrackerSheet = true } label: {
+                                VStack(spacing: 5) {
+                                    Image(systemName: "map.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(Brand.primary)
+                                    Text("Lawn Tracker")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(Brand.primary)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color(red: 0.04, green: 0.18, blue: 0.10))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Brand.primary.opacity(0.7), lineWidth: 1))
+                            }
+
+                            Button { showRainAlertSheet = true } label: {
+                                VStack(spacing: 5) {
+                                    Image(systemName: "cloud.rain.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(Color.cyan)
+                                    Text("Alerta Lluvia")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color(red: 0.06, green: 0.13, blue: 0.18))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.cyan.opacity(0.4), lineWidth: 1))
+                            }
+
+                            Button { showChecklistSheet = true } label: {
+                                VStack(spacing: 5) {
+                                    Image(systemName: "checklist")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(Color.mint)
+                                    Text("Checklist")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color(red: 0.05, green: 0.14, blue: 0.12))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.mint.opacity(0.4), lineWidth: 1))
+                            }
+
+                            Button { showCalcSheet = true } label: {
+                                VStack(spacing: 5) {
+                                    Image(systemName: "function")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(Color.orange)
+                                    Text("Calculadora")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color(red: 0.12, green: 0.10, blue: 0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.orange.opacity(0.4), lineWidth: 1))
                             }
                         }
-                        .listStyle(.plain)
-                        .refreshable {
-                            await store.refreshAll()
+                        .padding(.horizontal, 14)
+
+                        // Filter Chips (Image 1: Todos, Pendientes, Contactados, Completados)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                FilterChipWithIcon(title: "Todos (\(store.leads.count))", icon: "square.grid.2x2.fill", isSelected: filterStatus == "all") {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    filterStatus = "all"
+                                }
+                                FilterChipWithIcon(title: "Pendientes (\(store.leads.filter { $0.status == \"pending\" }.count))", icon: "clock.fill", isSelected: filterStatus == "pending") {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    filterStatus = "pending"
+                                }
+                                FilterChipWithIcon(title: "Contactados (\(store.leads.filter { $0.status == \"contacted\" }.count))", icon: "person.fill", isSelected: filterStatus == "contacted") {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    filterStatus = "contacted"
+                                }
+                                FilterChipWithIcon(title: "Completados (\(store.leads.filter { $0.status == \"completed\" }.count))", icon: "checkmark.circle.fill", isSelected: filterStatus == "completed") {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    filterStatus = "completed"
+                                }
+                            }
+                            .padding(.horizontal, 14)
                         }
+
+                        // Content List or Empty State (Exact Image 1 Design)
+                        if filteredLeads.isEmpty {
+                            VStack(spacing: 14) {
+                                ZStack {
+                                    // Background Lawn Ambience
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(red: 0.05, green: 0.14, blue: 0.08),
+                                                    Color(red: 0.02, green: 0.06, blue: 0.03)
+                                                ],
+                                                startPoint: .top,
+                                                endPoint: .bottom
+                                            )
+                                        )
+                                        .frame(height: 250)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 20)
+                                                .stroke(Brand.primary.opacity(0.2), lineWidth: 1)
+                                        )
+
+                                    VStack(spacing: 12) {
+                                        // Floating Lawn Grass Patch with Clipboard & Checkmark (Screenshot 1)
+                                        ZStack {
+                                            // Lawn Patch Glow
+                                            Circle()
+                                                .fill(
+                                                    RadialGradient(
+                                                        colors: [Brand.primary.opacity(0.35), Color.clear],
+                                                        center: .center,
+                                                        startRadius: 10,
+                                                        endRadius: 55
+                                                    )
+                                                )
+                                                .frame(width: 110, height: 110)
+
+                                            // Fresh Green Lawn Patch Base
+                                            Circle()
+                                                .fill(
+                                                    LinearGradient(
+                                                        colors: [Color(red: 0.1, green: 0.45, blue: 0.18), Color(red: 0.04, green: 0.22, blue: 0.08)],
+                                                        startPoint: .top,
+                                                        endPoint: .bottom
+                                                    )
+                                                )
+                                                .frame(width: 82, height: 42)
+                                                .offset(y: 20)
+                                                .overlay(
+                                                    Circle()
+                                                        .stroke(Brand.primary.opacity(0.4), lineWidth: 1)
+                                                        .offset(y: 20)
+                                                )
+
+                                            // Clipboard Icon with Calendar Grid
+                                            Image(systemName: "calendar.badge.clock")
+                                                .font(.system(size: 46, weight: .bold))
+                                                .foregroundStyle(.white.opacity(0.92))
+                                                .offset(y: -4)
+
+                                            // Emerald Checkmark Badge (Image 1)
+                                            ZStack {
+                                                Circle()
+                                                    .fill(Brand.primary)
+                                                    .frame(width: 26, height: 26)
+                                                    .shadow(color: Brand.primary.opacity(0.6), radius: 6)
+                                                Image(systemName: "checkmark")
+                                                    .font(.system(size: 13, weight: .black))
+                                                    .foregroundStyle(.black)
+                                            }
+                                            .offset(x: 20, y: 16)
+                                        }
+
+                                        Text("No hay citas registradas")
+                                            .font(.system(size: 19, weight: .bold))
+                                            .foregroundStyle(.white)
+
+                                        Text("Comienza agregando tu primera cita o cotización.")
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(.gray)
+                                            .multilineTextAlignment(.center)
+                                            .padding(.horizontal, 20)
+                                    }
+                                }
+                                .padding(.horizontal, 14)
+
+                                // Large Neon Green Button: + Nueva Cita > (Image 1)
+                                Button {
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    showNewLeadSheet = true
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "plus.circle.fill")
+                                            .font(.system(size: 18, weight: .black))
+                                        Text("Nueva Cita")
+                                            .font(.system(size: 16, weight: .black))
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 13, weight: .black))
+                                    }
+                                    .foregroundStyle(.black)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(Brand.primary)
+                                    .clipShape(Capsule())
+                                    .shadow(color: Brand.primary.opacity(0.55), radius: 12, y: 4)
+                                }
+                                .padding(.horizontal, 24)
+                            }
+                        } else {
+                            VStack(spacing: 10) {
+                                ForEach(filteredLeads) { lead in
+                                    LeadCardView(lead: lead)
+                                        .onTapGesture {
+                                            selectedLead = lead
+                                        }
+                                }
+                            }
+                            .padding(.horizontal, 14)
+                        }
+
+                        // Bottom 3 Quick Action Buttons (Exact Image 1 Design)
+                        HStack(spacing: 8) {
+                            Button {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                showNewLeadSheet = true
+                            } label: {
+                                VStack(spacing: 5) {
+                                    Image(systemName: "person.crop.circle.badge.plus")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundStyle(Brand.primary)
+                                    Text("Importar Cliente")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color(red: 0.06, green: 0.12, blue: 0.09))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                            }
+
+                            Button {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                showNewLeadSheet = true
+                            } label: {
+                                VStack(spacing: 5) {
+                                    Image(systemName: "calendar")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundStyle(Color.cyan)
+                                    Text("Calendario")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color(red: 0.06, green: 0.12, blue: 0.09))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                            }
+
+                            Button {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                showRadarSheet = true
+                            } label: {
+                                VStack(spacing: 5) {
+                                    Image(systemName: "map.fill")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundStyle(Color.green)
+                                    Text("Ver Ruta")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color(red: 0.06, green: 0.12, blue: 0.09))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.top, 6)
+                        .padding(.bottom, 24)
                     }
                 }
             }
@@ -1773,32 +2167,38 @@ struct AppointmentsView: View {
             .sheet(isPresented: $showChecklistSheet) {
                 MorningTrailerChecklistSheetView(store: store)
             }
-            .sheet(isPresented: $showVipLoyaltySheet) {
-                VipLoyaltyTiersView(store: store)
+            .sheet(isPresented: $showCalcSheet) {
+                BulkMaterialTruckCalculatorView(store: store)
             }
+            .sheet(isPresented: $showRadarSheet) {
+                TacticalTerritoryRadarView(store: store)
+            }
+        }
+    }
+}
+
+// MARK: - FILTER CHIP WITH ICON (EXACT IMAGE 1 DESIGN)
+struct FilterChipWithIcon: View {
+    let title: String
+    let icon: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.caption2.bold())
+                Text(title)
+                    .font(.caption.bold())
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(isSelected ? Brand.primary : Color(red: 0.06, green: 0.12, blue: 0.09))
+            .foregroundStyle(isSelected ? .black : .white)
+            .clipShape(Capsule())
             .overlay(
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Button {
-                            showNewLeadSheet = true
-                        } label: {
-                            HStack {
-                                Image(systemName: "plus")
-                                Text("Nueva Cita")
-                            }
-                            .font(.headline)
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 14)
-                            .background(Brand.primary)
-                            .clipShape(Capsule())
-                            .shadow(color: Brand.primary.opacity(0.4), radius: 8, y: 4)
-                        }
-                        .padding()
-                    }
-                }
+                Capsule().stroke(isSelected ? Brand.primary : Color.white.opacity(0.1), lineWidth: 1)
             )
         }
     }
@@ -8584,20 +8984,117 @@ struct DigitalSignaturePadSheetView: View {
     }
 }
 
-// MARK: - 2. RADAR TÁCTICO: "CONQUISTA DE TERRITORIO"
+// MARK: - 2. RADAR TÁCTICO: "CONQUISTA DE TERRITORIO" (PUNTOS EN CASAS DE CLIENTES SEMANALES)
+struct TacticalHouseClientPin: Identifiable {
+    let id: String
+    let name: String
+    let phone: String
+    let address: String
+    let serviceDay: String
+    let price: Double
+    let coordinate: CLLocationCoordinate2D
+    let isRecurring: Bool
+}
+
 struct TacticalTerritoryRadarView: View {
     @ObservedObject var store: LawnCareStore
     @Environment(\.dismiss) var dismiss
     @State private var radarAngle: Double = 0
-    @State private var selectedFilter: String = "Todas"
+    @State private var selectedDayFilter: String = "Todas"
+    @State private var selectedPin: TacticalHouseClientPin? = nil
     
     // Central Texas default coordinate: Killeen TX
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 31.1171, longitude: -97.7278),
-        span: MKCoordinateSpan(latitudeDelta: 0.12, longitudeDelta: 0.12)
+        span: MKCoordinateSpan(latitudeDelta: 0.14, longitudeDelta: 0.14)
     )
     
     let timer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
+    let days = ["Todas", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+    
+    // Generate precise persistent pins on clients' houses in Central Texas
+    var allClientPins: [TacticalHouseClientPin] {
+        var list: [TacticalHouseClientPin] = []
+        let baseLat = 31.1171
+        let baseLng = -97.7278
+        
+        for client in store.recurringClients {
+            let hash = abs(client.name.hashValue ^ client.address.hashValue)
+            let latOffset = Double((hash % 100) - 50) * 0.0013
+            let lngOffset = Double(((hash / 100) % 100) - 50) * 0.0015
+            let coord = CLLocationCoordinate2D(latitude: baseLat + latOffset, longitude: baseLng + lngOffset)
+            
+            list.append(
+                TacticalHouseClientPin(
+                    id: "rec_\(client.id)",
+                    name: client.name,
+                    phone: client.phone,
+                    address: client.address.isEmpty ? "Propiedad en Killeen, TX" : client.address,
+                    serviceDay: client.service_day,
+                    price: client.price,
+                    coordinate: coord,
+                    isRecurring: true
+                )
+            )
+        }
+        
+        for (idx, lead) in store.leads.enumerated() {
+            let hash = abs(lead.name.hashValue ^ (idx * 31))
+            let latOffset = Double((hash % 80) - 40) * 0.0011
+            let lngOffset = Double(((hash / 80) % 80) - 40) * 0.0013
+            let coord = CLLocationCoordinate2D(latitude: baseLat + latOffset, longitude: baseLng + lngOffset)
+            
+            list.append(
+                TacticalHouseClientPin(
+                    id: "lead_\(lead.id)",
+                    name: lead.name,
+                    phone: lead.phone,
+                    address: lead.address ?? "Killeen, TX",
+                    serviceDay: lead.date ?? "Esta Semana",
+                    price: 55.0,
+                    coordinate: coord,
+                    isRecurring: false
+                )
+            )
+        }
+        
+        // Realistic fallback properties in Killeen / Bell County neighborhoods so map is always alive
+        if list.isEmpty {
+            let starter: [(String, String, String, Double, Double, Double)] = [
+                ("Marcus Vance", "1402 Willow Springs Rd, Killeen, TX", "Lunes", 55.0, 31.1092, -97.7410),
+                ("Sarah Jenkins", "2204 W Stan Schlueter Loop, Killeen, TX", "Lunes", 65.0, 31.0850, -97.7580),
+                ("David Miller (Duplex)", "809 E Central Texas Pkwy, Killeen, TX", "Martes", 45.0, 31.1120, -97.7120),
+                ("Carlos Mendoza", "3105 Clear Creek Rd, Killeen, TX", "Martes", 60.0, 31.1250, -97.7850),
+                ("Jennifer Adams", "501 E Knights Way, Harker Heights, TX", "Miércoles", 50.0, 31.0750, -97.6650),
+                ("Robert King (HOA)", "1203 Mountain Lion Cir, Harker Heights, TX", "Jueves", 75.0, 31.0620, -97.6480),
+                ("Daniel Hernandez", "204 S 1st St, Copperas Cove, TX", "Viernes", 50.0, 31.1210, -97.9020),
+                ("Fort Cavazos Quarters", "Building 18010, Fort Cavazos, TX", "Sábado", 65.0, 31.1390, -97.7780)
+            ]
+            for s in starter {
+                list.append(
+                    TacticalHouseClientPin(
+                        id: s.0,
+                        name: s.0,
+                        phone: "2548528163",
+                        address: s.1,
+                        serviceDay: s.2,
+                        price: s.3,
+                        coordinate: CLLocationCoordinate2D(latitude: s.4, longitude: s.5),
+                        isRecurring: true
+                    )
+                )
+            }
+        }
+        
+        return list
+    }
+    
+    var filteredPins: [TacticalHouseClientPin] {
+        if selectedDayFilter == "Todas" {
+            return allClientPins
+        }
+        return allClientPins.filter { $0.serviceDay.localizedCaseInsensitiveContains(selectedDayFilter) }
+    }
     
     var body: some View {
         NavigationView {
@@ -8614,72 +9111,228 @@ struct TacticalTerritoryRadarView: View {
                                     .font(.caption2.bold())
                                     .foregroundStyle(Brand.primary)
                             }
-                            Text("Territorio Central Texas")
+                            Text("Puntos en Casas de Clientes")
                                 .font(.headline.bold())
                                 .foregroundStyle(.white)
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text("DOMINIO ZONAL")
+                            Text("CASAS ACTIVAS")
                                 .font(.caption2.bold())
                                 .foregroundStyle(.gray)
-                            Text("88% ACTIVO")
+                            Text("\(filteredPins.count) OBJETIVOS")
                                 .font(.subheadline.bold())
-                                .foregroundStyle(.green)
+                                .foregroundStyle(Brand.primary)
                         }
                     }
                     .padding(12)
                     .background(Brand.card)
                     
-                    // Radar Map Container
+                    // Day of Week Filter Bar (Lunes a Sábado)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(days, id: \.self) { day in
+                                let count = day == "Todas" ? allClientPins.count : allClientPins.filter { $0.serviceDay.localizedCaseInsensitiveContains(day) }.count
+                                Button {
+                                    selectedDayFilter = day
+                                    if let first = filteredPins.first {
+                                        withAnimation { region.center = first.coordinate }
+                                    }
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Text(day)
+                                        Text("(\(count))")
+                                            .font(.system(size: 9, weight: .bold))
+                                    }
+                                    .font(.caption.bold())
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(selectedDayFilter == day ? Brand.primary : Brand.cardLight)
+                                    .foregroundStyle(selectedDayFilter == day ? .black : .white)
+                                    .clipShape(Capsule())
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                    }
+                    .background(Color.black.opacity(0.7))
+                    
+                    // Interactive Map with Annotations on Each House!
                     ZStack {
-                        Map(coordinateRegion: $region)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        Map(coordinateRegion: $region, annotationItems: filteredPins) { pin in
+                            MapAnnotation(coordinate: pin.coordinate) {
+                                VStack(spacing: 2) {
+                                    // Price & Day Badge
+                                    HStack(spacing: 3) {
+                                        Text("$\(Int(pin.price))")
+                                            .font(.system(size: 10, weight: .black))
+                                            .foregroundStyle(Brand.primary)
+                                        Text("• \(pin.serviceDay)")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundStyle(.white)
+                                    }
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2.5)
+                                    .background(Color.black.opacity(0.85))
+                                    .clipShape(Capsule())
+                                    .overlay(Capsule().stroke(Brand.primary, lineWidth: 1))
+                                    
+                                    // House Icon target with pulsing ring
+                                    ZStack {
+                                        Circle()
+                                            .stroke(Brand.primary.opacity(0.6), lineWidth: 1.5)
+                                            .frame(width: 32, height: 32)
+                                        Circle()
+                                            .fill(selectedPin?.id == pin.id ? Color.yellow : Brand.primary)
+                                            .frame(width: 24, height: 24)
+                                            .shadow(color: Brand.primary, radius: 6)
+                                        Image(systemName: "house.fill")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundStyle(.black)
+                                    }
+                                }
+                                .onTapGesture {
+                                    withAnimation(.spring()) {
+                                        selectedPin = pin
+                                        region.center = pin.coordinate
+                                    }
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         
-                        // Tactical Sonar Overlay Grid
+                        // Subtle Radar Sonar Overlay Grid
                         ZStack {
                             Circle()
-                                .stroke(Brand.primary.opacity(0.3), lineWidth: 1)
-                                .frame(width: 160, height: 160)
-                            Circle()
                                 .stroke(Brand.primary.opacity(0.2), lineWidth: 1)
-                                .frame(width: 280, height: 280)
+                                .frame(width: 140, height: 140)
+                            Circle()
+                                .stroke(Brand.primary.opacity(0.15), lineWidth: 1)
+                                .frame(width: 250, height: 250)
                             
-                            // Crosshairs
-                            Rectangle()
-                                .fill(Brand.primary.opacity(0.2))
-                                .frame(width: 1, height: 280)
-                            Rectangle()
-                                .fill(Brand.primary.opacity(0.2))
-                                .frame(width: 280, height: 1)
-                            
-                            // Sonar Sweep Line
                             Rectangle()
                                 .fill(
                                     LinearGradient(
-                                        gradient: Gradient(colors: [Brand.primary.opacity(0.7), Color.clear]),
+                                        gradient: Gradient(colors: [Brand.primary.opacity(0.4), Color.clear]),
                                         startPoint: .top,
                                         endPoint: .bottom
                                     )
                                 )
-                                .frame(width: 2, height: 140)
-                                .offset(y: -70)
+                                .frame(width: 1.5, height: 125)
+                                .offset(y: -62.5)
                                 .rotationEffect(.degrees(radarAngle))
                         }
                         .allowsHitTesting(false)
+                        
+                        // Selected Pin Callout Card
+                        if let pin = selectedPin {
+                            VStack {
+                                Spacer()
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(pin.name)
+                                                .font(.headline.bold())
+                                                .foregroundStyle(.white)
+                                            Text(pin.address)
+                                                .font(.caption)
+                                                .foregroundStyle(.gray)
+                                        }
+                                        Spacer()
+                                        Button {
+                                            withAnimation { selectedPin = nil }
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.title3)
+                                                .foregroundStyle(.gray)
+                                        }
+                                    }
+                                    
+                                    HStack {
+                                        Text("Día: \(pin.serviceDay)")
+                                            .font(.caption2.bold())
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 3)
+                                            .background(Brand.primary.opacity(0.2))
+                                            .foregroundStyle(Brand.primary)
+                                            .clipShape(Capsule())
+                                        
+                                        Text("$\(Int(pin.price)) USD / corte")
+                                            .font(.caption2.bold())
+                                            .foregroundStyle(.white)
+                                        
+                                        Spacer()
+                                    }
+                                    
+                                    // Action Buttons
+                                    HStack(spacing: 8) {
+                                        Button {
+                                            let clean = pin.address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                                            if let url = URL(string: "http://maps.apple.com/?daddr=\(clean)") {
+                                                UIApplication.shared.open(url)
+                                            }
+                                        } label: {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "location.fill")
+                                                Text("Navegar")
+                                            }
+                                            .font(.caption.bold())
+                                            .foregroundStyle(.black)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 8)
+                                            .background(Brand.primary)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        }
+                                        
+                                        Button {
+                                            let clean = pin.phone.filter { "0123456789".contains($0) }
+                                            let msg = "¡Hola \(pin.name)! Te contacto de Rodriguez Lawn Care sobre tu servicio de jardinería."
+                                            let encoded = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                                            if let url = URL(string: "https://wa.me/\(clean)?text=\(encoded)") {
+                                                UIApplication.shared.open(url)
+                                            }
+                                        } label: {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "message.fill")
+                                                Text("WhatsApp")
+                                            }
+                                            .font(.caption.bold())
+                                            .foregroundStyle(.black)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 8)
+                                            .background(Color.green)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        }
+                                    }
+                                }
+                                .padding(14)
+                                .background(Color(red: 0.05, green: 0.12, blue: 0.09))
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Brand.primary, lineWidth: 1.5)
+                                )
+                                .shadow(color: Color.black.opacity(0.8), radius: 15, y: 5)
+                                .padding(.horizontal, 14)
+                                .padding(.bottom, 12)
+                            }
+                        }
                     }
                     
                     // Tactical Metrics Card
-                    VStack(spacing: 10) {
+                    VStack(spacing: 8) {
                         HStack(spacing: 8) {
-                            TacticalMetricBadge(icon: "shield.fill", title: "Conquistadas", value: "\(max(14, store.recurringClients.count + 8))", color: .green)
+                            TacticalMetricBadge(icon: "shield.fill", title: "Conquistadas", value: "\(store.recurringClients.count + 8)", color: .green)
                             TacticalMetricBadge(icon: "bolt.fill", title: "En Proceso", value: "\(store.leads.count)", color: .yellow)
                             TacticalMetricBadge(icon: "cross.circle.fill", title: "Objetivos", value: "25", color: .orange)
                         }
                         
                         Button {
-                            // Center in Killeen
                             region.center = CLLocationCoordinate2D(latitude: 31.1171, longitude: -97.7278)
+                            region.span = MKCoordinateSpan(latitudeDelta: 0.14, longitudeDelta: 0.14)
                         } label: {
                             HStack {
                                 Image(systemName: "scope")
@@ -8693,7 +9346,7 @@ struct TacticalTerritoryRadarView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
                     }
-                    .padding(12)
+                    .padding(10)
                     .background(Brand.card)
                 }
             }
@@ -8709,33 +9362,6 @@ struct TacticalTerritoryRadarView: View {
                 radarAngle = (radarAngle + 4).truncatingRemainder(dividingBy: 360)
             }
         }
-    }
-}
-
-struct TacticalMetricBadge: View {
-    let icon: String
-    let title: String
-    let value: String
-    let color: Color
-    
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.caption)
-                .foregroundStyle(color)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.system(size: 9))
-                    .foregroundStyle(.gray)
-                Text(value)
-                    .font(.caption.bold())
-                    .foregroundStyle(.white)
-            }
-            Spacer()
-        }
-        .padding(8)
-        .background(Color.black.opacity(0.4))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 
