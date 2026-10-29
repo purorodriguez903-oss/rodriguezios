@@ -1639,6 +1639,7 @@ struct GalleryAdminView: View {
     @ObservedObject var store: LawnCareStore
     @State private var selectedFilter = "all"
     @State private var showAddPhotoSheet = false
+    @State private var showPhotoActionDialog = false
     @State private var activePhotoAction: GalleryPhoto? = nil
     @State private var photoToEdit: GalleryPhoto? = nil
     @State private var fullScreenPhoto: GalleryPhoto? = nil
@@ -1700,6 +1701,7 @@ struct GalleryAdminView: View {
                                 GalleryWorkCard(photo: photo, store: store)
                                     .onTapGesture {
                                         activePhotoAction = photo
+                                        showPhotoActionDialog = true
                                     }
                             }
                         }
@@ -1728,25 +1730,29 @@ struct GalleryAdminView: View {
                 }
             }
             // Action Menu Popup on Tap ("Cuadrito")
-            .confirmationDialog("Administrar Foto", item: $activePhotoAction, titleVisibility: .visible) { photo in
-                Button("🔝 Mover al Frente (Posición #1)") {
-                    Task { await store.moveGalleryPhotoToTop(id: photo.id) }
-                }
-                Button("✏️ Editar Título / Categoría") {
-                    photoToEdit = photo
-                }
-                Button("🔄 Reemplazar Foto") {
-                    photoToEdit = photo
-                }
-                Button("🔍 Ver Pantalla Completa") {
-                    fullScreenPhoto = photo
-                }
-                Button("🗑️ Eliminar de la Web", role: .destructive) {
-                    Task { await store.deleteGalleryPhoto(id: photo.id) }
+            .confirmationDialog("Administrar Foto", isPresented: $showPhotoActionDialog, titleVisibility: .visible) {
+                if let photo = activePhotoAction {
+                    Button("🔝 Mover al Frente (Posición #1)") {
+                        Task { await store.moveGalleryPhotoToTop(id: photo.id) }
+                    }
+                    Button("✏️ Editar Título / Categoría") {
+                        photoToEdit = photo
+                    }
+                    Button("🔄 Reemplazar Foto") {
+                        photoToEdit = photo
+                    }
+                    Button("🔍 Ver Pantalla Completa") {
+                        fullScreenPhoto = photo
+                    }
+                    Button("🗑️ Eliminar de la Web", role: .destructive) {
+                        Task { await store.deleteGalleryPhoto(id: photo.id) }
+                    }
                 }
                 Button("Cancelar", role: .cancel) {}
-            } message: { photo in
-                Text("Trabajo: #\(String(format: "%02d", photo.id)) - \(photo.title)")
+            } message: {
+                if let photo = activePhotoAction {
+                    Text("Trabajo: #\(String(format: "%02d", photo.id)) - \(photo.title)")
+                }
             }
             .sheet(isPresented: $showAddPhotoSheet) {
                 AddGalleryPhotoSheet(store: store)
