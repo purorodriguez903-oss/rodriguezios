@@ -60,6 +60,7 @@ CALENDAR_JSON_PATH = os.path.join(BASE_DIR, "calendar.json")
 PROMOTIONS_JSON_PATH = os.path.join(BASE_DIR, "promotions.json")
 IPA_DELIVERY_JSON_PATH = os.path.join(BASE_DIR, "ipa_delivery.json")
 REVIEWS_JSON_PATH = os.path.join(BASE_DIR, "reviews.json")
+RECURRING_JSON_PATH = os.path.join(BASE_DIR, "recurring_clients.json")
 UPLOADS_LEADS_FOLDER = os.path.join(BASE_DIR, "assets", "uploads", "leads")
 os.makedirs(UPLOADS_LEADS_FOLDER, exist_ok=True)
 
@@ -86,6 +87,25 @@ def save_gallery(data):
         return True
     except Exception as e:
         print(f"[Error] Guardando gallery.json: {e}")
+        return False
+
+def load_recurring():
+    if not os.path.exists(RECURRING_JSON_PATH):
+        return []
+    try:
+        with open(RECURRING_JSON_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"[Error] Cargando recurring_clients.json: {e}")
+        return []
+
+def save_recurring(data):
+    try:
+        with open(RECURRING_JSON_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"[Error] Guardando recurring_clients.json: {e}")
         return False
 
 def load_reviews():
@@ -2861,6 +2881,107 @@ async def handle_cloud_admin_page(request):
 
 
 # ----------------- CALENDAR & SCHEDULE API -----------------
+
+# ----------------- RECURRING CLIENTS & WEATHER API -----------------
+async def handle_api_get_recurring(request):
+    clients = load_recurring()
+    return cors_json_response({"success": True, "clients": clients})
+
+async def handle_api_save_recurring(request):
+    try:
+        data = await request.json()
+        clients = load_recurring()
+        client_id = int(data.get("id") or int(time.time() * 1000))
+        existing = next((c for c in clients if c.get("id") == client_id), None)
+        item = {
+            "id": client_id,
+            "name": (data.get("name") or "Cliente").strip(),
+            "phone": (data.get("phone") or "").strip(),
+            "address": (data.get("address") or "").strip(),
+            "frequency": (data.get("frequency") or "weekly").strip(),
+            "service_day": (data.get("service_day") or "Martes").strip(),
+            "price": float(data.get("price") or 55.0),
+            "status": (data.get("status") or "pending").strip(),
+            "services": data.get("services", ["Front & Back Yard Cut"]),
+            "notes": (data.get("notes") or "").strip(),
+            "last_serviced": data.get("last_serviced", "")
+        }
+        if existing:
+            existing.update(item)
+        else:
+            clients.append(item)
+        save_recurring(clients)
+        return cors_json_response({"success": True, "client": item, "clients": clients})
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+async def handle_api_toggle_paid_recurring(request):
+    try:
+        data = await request.json()
+        client_id = int(data.get("id") or 0)
+        clients = load_recurring()
+        for c in clients:
+            if c.get("id") == client_id:
+                curr = c.get("status", "pending")
+                c["status"] = "paid" if curr == "pending" else "pending"
+                save_recurring(clients)
+                return cors_json_response({"success": True, "client": c, "clients": clients})
+        return cors_json_response({"success": False, "error": "Client not found"}, status=404)
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+async def handle_api_delete_recurring(request):
+    try:
+        client_id = request.match_info.get("id")
+        if not client_id:
+            data = await request.json()
+            client_id = data.get("id")
+        client_id = int(client_id or 0)
+        clients = load_recurring()
+        before_len = len(clients)
+        clients = [c for c in clients if c.get("id") != client_id]
+        if len(clients) < before_len:
+            save_recurring(clients)
+            return cors_json_response({"success": True, "clients": clients})
+        return cors_json_response({"success": False, "error": "Client not found"}, status=404)
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+async def handle_api_weather_killeen(request):
+    """Returns real-time weather and rain forecast for Killeen / Central Texas."""
+    try:
+        url = "https://api.open-meteo.com/v1/forecast?latitude=31.1171&longitude=-97.7278&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&temperature_unit=fahrenheit&timezone=America%2FChicago"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=4)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    curr = data.get("current", {})
+                    daily = data.get("daily", {})
+                    temp = round(curr.get("temperature_2m", 78))
+                    code = curr.get("weather_code", 0)
+                    prob_list = daily.get("precipitation_probability_max", [10, 10, 20])
+                    rain_prob = prob_list[0] if prob_list else 10
+                    return cors_json_response({
+                        "success": True,
+                        "temperature": temp,
+                        "unit": "°F",
+                        "weather_code": code,
+                        "rain_probability": rain_prob,
+                        "city": "Killeen, TX",
+                        "forecast": data
+                    })
+    except Exception:
+        pass
+    return cors_json_response({
+        "success": True,
+        "temperature": 78,
+        "unit": "°F",
+        "weather_code": 1,
+        "rain_probability": 10,
+        "city": "Killeen, TX",
+        "cached": True
+    })
+
 async def handle_api_get_reviews(request):
     """Returns list of client reviews for website and iOS app."""
     return cors_json_response(load_reviews())
@@ -3132,6 +3253,16 @@ def create_web_app():
 
     # Calendar & Availability API
     # Reviews API
+    # Recurring Clients API
+    app.router.add_get('/api/recurring', handle_api_get_recurring)
+    app.router.add_post('/api/recurring', handle_api_save_recurring)
+    app.router.add_post('/api/recurring/toggle-paid', handle_api_toggle_paid_recurring)
+    app.router.add_post('/api/recurring/delete', handle_api_delete_recurring)
+    app.router.add_delete('/api/recurring/{id}', handle_api_delete_recurring)
+
+    # Weather API for Killeen
+    app.router.add_get('/api/weather/killeen', handle_api_weather_killeen)
+
     app.router.add_get('/api/reviews', handle_api_get_reviews)
     app.router.add_post('/api/reviews', handle_api_add_review)
     app.router.add_post('/api/reviews/delete', handle_api_delete_review)

@@ -1,0 +1,41 @@
+[
+  {
+    "id": 1,
+    "name": "Michael Stevens",
+    "phone": "(254) 555-0142",
+    "address": "4502 Trimmier Rd, Killeen, TX",
+    "frequency": "weekly",
+    "service_day": "Martes",
+    "price": 60.0,
+    "status": "paid",
+    "services": ["Front & Back Yard Cut", "Perimeter Edging"],
+    "notes": "Gate code #1290, 2 small dogs in back yard (friendly)",
+    "last_serviced": "2026-10-27"
+  },
+  {
+    "id": 2,
+    "name": "Jennifer Martinez",
+    "phone": "(254) 555-0891",
+    "address": "2804 Rosewood Dr, Harker Heights, TX",
+    "frequency": "biweekly",
+    "service_day": "Jueves",
+    "price": 75.0,
+    "status": "pending",
+    "services": ["Front & Back Yard Cut", "Shrub & Hedge Trimming"],
+    "notes": "Pay via Zelle after service",
+    "last_serviced": "2026-10-15"
+  },
+  {
+    "id": 3,
+    "name": "David Miller (Veteran)",
+    "phone": "(254) 555-0322",
+    "address": "1108 Clear Creek Rd, Killeen, TX",
+    "frequency": "weekly",
+    "service_day": "Viernes",
+    "price": 55.0,
+    "status": "pending",
+    "services": ["Front & Back Yard Cut", "Sidewalk Edging & Blowing"],
+    "notes": "Military discount applied (Fort Cavazos area)",
+    "last_serviced": "2026-10-23"
+  }
+]

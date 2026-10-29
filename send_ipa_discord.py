@@ -82,14 +82,15 @@ async def main():
     embed.add_field(
         name="✨ Novedades & Funciones Incluidas:",
         value=(
-            "• 🎨 **Nuevo Icono Oficial de Alta Fidelidad**: Logo R esmeralda con pasto.\n"
-            "• 🤖 **IA Estimate Real-Time**: Cotización con fotos y búsqueda de precios reales en Home Depot, Lowe's y Tractor Supply en Killeen, TX.\n"
-            "• 📅 **Calendario Profesional Diario**: Bloqueo de días Normal 🟢 / Lleno 🔴 y visualización de citas de clientes.\n"
-            "• 🧾 **Generador de Facturas (Invoices)**: Crea invoices con logo de Rodriguez Lawn Care y envíalos por WhatsApp o guárdalos en fotos.\n"
-            "• 🔥 **Promociones Web 24h**: Lanza ofertas flash con banner dinámico y temporizador en la página web.\n"
-            "• 📸 **Fotos de Clientes en Citas**: Las imágenes que los clientes suben en la web llegan directamente a tu app.\n"
-            "• ✨ **Fondo con Partículas Glow**: Efecto visual moderno y fluido en toda la app.\n"
-            "• 📲 **Sincronización Total en la Nube**: Conexión permanente con Railway y Discord."
+            "• 🗺️ **Optimización de Rutas del Día**: Organiza tus paradas y ábrelas en Apple Maps / Google Maps.\n"
+            "• 📸 **Cámara Antes & Después**: Comparativa con marca de agua y publicación en vivo a la galería web.\n"
+            "• 💵 **Pagos Zelle & Cash App en Invoice**: Datos de pago listos para cobrar por WhatsApp y en la factura.\n"
+            "• 🔁 **Clientes Recurrentes**: Control semanal/quincenal, estado de pago y recordatorios automáticos por WhatsApp.\n"
+            "• 🌧️ **Clima & Alerta de Lluvias en Killeen**: Pronóstico en vivo y botón para mover citas por lluvia.\n"
+            "• 📐 **Medidor Satelital de Jardín**: Mide el terreno en sq ft y acres por GPS para calcular precios exactos.\n"
+            "• 🔔 **Sonidos de Alerta & Haptics**: Avisos audibles cuando entran cotizaciones o confirmas trabajos.\n"
+            "• 🎨 **Icono Oficial R Esmeralda**: Diseño nítido de alta fidelidad.\n"
+            "• 📲 **Sincronización Total 24/7 en la Nube**: Conexión permanente con Railway y Discord."
         ),
         inline=False
     )

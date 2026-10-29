@@ -64,6 +64,9 @@ import UserNotifications
 import AVKit
 import Combine
 import WebKit
+import MapKit
+import CoreLocation
+import AudioToolbox
 
 // MARK: - THEME & BRANDING
 enum Brand {
@@ -76,6 +79,70 @@ enum Brand {
 }
 
 // MARK: - DATA MODELS
+
+// MARK: - WEATHER & RECURRING CLIENT MODELS
+struct WeatherInfo: Codable {
+    var temperature: Int
+    var unit: String
+    var weather_code: Int
+    var rain_probability: Int
+    var city: String
+    
+    var conditionText: String {
+        switch weather_code {
+        case 0: return "Despejado / Soleado"
+        case 1, 2: return "Parcialmente Nublado"
+        case 3: return "Nublado"
+        case 45, 48: return "Niebla"
+        case 51, 53, 55: return "Llovizna Ligera"
+        case 61, 63, 65: return "Lluvia"
+        case 80, 81, 82: return "Chubascos Fuertes"
+        case 95, 96, 99: return "Tormenta Eléctrica"
+        default: return "Cielo Variable"
+        }
+    }
+    
+    var conditionIcon: String {
+        switch weather_code {
+        case 0: return "sun.max.fill"
+        case 1, 2: return "cloud.sun.fill"
+        case 3: return "cloud.fill"
+        case 51, 53, 55, 61, 63, 65: return "cloud.rain.fill"
+        case 80, 81, 82: return "cloud.heavyrain.fill"
+        case 95, 96, 99: return "cloud.bolt.rain.fill"
+        default: return "sun.max.fill"
+        }
+    }
+}
+
+struct RecurringClient: Identifiable, Codable {
+    var id: Int
+    var name: String
+    var phone: String
+    var address: String
+    var frequency: String // "weekly", "biweekly", "monthly"
+    var service_day: String // "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"
+    var price: Double
+    var status: String // "paid", "pending"
+    var services: [String]?
+    var notes: String?
+    var last_serviced: String?
+}
+
+struct SoundManager {
+    static func playLeadAlert() {
+        AudioServicesPlaySystemSound(1025)
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+    }
+    
+    static func playSuccessTone() {
+        AudioServicesPlaySystemSound(1057)
+        let impact = UIImpactFeedbackGenerator(style: .medium)
+        impact.impactOccurred()
+    }
+}
+
 struct Lead: Identifiable, Codable, Equatable {
     var id: Int
     var created_at: Int?
@@ -339,13 +406,16 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "1.7.2"
-    let currentAppBuild: Int = 20
+    let currentAppVersion: String = "1.8.0"
+    let currentAppBuild: Int = 21
 
     @Published var calendarData: CalendarData = CalendarData(day_status: [:], appointments: [])
     @Published var activePromo: FlashPromotion? = nil
     @Published var reviews: [ClientReview] = []
     @Published var promoHistory: [FlashPromotion] = []
+    @Published var recurringClients: [RecurringClient] = []
+    @Published var weatherInfo: WeatherInfo? = nil
+    @AppStorage("sound_effects_enabled") var soundEffectsEnabled: Bool = true
 
     @AppStorage("api_server_url") var serverURL: String = "https://web-production-b6891b.up.railway.app"
 
@@ -364,9 +434,11 @@ class LawnCareStore: ObservableObject {
         Task { @MainActor in
             await checkOTAUpdate(manual: false)
             await fetchCloudConfig()
-        await fetchCalendar()
-        await fetchPromo()
-        await fetchReviews()
+            await fetchCalendar()
+            await fetchPromo()
+            await fetchReviews()
+            await fetchRecurringClients()
+            await fetchWeather()
         }
     }
 
@@ -493,6 +565,8 @@ class LawnCareStore: ObservableObject {
         await fetchCloudConfig()
         await fetchCalendar()
         await fetchPromo()
+        await fetchRecurringClients()
+        await fetchWeather()
         await checkOTAUpdate(manual: false)
 
         let formatter = DateFormatter()
@@ -1140,6 +1214,85 @@ class LawnCareStore: ObservableObject {
             }
         }.resume()
     }
+
+    // MARK: - RECURRING CLIENTS & WEATHER METHODS
+    func fetchRecurringClients() async {
+        guard let url = URL(string: "\(cleanURL)/api/recurring") else { return }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            struct RecResp: Codable { var success: Bool; var clients: [RecurringClient] }
+            if let resp = try? JSONDecoder().decode(RecResp.self, from: data) {
+                DispatchQueue.main.async {
+                    self.recurringClients = resp.clients
+                }
+            }
+        } catch {
+            print("Notice fetchRecurringClients: \(error)")
+        }
+    }
+
+    func saveRecurringClient(_ client: RecurringClient) async {
+        guard let url = URL(string: "\(cleanURL)/api/recurring") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let body = try? JSONEncoder().encode(client) {
+            req.httpBody = body
+            _ = try? await URLSession.shared.data(for: req)
+            await fetchRecurringClients()
+            if soundEffectsEnabled { SoundManager.playSuccessTone() }
+        }
+    }
+
+    func togglePaidRecurring(id: Int) async {
+        guard let url = URL(string: "\(cleanURL)/api/recurring/toggle-paid") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["id": id])
+        _ = try? await URLSession.shared.data(for: req)
+        await fetchRecurringClients()
+        if soundEffectsEnabled { SoundManager.playSuccessTone() }
+    }
+
+    func deleteRecurringClient(id: Int) async {
+        guard let url = URL(string: "\(cleanURL)/api/recurring/delete") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["id": id])
+        _ = try? await URLSession.shared.data(for: req)
+        await fetchRecurringClients()
+    }
+
+    func fetchWeather() async {
+        guard let url = URL(string: "\(cleanURL)/api/weather/killeen") else { return }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            struct WResp: Codable {
+                var success: Bool
+                var temperature: Int
+                var unit: String
+                var weather_code: Int
+                var rain_probability: Int
+                var city: String
+            }
+            if let r = try? JSONDecoder().decode(WResp.self, from: data) {
+                DispatchQueue.main.async {
+                    self.weatherInfo = WeatherInfo(
+                        temperature: r.temperature,
+                        unit: r.unit,
+                        weather_code: r.weather_code,
+                        rain_probability: r.rain_probability,
+                        city: r.city
+                    )
+                }
+            }
+        } catch {
+            print("Notice fetchWeather: \(error)")
+        }
+    }
+
 
     static let defaultMusicPresets: [MusicPreset] = [
         MusicPreset(id: "texas_guitar", name: "🎸 Texas Acoustic & Guitarra Campestre", genre: "Acoustic Chill", url: "./assets/audio/texas_acoustic.mp3", desc: "Acordes suaves de guitarra acústica y vibra texana para ambientar la página con clase."),
@@ -3130,6 +3283,9 @@ struct WebAdminView: View {
     @State private var showQuickEstimatorSheet = false
     @State private var showReviewsSheet = false
     @State private var showMusicSettingsSheet = false
+    @State private var showRecurringSheet = false
+    @State private var showBeforeAfterSheet = false
+    @State private var showLawnAreaSheet = false
 
     var body: some View {
         NavigationView {
@@ -3139,6 +3295,10 @@ struct WebAdminView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         otaUpdatesCard
+                        recurringClientsCard
+                        beforeAfterCard
+                        lawnAreaCard
+                        soundAlertsCard
                         analyticsCard
                         musicManagerCard
                         reviewsManagerCard
@@ -3165,6 +3325,15 @@ struct WebAdminView: View {
             .onAppear {
                 serverInput = store.serverURL
             }
+            .sheet(isPresented: $showRecurringSheet) {
+                RecurringClientsManagerView(store: store)
+            }
+            .sheet(isPresented: $showBeforeAfterSheet) {
+                BeforeAfterCameraSheetView(store: store)
+            }
+            .sheet(isPresented: $showLawnAreaSheet) {
+                LawnAreaCalculatorSheetView(store: store)
+            }
             .sheet(isPresented: $showMusicSettingsSheet) {
                 WebMusicSettingsSheetView(store: store)
             }
@@ -3183,6 +3352,135 @@ struct WebAdminView: View {
                 Text("Se ha actualizado la dirección del servidor.")
             }
         }
+    }
+
+
+    // RECURRING CLIENTS CARD
+    private var recurringClientsCard: some View {
+        Button {
+            showRecurringSheet = true
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Brand.primary.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "repeat.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(Brand.primary)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("🔁 Clientes Recurrentes")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                    Text("\(store.recurringClients.count) clientes fijos • Recordatorios WhatsApp y Cobros")
+                        .font(.caption2)
+                        .foregroundStyle(.gray)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+            }
+            .padding(14)
+            .background(Brand.card)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    // BEFORE & AFTER CARD
+    private var beforeAfterCard: some View {
+        Button {
+            showBeforeAfterSheet = true
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.orange.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "camera.filters")
+                        .font(.title3)
+                        .foregroundStyle(Color.orange)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("📸 Cámara Antes & Después")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                    Text("Comparativa con logo y publicación directa a la web")
+                        .font(.caption2)
+                        .foregroundStyle(.gray)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+            }
+            .padding(14)
+            .background(Brand.card)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    // SATELLITE SQFT CALCULATOR CARD
+    private var lawnAreaCard: some View {
+        Button {
+            showLawnAreaSheet = true
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.green.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "map.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(Color.green)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("📐 Medidor Satelital de Terreno (SQFT)")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                    Text("Mide pies cuadrados y cotiza por GPS satelital")
+                        .font(.caption2)
+                        .foregroundStyle(.gray)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+            }
+            .padding(14)
+            .background(Brand.card)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    // SOUND & HAPTICS CARD
+    private var soundAlertsCard: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.purple.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                Image(systemName: "bell.and.waves.left.and.right.fill")
+                    .font(.title3)
+                    .foregroundStyle(Color.purple)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("🔔 Efectos de Sonido y Haptics")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                Text("Tonos audibles al recibir citas o guardar facturas")
+                    .font(.caption2)
+                    .foregroundStyle(.gray)
+            }
+            Spacer()
+            Toggle("", isOn: $store.soundEffectsEnabled)
+                .labelsHidden()
+                .tint(Brand.primary)
+        }
+        .padding(14)
+        .background(Brand.card)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     // QUICK ESTIMATOR CARD
@@ -5128,6 +5426,28 @@ struct InvoiceSheetView: View {
                             .background(Color.white.opacity(0.05))
                             .clipShape(RoundedRectangle(cornerRadius: 10))
 
+                            // Payment Instructions Box
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("MÉTODOS DE PAGO ACEPTADOS:")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(Brand.primary)
+                                HStack {
+                                    Image(systemName: "creditcard.fill").foregroundStyle(Brand.primary)
+                                    Text("Zelle: arizmendir754@gmail.com • (254) 852-8163")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.white)
+                                }
+                                HStack {
+                                    Image(systemName: "dollarsign.circle.fill").foregroundStyle(.green)
+                                    Text("Cash App: $RodriguezLawnCare9 / Efectivo al terminar")
+                                        .font(.caption2)
+                                        .foregroundStyle(.white.opacity(0.9))
+                                }
+                            }
+                            .padding(10)
+                            .background(Color.white.opacity(0.04))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+
                             Text("Gracias por confiar en Rodriguez LawnCare. Pago al finalizar el trabajo.")
                                 .font(.caption2)
                                 .italic()
@@ -5249,6 +5569,11 @@ struct InvoiceSheetView: View {
 🌿 *Servicios:* \(svcs)
 💵 *Total a Pagar:* $\(String(format: "%.2f", totalAmount)) USD
 📅 *Fecha:* \(timeFormatted(Date()))
+
+💳 *MÉTODOS DE PAGO ACEPTADOS:*
+• Zelle: arizmendir754@gmail.com o (254) 852-8163
+• Cash App: $RodriguezLawnCare9
+• Efectivo al terminar el trabajo
 
 ✅ *Garantía 100% de Calidad y Satisfacción.*
 ¿Confirmamos este horario para realizar tu servicio? ¡Quedamos a tus órdenes!
@@ -5392,6 +5717,7 @@ struct ProfessionalCalendarView: View {
     @State private var currentMonth: Date = Date()
     @State private var showAddEventSheet: Bool = false
     @State private var isTogglingDay: Bool = false
+    @State private var showRouteOptimizer: Bool = false
 
     private var calendar: Calendar { Calendar.current }
 
@@ -5440,6 +5766,10 @@ struct ProfessionalCalendarView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
+                        // Weather Forecast in Killeen
+                        WeatherBannerView(store: store)
+                            .padding(.top, 4)
+
                         // Month Header Navigation
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
@@ -5592,11 +5922,25 @@ struct ProfessionalCalendarView: View {
                                     .foregroundStyle(Brand.primary)
                                 Spacer()
                                 Button {
+                                    showRouteOptimizer = true
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "map.fill")
+                                        Text("🗺️ Ruta de Hoy")
+                                    }
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.blue)
+                                    .clipShape(Capsule())
+                                }
+                                Button {
                                     showAddEventSheet = true
                                 } label: {
                                     HStack(spacing: 4) {
                                         Image(systemName: "plus.circle.fill")
-                                        Text("Agregar Trabajo")
+                                        Text("Agregar")
                                     }
                                     .font(.caption.bold())
                                     .foregroundStyle(Brand.primary)
@@ -5630,6 +5974,9 @@ struct ProfessionalCalendarView: View {
             .navigationBarHidden(true)
             .sheet(isPresented: $showAddEventSheet) {
                 DirectAddCalendarSheet(store: store, defaultDate: selectedDateString)
+            }
+            .sheet(isPresented: ) {
+                DailyRouteOptimizerSheetView(selectedDate: selectedDate, store: store)
             }
         }
     }
@@ -6605,6 +6952,986 @@ struct WebMusicSettingsSheetView: View {
                 showSavedNotice = true
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
+        }
+    }
+}
+
+
+// ====================================================================
+// MARK: - NEW FEATURES: WEATHER, ROUTES, RECURRING, BEFORE/AFTER, SQFT
+// ====================================================================
+
+// MARK: - WEATHER BANNER VIEW (KILLEEN, TX)
+struct WeatherBannerView: View {
+    @ObservedObject var store: LawnCareStore
+    
+    var body: some View {
+        if let w = store.weatherInfo {
+            VStack(spacing: 8) {
+                HStack(spacing: 12) {
+                    Image(systemName: w.conditionIcon)
+                        .font(.title2)
+                        .foregroundStyle(w.rain_probability >= 40 ? Color.blue : Brand.primary)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text("\(w.temperature)°F • Killeen, TX")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.white)
+                            Text("• \(w.conditionText)")
+                                .font(.caption)
+                                .foregroundStyle(.gray)
+                        }
+                        
+                        Text("Probabilidad de lluvia hoy: \(w.rain_probability)%")
+                            .font(.caption2.bold())
+                            .foregroundStyle(w.rain_probability >= 40 ? Color.orange : Brand.primary)
+                    }
+                    
+                    Spacer()
+                    
+                    Button {
+                        Task { await store.fetchWeather() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption)
+                            .foregroundStyle(.gray)
+                            .padding(6)
+                            .background(Color.white.opacity(0.05))
+                            .clipShape(Circle())
+                    }
+                }
+                
+                if w.rain_probability >= 40 {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Color.orange)
+                            .font(.caption)
+                        Text("Alerta de lluvia: Ten precaución con pasto mojado y ajusta citas si es necesario.")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.9))
+                        Spacer()
+                    }
+                    .padding(8)
+                    .background(Color.orange.opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+            }
+            .padding(12)
+            .background(Brand.card)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(w.rain_probability >= 40 ? Color.orange.opacity(0.4) : Brand.primary.opacity(0.3), lineWidth: 1)
+            )
+            .padding(.horizontal)
+        }
+    }
+}
+
+// MARK: - ROUTE OPTIMIZER VIEW
+struct DailyRouteOptimizerSheetView: View {
+    @Environment(\.dismiss) var dismiss
+    let selectedDate: Date
+    @ObservedObject var store: LawnCareStore
+    
+    private var dateString: String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: selectedDate)
+    }
+    
+    private var dateDisplay: String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "es_US")
+        f.dateStyle = .medium
+        return f.string(from: selectedDate)
+    }
+    
+    var stops: [CalendarAppointment] {
+        store.calendarData.appointments?.filter {
+            $0.date == dateString && !($0.address?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        } ?? []
+    }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        // Header Summary Card
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: "map.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(Brand.primary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Ruta Optimizada de Paradas")
+                                        .font(.headline.bold())
+                                        .foregroundStyle(.white)
+                                    Text("\(dateDisplay) • \(stops.count) Paradas Programadas")
+                                        .font(.caption)
+                                        .foregroundStyle(.gray)
+                                }
+                                Spacer()
+                            }
+                            
+                            Text("Ahorra tiempo y gasolina en Killeen, Harker Heights y alrededores abriendo la ruta completa en tus mapas favoritos.")
+                                .font(.caption2)
+                                .foregroundStyle(.gray)
+                                .padding(.top, 2)
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Brand.primary.opacity(0.3), lineWidth: 1)
+                        )
+                        
+                        // Launcher Actions
+                        if !stops.isEmpty {
+                            VStack(spacing: 10) {
+                                Button {
+                                    openAppleMapsRoute()
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "applelogo")
+                                        Text("Abrir Ruta Completa en Apple Maps")
+                                    }
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(12)
+                                    .background(Color.blue)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                }
+                                
+                                Button {
+                                    openGoogleMapsRoute()
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "location.fill")
+                                        Text("Abrir Ruta Completa en Google Maps")
+                                    }
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.black)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(12)
+                                    .background(Brand.primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                }
+                            }
+                        }
+                        
+                        // Stops List
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("ORDEN SUGERIDO DE PARADAS (\(stops.count))")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                            
+                            if stops.isEmpty {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "mappin.slash")
+                                        .font(.largeTitle)
+                                        .foregroundStyle(.gray.opacity(0.5))
+                                    Text("No hay citas con dirección registrada para este día.")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.gray)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 40)
+                            } else {
+                                ForEach(Array(stops.enumerated()), id: \.element.id) { index, appt in
+                                    HStack(alignment: .top, spacing: 12) {
+                                        ZStack {
+                                            Circle()
+                                                .fill(Brand.primary)
+                                                .frame(width: 32, height: 32)
+                                            Text("\(index + 1)")
+                                                .font(.caption.bold())
+                                                .foregroundStyle(.black)
+                                        }
+                                        
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(appt.client_name)
+                                                .font(.headline)
+                                                .foregroundStyle(.white)
+                                            if let addr = appt.address, !addr.isEmpty {
+                                                Text(addr)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.gray)
+                                            }
+                                            if let tw = appt.time_window, !tw.isEmpty {
+                                                Text("⏰ Horario: \(tw)")
+                                                    .font(.caption2)
+                                                    .foregroundStyle(Brand.primary)
+                                            }
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        if let addr = appt.address, !addr.isEmpty {
+                                            Button {
+                                                openSingleAddressInMaps(addr)
+                                            } label: {
+                                                Image(systemName: "arrow.triangle.turn.up.right.circle.fill")
+                                                    .font(.title2)
+                                                    .foregroundStyle(Brand.primary)
+                                            }
+                                        }
+                                    }
+                                    .padding(12)
+                                    .background(Brand.card)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Optimizador de Ruta")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
+    }
+    
+    private func openSingleAddressInMaps(_ address: String) {
+        let clean = address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        if let url = URL(string: "http://maps.apple.com/?daddr=\(clean)") {
+            UIApplication.shared.open(url)
+        }
+    }
+    
+    private func openAppleMapsRoute() {
+        guard let first = stops.first?.address else { return }
+        let cleanFirst = first.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        if let url = URL(string: "http://maps.apple.com/?daddr=\(cleanFirst)") {
+            UIApplication.shared.open(url)
+        }
+    }
+    
+    private func openGoogleMapsRoute() {
+        guard let dest = stops.last?.address else { return }
+        let destClean = dest.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let waypoints = stops.dropLast().compactMap { $0.address?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) }.joined(separator: "|")
+        var urlStr = "https://www.google.com/maps/dir/?api=1&destination=\(destClean)"
+        if !waypoints.isEmpty {
+            urlStr += "&waypoints=\(waypoints)"
+        }
+        if let url = URL(string: urlStr) {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+// MARK: - RECURRING CLIENTS MANAGER
+struct RecurringClientsManagerView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    @State private var selectedDayFilter: String = "Todos"
+    @State private var showAddSheet: Bool = false
+    
+    let dayFilters = ["Todos", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Pendientes"]
+    
+    var filteredClients: [RecurringClient] {
+        if selectedDayFilter == "Todos" {
+            return store.recurringClients
+        } else if selectedDayFilter == "Pendientes" {
+            return store.recurringClients.filter { $0.status == "pending" }
+        } else {
+            return store.recurringClients.filter { $0.service_day == selectedDayFilter }
+        }
+    }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Filter bar
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(dayFilters, id: \.self) { filter in
+                                Button {
+                                    selectedDayFilter = filter
+                                } label: {
+                                    Text(filter)
+                                        .font(.caption.bold())
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(selectedDayFilter == filter ? Brand.primary : Brand.card)
+                                        .foregroundStyle(selectedDayFilter == filter ? .black : .white)
+                                        .clipShape(Capsule())
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 10)
+                    }
+                    
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            if filteredClients.isEmpty {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "person.2.slash")
+                                        .font(.largeTitle)
+                                        .foregroundStyle(.gray.opacity(0.5))
+                                    Text("No hay clientes recurrentes registrados en esta categoría.")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.gray)
+                                }
+                                .padding(.top, 50)
+                            } else {
+                                ForEach(filteredClients) { client in
+                                    RecurringClientCard(client: client, store: store)
+                                }
+                            }
+                        }
+                        .padding()
+                    }
+                }
+            }
+            .navigationTitle("Clientes Recurrentes")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showAddSheet = true
+                    } label: {
+                        Image(systemName: "person.badge.plus")
+                            .foregroundStyle(Brand.primary)
+                    }
+                }
+            }
+            .sheet(isPresented: $showAddSheet) {
+                AddRecurringClientSheet(store: store)
+            }
+        }
+    }
+}
+
+struct RecurringClientCard: View {
+    let client: RecurringClient
+    @ObservedObject var store: LawnCareStore
+    @State private var isToggling: Bool = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(client.name)
+                        .font(.headline.bold())
+                        .foregroundStyle(.white)
+                    Text(client.phone)
+                        .font(.caption)
+                        .foregroundStyle(Brand.primary)
+                    if !client.address.isEmpty {
+                        Text(client.address)
+                            .font(.caption2)
+                            .foregroundStyle(.gray)
+                    }
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("$\(String(format: "%.0f", client.price))/visita")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(Brand.primary)
+                    Text(client.frequency == "weekly" ? "Semanal" : (client.frequency == "biweekly" ? "Quincenal" : "Mensual"))
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Brand.primary.opacity(0.15))
+                        .foregroundStyle(Brand.primary)
+                        .clipShape(Capsule())
+                }
+            }
+            
+            HStack(spacing: 8) {
+                Text("Día de Corte: \(client.service_day)")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.white.opacity(0.8))
+                Spacer()
+                
+                Button {
+                    Task {
+                        isToggling = true
+                        await store.togglePaidRecurring(id: client.id)
+                        isToggling = false
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(client.status == "paid" ? Color.green : Color.orange)
+                            .frame(width: 8, height: 8)
+                        Text(client.status == "paid" ? "Pagado ✓" : "Pendiente ⏳")
+                            .font(.caption2.bold())
+                            .foregroundStyle(client.status == "paid" ? Color.green : Color.orange)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.06))
+                    .clipShape(Capsule())
+                }
+            }
+            
+            Divider().background(Color.gray.opacity(0.2))
+            
+            HStack(spacing: 8) {
+                Button {
+                    sendReminderWhatsApp()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "message.fill")
+                        Text("Recordatorio WhatsApp")
+                    }
+                    .font(.caption.bold())
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(8)
+                    .background(Color.green)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                
+                Button {
+                    callClient()
+                } label: {
+                    Image(systemName: "phone.fill")
+                        .font(.caption)
+                        .foregroundStyle(.white)
+                        .padding(8)
+                        .background(Brand.cardLight)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+            }
+        }
+        .padding(14)
+        .background(Brand.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+    
+    private func sendReminderWhatsApp() {
+        var cleanPhone = client.phone.filter { "0123456789".contains($0) }
+        if cleanPhone.count == 10 { cleanPhone = "1" + cleanPhone }
+        let msg = """
+🌿 *Rodriguez Lawn Care - Recordatorio de Servicio*
+¡Hola \(client.name)! Te recordamos que mañana \(client.service_day) pasamos a realizar tu servicio de corte y mantenimiento de jardín.
+
+Por favor asegúrate de:
+1. Dejar el portón sin candado o llave.
+2. Mantener mascotas dentro de casa.
+3. Retirar juguetes o mangueras del pasto.
+
+¡Muchas gracias por tu confianza! Si tienes alguna duda, responde a este mensaje.
+"""
+        let encoded = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        if let url = URL(string: "https://wa.me/\(cleanPhone)?text=\(encoded)") {
+            UIApplication.shared.open(url)
+        }
+    }
+    
+    private func callClient() {
+        let clean = client.phone.filter { "0123456789".contains($0) }
+        if let url = URL(string: "tel://\(clean)") {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+struct AddRecurringClientSheet: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var name: String = ""
+    @State private var phone: String = ""
+    @State private var address: String = ""
+    @State private var frequency: String = "weekly"
+    @State private var serviceDay: String = "Lunes"
+    @State private var price: String = "60"
+    @State private var notes: String = ""
+    
+    let days = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                Form {
+                    Section(header: Text("DATOS DEL CLIENTE").foregroundStyle(Brand.primary)) {
+                        TextField("Nombre Completo", text: $name)
+                        TextField("Teléfono (Ej: 254-555-0100)", text: $phone)
+                            .keyboardType(.phonePad)
+                        TextField("Dirección (Killeen / TX)", text: $address)
+                    }
+                    .listRowBackground(Brand.card)
+                    
+                    Section(header: Text("FRECUENCIA Y HORARIO").foregroundStyle(Brand.primary)) {
+                        Picker("Frecuencia", selection: $frequency) {
+                            Text("Semanal").tag("weekly")
+                            Text("Quincenal").tag("biweekly")
+                            Text("Mensual").tag("monthly")
+                        }
+                        Picker("Día de Servicio", selection: $serviceDay) {
+                            ForEach(days, id: \.self) { d in
+                                Text(d).tag(d)
+                            }
+                        }
+                        TextField("Precio por Visita ($)", text: $price)
+                            .keyboardType(.decimalPad)
+                        TextField("Notas (Portón, Mascotas, etc.)", text: $notes)
+                    }
+                    .listRowBackground(Brand.card)
+                }
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Nuevo Cliente Frecuente")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancelar") { dismiss() }
+                        .foregroundStyle(.gray)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Guardar") {
+                        let newC = RecurringClient(
+                            id: Int(Date().timeIntervalSince1970 * 1000),
+                            name: name.isEmpty ? "Cliente" : name,
+                            phone: phone,
+                            address: address,
+                            frequency: frequency,
+                            service_day: serviceDay,
+                            price: Double(price) ?? 60.0,
+                            status: "pending",
+                            services: ["Front & Back Yard Cut"],
+                            notes: notes,
+                            last_serviced: ""
+                        )
+                        Task {
+                            await store.saveRecurringClient(newC)
+                            dismiss()
+                        }
+                    }
+                    .foregroundStyle(Brand.primary)
+                    .disabled(name.isEmpty)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - BEFORE & AFTER CAMERA SHEET
+struct BeforeAfterCameraSheetView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var beforeImage: UIImage? = nil
+    @State private var afterImage: UIImage? = nil
+    @State private var showBeforePicker: Bool = false
+    @State private var showAfterPicker: Bool = false
+    @State private var titleText: String = "Corte & Mantenimiento Residencial"
+    @State private var categoryText: String = "Front Yard"
+    @State private var isPublishing: Bool = false
+    @State private var showSuccessAlert: Bool = false
+    
+    let categories = ["Front Yard", "Back Yard", "Mulch", "Tree Care", "Cleanups", "General LawnCare"]
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        // Title & Category Inputs
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("TÍTULO DEL TRABAJO")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                            TextField("Ej: Corte y Bordeado Impecable", text: $titleText)
+                                .padding(10)
+                                .background(Brand.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .foregroundStyle(.white)
+                            
+                            Text("CATEGORÍA")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                                .padding(.top, 4)
+                            Picker("Categoría", selection: $categoryText) {
+                                ForEach(categories, id: \.self) { c in
+                                    Text(c).tag(c)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        
+                        // Photo Pickers
+                        HStack(spacing: 12) {
+                            // Before Box
+                            Button {
+                                showBeforePicker = true
+                            } label: {
+                                VStack(spacing: 8) {
+                                    if let b = beforeImage {
+                                        Image(uiImage: b)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(height: 140)
+                                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    } else {
+                                        VStack(spacing: 6) {
+                                            Image(systemName: "camera.badge.ellipsis")
+                                                .font(.title)
+                                                .foregroundStyle(.orange)
+                                            Text("Foto ANTES")
+                                                .font(.subheadline.bold())
+                                                .foregroundStyle(.white)
+                                            Text("Toca para agregar")
+                                                .font(.caption2)
+                                                .foregroundStyle(.gray)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 140)
+                                        .background(Color.white.opacity(0.04))
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    }
+                                }
+                            }
+                            
+                            // After Box
+                            Button {
+                                showAfterPicker = true
+                            } label: {
+                                VStack(spacing: 8) {
+                                    if let a = afterImage {
+                                        Image(uiImage: a)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(height: 140)
+                                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    } else {
+                                        VStack(spacing: 6) {
+                                            Image(systemName: "camera.fill")
+                                                .font(.title)
+                                                .foregroundStyle(Brand.primary)
+                                            Text("Foto DESPUÉS")
+                                                .font(.subheadline.bold())
+                                                .foregroundStyle(.white)
+                                            Text("Toca para agregar")
+                                                .font(.caption2)
+                                                .foregroundStyle(.gray)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 140)
+                                        .background(Color.white.opacity(0.04))
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Action Buttons
+                        VStack(spacing: 12) {
+                            Button {
+                                publishToLiveGallery()
+                            } label: {
+                                HStack {
+                                    if isPublishing {
+                                        ProgressView().tint(.black)
+                                    } else {
+                                        Image(systemName: "globe")
+                                        Text("🚀 Publicar Directo en la Galería Web")
+                                    }
+                                }
+                                .font(.headline)
+                                .foregroundStyle(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(afterImage != nil ? Brand.primary : Color.gray)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .disabled(afterImage == nil || isPublishing)
+                            
+                            Button {
+                                shareWhatsAppBeforeAfter()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "message.fill")
+                                    Text("Compartir con Cliente por WhatsApp")
+                                }
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.green)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .disabled(afterImage == nil)
+                        }
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Cámara Antes y Después")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+            .sheet(isPresented: $showBeforePicker) {
+                PhotoLibraryPicker(selectedImage: $beforeImage)
+            }
+            .sheet(isPresented: $showAfterPicker) {
+                PhotoLibraryPicker(selectedImage: $afterImage)
+            }
+            .alert("¡Publicado en la Web!", isPresented: $showSuccessAlert) {
+                Button("OK") { dismiss() }
+            } message: {
+                Text("Tu nuevo trabajo ya está en vivo en la sección de Real Work de la página web con el distintivo ✨ Antes & Después.")
+            }
+        }
+    }
+    
+    private func publishToLiveGallery() {
+        guard let img = afterImage else { return }
+        isPublishing = true
+        let b64 = img.jpegData(compressionQuality: 0.6)?.base64EncodedString() ?? ""
+        Task {
+            await store.addGalleryPhoto(title: titleText, category: categoryText, imageBase64: b64)
+            isPublishing = false
+            showSuccessAlert = true
+        }
+    }
+    
+    private func shareWhatsAppBeforeAfter() {
+        let msg = """
+🌿 *Rodriguez Lawn Care - Trabajo Terminado*
+¡Hola! Aquí tienes el resultado de nuestro servicio en tu propiedad:
+✂️ \(titleText)
+⭐ Garantía de satisfacción 100%. ¡Muchas gracias por tu preferencia!
+"""
+        let encoded = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        if let url = URL(string: "https://wa.me/?text=\(encoded)") {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+// MARK: - SATELLITE LAWN AREA CALCULATOR
+struct LawnAreaCalculatorSheetView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var addressSearch: String = ""
+    @State private var region = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 31.1171, longitude: -97.7278), // Killeen, TX
+        span: MKCoordinateSpan(latitudeDelta: 0.003, longitudeDelta: 0.003)
+    )
+    @State private var polygonPoints: [CLLocationCoordinate2D] = []
+    @State private var computedSqFt: Double = 0
+    @State private var isSearching: Bool = false
+    
+    var suggestedPrice: Double {
+        if computedSqFt <= 0 { return 55.0 }
+        if computedSqFt < 3500 { return 45.0 }
+        if computedSqFt < 7000 { return 65.0 }
+        if computedSqFt < 12000 { return 85.0 }
+        if computedSqFt < 25000 { return 110.0 }
+        return 140.0 + ((computedSqFt - 25000) / 10000) * 20.0
+    }
+    
+    var computedAcres: Double {
+        return computedSqFt / 43560.0
+    }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Search bar
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.gray)
+                        TextField("Dirección en Killeen o TX (Ej: 123 Main St)", text: $addressSearch, onCommit: {
+                            searchAddress()
+                        })
+                        .foregroundStyle(.white)
+                        if isSearching {
+                            ProgressView().tint(.white)
+                        } else {
+                            Button("Buscar") { searchAddress() }
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                        }
+                    }
+                    .padding(10)
+                    .background(Brand.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    
+                    // Map with Satellite style
+                    ZStack(alignment: .topTrailing) {
+                        Map(coordinateRegion: $region)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .onTapGesture {
+                                // Add center point to polygon
+                                polygonPoints.append(region.center)
+                                recalculateArea()
+                            }
+                        
+                        // Tap Helper Tag
+                        Text("Mueve el mapa y toca para marcar esquinas del jardín (\(polygonPoints.count) puntos)")
+                            .font(.caption2.bold())
+                            .padding(6)
+                            .background(Color.black.opacity(0.7))
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
+                            .padding(10)
+                    }
+                    
+                    // Calculation Results Bottom Card
+                    VStack(spacing: 12) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("ÁREA CALCULADA:")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.gray)
+                                Text("\(String(format: "%.0f", computedSqFt)) sq ft")
+                                    .font(.title2.bold())
+                                    .foregroundStyle(Brand.primary)
+                                Text("\(String(format: "%.2f", computedAcres)) Acres")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.8))
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("PRECIO SUGERIDO:")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.gray)
+                                Text("$\(String(format: "%.0f", suggestedPrice)) USD")
+                                    .font(.title2.bold())
+                                    .foregroundStyle(.green)
+                                Text("Corte Residencial")
+                                    .font(.caption2)
+                                    .foregroundStyle(.gray)
+                            }
+                        }
+                        
+                        HStack(spacing: 10) {
+                            Button {
+                                polygonPoints.removeAll()
+                                computedSqFt = 0
+                            } label: {
+                                Text("Limpiar Puntos")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.red)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(10)
+                                    .background(Color.red.opacity(0.15))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            
+                            Button {
+                                copyEstimateWhatsApp()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "doc.on.doc.fill")
+                                    Text("Copiar a WhatsApp")
+                                }
+                                .font(.caption.bold())
+                                .foregroundStyle(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding(10)
+                                .background(Brand.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+                    }
+                    .padding(14)
+                    .background(Brand.card)
+                }
+            }
+            .navigationTitle("Medidor Satelital SQFT")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
+    }
+    
+    private func searchAddress() {
+        guard !addressSearch.isEmpty else { return }
+        isSearching = true
+        let geocoder = CLGeocoder()
+        let query = addressSearch.contains("TX") ? addressSearch : "\(addressSearch), Killeen, TX"
+        geocoder.geocodeAddressString(query) { placemarks, _ in
+            isSearching = false
+            if let loc = placemarks?.first?.location {
+                region = MKCoordinateRegion(
+                    center: loc.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.0015, longitudeDelta: 0.0015)
+                )
+            }
+        }
+    }
+    
+    private func recalculateArea() {
+        guard polygonPoints.count >= 3 else {
+            computedSqFt = 0
+            return
+        }
+        var area: Double = 0.0
+        let k = 111319.9
+        for i in 0..<polygonPoints.count {
+            let p1 = polygonPoints[i]
+            let p2 = polygonPoints[(i + 1) % polygonPoints.count]
+            let x1 = p1.longitude * k * cos(p1.latitude * Double.pi / 180.0)
+            let y1 = p1.latitude * k
+            let x2 = p2.longitude * k * cos(p2.latitude * Double.pi / 180.0)
+            let y2 = p2.latitude * k
+            area += (x1 * y2) - (x2 * y1)
+        }
+        let areaSqMeters = abs(area) / 2.0
+        computedSqFt = areaSqMeters * 10.7639
+    }
+    
+    private func copyEstimateWhatsApp() {
+        let msg = """
+🌿 *Rodriguez Lawn Care - Medición y Presupuesto Satelital*
+📍 Propiedad: \(addressSearch.isEmpty ? "Área en Killeen" : addressSearch)
+📐 Tamaño estimado: \(String(format: "%.0f", computedSqFt)) sq ft (\(String(format: "%.2f", computedAcres)) Acres)
+💵 Presupuesto sugerido de corte: $\(String(format: "%.0f", suggestedPrice)) USD
+¡Contáctanos al (254) 852-8163 para agendar tu servicio hoy mismo!
+"""
+        UIPasteboard.general.string = msg
+        let encoded = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        if let url = URL(string: "https://wa.me/?text=\(encoded)") {
+            UIApplication.shared.open(url)
         }
     }
 }

@@ -229,6 +229,10 @@
         ? `<span class="gallery-badge badge-new"><span class="badge-pulse"></span>🔥 NEW</span>`
         : `<span class="gallery-badge badge-num">#${idFormatted}</span>`;
 
+      const beforeAfterBadge = item.is_before_after
+        ? `<span class="gallery-badge" style="background: linear-gradient(135deg, #10b981, #059669); color: white; font-weight: 700;">✨ Antes & Después</span>`
+        : '';
+
       const category = item.category || detectCategory(item.title);
       const icon = getCategoryIcon(category);
       const title = item.title || `Trabajo #${item.id}`;
@@ -238,6 +242,7 @@
           <div class="gallery-thumb-wrap">
             <div class="gallery-badges-row">
               ${badgeHtml}
+              ${beforeAfterBadge}
               <span class="gallery-category-pill">${icon} ${escapeHtml(category)}</span>
             </div>
             <img src="${item.url}" alt="${escapeHtml(title)}" class="gallery-img" loading="lazy" onerror="this.src='./assets/images/mowing.jpg'">
