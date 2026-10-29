@@ -1924,7 +1924,7 @@ struct GalleryWorkCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
                     Text(photo.category.uppercased())
-                        .font(.system(size: 9, weight: .extrabold))
+                        .font(.system(size: 9, weight: .heavy))
                         .foregroundStyle(Brand.primary)
                     Spacer()
                     Text("#\(String(format: "%02d", photo.id))")
