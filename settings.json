@@ -91,7 +91,7 @@
     }
   ],
   "music": {
-    "enabled": true,
+    "enabled": false,
     "title": "🎸 Texas Acoustic & Guitarra Campestre",
     "genre": "Acoustic Chill",
     "stream_url": "./assets/audio/texas_acoustic.mp3",

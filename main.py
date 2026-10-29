@@ -2980,8 +2980,10 @@ async def handle_api_calendar_availability(request):
         return cors_json_response({
             "success": True,
             "date": date_val,
+            "available": False,
             "is_available": False,
             "is_full": True,
+            "day_status": "full",
             "message": "Día Lleno / Team Fully Booked. Please select another date."
         })
 
@@ -2995,9 +2997,12 @@ async def handle_api_calendar_availability(request):
     return cors_json_response({
         "success": True,
         "date": date_val,
+        "available": True,
         "is_available": True,
         "is_full": False,
+        "day_status": "normal",
         "booked_slots": booked_slots,
+        "booked_times": booked_slots,
         "team_working_slots": booked_slots
     })
 

@@ -883,7 +883,9 @@ async function checkCalendarDate(dateVal, noticeElementId, timeSelectId, submitB
     const res = await fetch(`/api/calendar/availability?date=${encodeURIComponent(dateVal)}`);
     if (!res.ok) return;
     const data = await res.json();
-    if (!data.available) {
+    // Only block if explicitly full
+    const isDayFull = (data.is_full === true || data.day_status === 'full' || data.is_available === false);
+    if (isDayFull) {
       if (noticeEl) {
         noticeEl.style.display = 'block';
         noticeEl.innerHTML = `⚠️ <strong>Team Fully Booked:</strong> Este día tenemos todos los horarios ocupados. Por favor selecciona otra fecha disponible.`;
@@ -895,7 +897,8 @@ async function checkCalendarDate(dateVal, noticeElementId, timeSelectId, submitB
       const btn = document.querySelector(submitBtnSelector);
       if (btn) btn.disabled = false;
 
-      if (timeSelect && Array.isArray(data.booked_times)) {
+      const bookedSlots = data.booked_slots || data.booked_times || [];
+      if (timeSelect && Array.isArray(bookedSlots) && bookedSlots.length > 0) {
         Array.from(timeSelect.options).forEach(opt => {
           const isBooked = data.booked_times.some(bt => opt.value.includes(bt) || bt.includes(opt.value));
           if (isBooked) {

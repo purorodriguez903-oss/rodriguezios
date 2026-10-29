@@ -339,8 +339,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "1.7.0"
-    let currentAppBuild: Int = 18
+    let currentAppVersion: String = "1.7.1"
+    let currentAppBuild: Int = 19
 
     @Published var calendarData: CalendarData = CalendarData(day_status: [:], appointments: [])
     @Published var activePromo: FlashPromotion? = nil
@@ -3129,6 +3129,7 @@ struct WebAdminView: View {
     @State private var showCloudPanelSheet = false
     @State private var showQuickEstimatorSheet = false
     @State private var showReviewsSheet = false
+    @State private var showMusicSettingsSheet = false
 
     var body: some View {
         NavigationView {
@@ -3139,6 +3140,7 @@ struct WebAdminView: View {
                     VStack(alignment: .leading, spacing: 18) {
                         otaUpdatesCard
                         analyticsCard
+                        musicManagerCard
                         reviewsManagerCard
                         heroManagerCard
                         quickEstimatorCard
@@ -3162,6 +3164,9 @@ struct WebAdminView: View {
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 serverInput = store.serverURL
+            }
+            .sheet(isPresented: $showMusicSettingsSheet) {
+                WebMusicSettingsSheetView(store: store)
             }
             .sheet(isPresented: $showReviewsSheet) {
                 ReviewsManagerView(store: store)
@@ -3406,6 +3411,52 @@ struct WebAdminView: View {
     }
 
     // 3. HERO BACKGROUND MANAGER
+    private var musicManagerCard: some View {
+        Button {
+            showMusicSettingsSheet = true
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.purple.opacity(0.18))
+                        .frame(width: 48, height: 48)
+                    Image(systemName: "music.note.list")
+                        .font(.title2)
+                        .foregroundStyle(Color.purple)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack {
+                        Text("Música de Fondo Web")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                        Spacer()
+                        let isEnabled = store.settings?.music?.enabled ?? false
+                        Text(isEnabled ? "ON 🎵" : "OFF 🔇")
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(isEnabled ? Color.purple.opacity(0.2) : Color.gray.opacity(0.2))
+                            .foregroundStyle(isEnabled ? Color.purple : Color.gray)
+                            .cornerRadius(6)
+                    }
+                    Text(store.settings?.music?.enabled == true ? (store.settings?.music?.title ?? "Sonando en la Web") : "Música desactivada en la web")
+                        .font(.caption)
+                        .foregroundStyle(.gray)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.gray)
+            }
+            .padding(14)
+            .background(Brand.card)
+            .cornerRadius(14)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.purple.opacity(0.3), lineWidth: 1)
+            )
+        }
+    }
+
     private var reviewsManagerCard: some View {
         Button {
             showReviewsSheet = true
@@ -6334,6 +6385,225 @@ struct AddReviewSheetView: View {
                 dismiss()
             } else {
                 errorMessage = "Error al guardar en el servidor. Intenta nuevamente."
+            }
+        }
+    }
+}
+
+
+// ==================== GESTOR DE MÚSICA DE FONDO WEB ====================
+struct WebMusicSettingsSheetView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+
+    @State private var isEnabled: Bool = false
+    @State private var selectedPresetId: String = "texas_guitar"
+    @State private var musicVolume: Double = 0.40
+    @State private var isSaving: Bool = false
+    @State private var showSavedNotice: Bool = false
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        // ON / OFF Master Switch Card
+                        VStack(spacing: 12) {
+                            HStack {
+                                ZStack {
+                                    Circle()
+                                        .fill(isEnabled ? Color.purple.opacity(0.25) : Color.gray.opacity(0.2))
+                                        .frame(width: 44, height: 44)
+                                    Image(systemName: isEnabled ? "speaker.wave.3.fill" : "speaker.slash.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(isEnabled ? Color.purple : Color.gray)
+                                }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Música en la Página Web")
+                                        .font(.headline.bold())
+                                        .foregroundStyle(.white)
+                                    Text(isEnabled ? "🟢 Activa: los clientes pueden escuchar música" : "🔴 Apagada: la página web está en silencio")
+                                        .font(.caption)
+                                        .foregroundStyle(isEnabled ? Brand.primary : .gray)
+                                }
+                                Spacer()
+                                Toggle("", isOn: $isEnabled)
+                                    .labelsHidden()
+                                    .toggleStyle(SwitchToggleStyle(tint: Color.purple))
+                            }
+
+                            if isEnabled {
+                                Button {
+                                    isEnabled = false
+                                    saveMusicConfig()
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "speaker.slash")
+                                        Text("Apagar Música Ahora (Mute)")
+                                    }
+                                    .font(.caption.bold())
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .background(Color.red.opacity(0.15))
+                                    .foregroundStyle(.red)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                            }
+                        }
+                        .padding()
+                        .background(Brand.card)
+                        .cornerRadius(14)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(isEnabled ? Color.purple.opacity(0.4) : Color.white.opacity(0.08), lineWidth: 1)
+                        )
+
+                        // Pistas de Música Disponibles (Presets)
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("SELECCIONA LA PISTA DE MÚSICA")
+                                .font(.caption.bold())
+                                .foregroundStyle(.gray)
+
+                            ForEach(LawnCareStore.defaultMusicPresets) { preset in
+                                Button {
+                                    selectedPresetId = preset.id
+                                    isEnabled = true
+                                } label: {
+                                    HStack(alignment: .top, spacing: 12) {
+                                        Image(systemName: selectedPresetId == preset.id ? "checkmark.circle.fill" : "circle")
+                                            .font(.title3)
+                                            .foregroundStyle(selectedPresetId == preset.id ? Color.purple : .gray)
+                                            .padding(.top, 2)
+
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            HStack {
+                                                Text(preset.name)
+                                                    .font(.subheadline.bold())
+                                                    .foregroundStyle(.white)
+                                                Spacer()
+                                                Text(preset.genre)
+                                                    .font(.caption2.bold())
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(Color.purple.opacity(0.2))
+                                                    .foregroundStyle(Color.purple)
+                                                    .clipShape(Capsule())
+                                            }
+                                            Text(preset.desc)
+                                                .font(.caption2)
+                                                .foregroundStyle(.gray)
+                                                .lineLimit(2)
+                                        }
+                                    }
+                                    .padding(12)
+                                    .background(selectedPresetId == preset.id ? Color.purple.opacity(0.12) : Brand.card)
+                                    .cornerRadius(12)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(selectedPresetId == preset.id ? Color.purple : Color.white.opacity(0.05), lineWidth: 1)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Volumen
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text("VOLUMEN DE REPRODUCCIÓN")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.gray)
+                                Spacer()
+                                Text("\(Int(musicVolume * 100))%")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(Color.purple)
+                            }
+
+                            HStack(spacing: 12) {
+                                Image(systemName: "speaker.fill")
+                                    .foregroundStyle(.gray)
+                                Slider(value: $musicVolume, in: 0.10...1.0, step: 0.05)
+                                    .tint(Color.purple)
+                                Image(systemName: "speaker.wave.3.fill")
+                                    .foregroundStyle(.gray)
+                            }
+                            .padding()
+                            .background(Brand.card)
+                            .cornerRadius(12)
+                        }
+
+                        // Save Button
+                        Button {
+                            saveMusicConfig()
+                        } label: {
+                            HStack {
+                                if isSaving {
+                                    ProgressView().tint(.white)
+                                } else {
+                                    Image(systemName: "checkmark.circle.fill")
+                                    Text("Guardar y Aplicar en la Web")
+                                }
+                            }
+                            .font(.headline.bold())
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.purple)
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+                        .disabled(isSaving)
+
+                        if showSavedNotice {
+                            HStack {
+                                Image(systemName: "checkmark.seal.fill")
+                                Text("¡Música actualizada con éxito en la página web!")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundStyle(Brand.primary)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Brand.primary.opacity(0.12))
+                            .cornerRadius(10)
+                        }
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Música de Fondo Web")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }.foregroundStyle(Brand.primary)
+                }
+            }
+            .onAppear {
+                if let m = store.settings?.music {
+                    self.isEnabled = m.enabled
+                    self.selectedPresetId = m.preset_id ?? "texas_guitar"
+                    self.musicVolume = m.volume ?? 0.40
+                }
+            }
+        }
+    }
+
+    private func saveMusicConfig() {
+        isSaving = true
+        showSavedNotice = false
+        let preset = LawnCareStore.defaultMusicPresets.first(where: { $0.id == selectedPresetId }) ?? LawnCareStore.defaultMusicPresets[0]
+        Task {
+            await store.updateWebMusic(
+                enabled: isEnabled,
+                title: preset.name,
+                genre: preset.genre,
+                streamURL: preset.url,
+                volume: musicVolume,
+                presetId: preset.id
+            )
+            await MainActor.run {
+                isSaving = false
+                showSavedNotice = true
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
         }
     }
