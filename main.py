@@ -450,6 +450,18 @@ async def send_ipa_to_discord(bot_instance, channel_id=IPA_CHANNEL_ID, force=Fal
         file_size_mb = file_size_bytes / (1024 * 1024)
 
         import hashlib
+        # Clean up previous bot messages to avoid spam and keep channel clean
+        try:
+            async for old_msg in channel.history(limit=50):
+                if old_msg.author.id == bot_instance.user.id:
+                    try:
+                        await old_msg.delete()
+                        print(f"[IPA Delivery] Mensaje previo {old_msg.id} eliminado para evitar spam.")
+                    except Exception as del_err:
+                        print(f"[IPA Delivery] Aviso al borrar mensaje anterior: {del_err}")
+        except Exception as hist_err:
+            print(f"[IPA Delivery] Aviso al limpiar historial: {hist_err}")
+
         with open(ipa_path, "rb") as f:
             ipa_hash = hashlib.md5(f.read()).hexdigest()
 
