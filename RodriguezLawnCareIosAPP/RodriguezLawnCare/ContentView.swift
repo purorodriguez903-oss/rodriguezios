@@ -95,6 +95,7 @@ struct AppVersionInfo: Codable {
     var ota_install_url: String?
     var trollstore_url: String?
     var esign_url: String?
+    var gbox_url: String?
     var web_install_url: String?
     var has_update: Bool?
 }
@@ -306,6 +307,7 @@ class LawnCareStore: ObservableObject {
         await fetchGallery()
         await fetchSettings()
         await fetchCloudConfig()
+        await checkOTAUpdate(manual: false)
 
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm:ss a"
@@ -2663,6 +2665,30 @@ struct WebAdminView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             }
+
+            Button {
+                let gboxTarget = "gbox://import?url=\(store.cleanURL)/download/ipa"
+                if let url = URL(string: gboxTarget) {
+                    UIApplication.shared.open(url) { opened in
+                        if !opened {
+                            if let fallback = URL(string: "\(store.cleanURL)/download/ipa") {
+                                UIApplication.shared.open(fallback)
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "shippingbox.fill")
+                    Text("📦 Actualizar en 1 Toque con GBox")
+                }
+                .font(.caption.bold())
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(11)
+                .background(Color(red: 0.05, green: 0.55, blue: 0.85))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
         }
         .padding()
         .background(Brand.card)
@@ -2905,6 +2931,33 @@ struct OTAUpdateSheetView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Brand.card)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                        // Button 0: GBox 1-Tap
+                        Button {
+                            let gboxTarget = info?.gbox_url ?? "gbox://import?url=\(store.cleanURL)/download/ipa"
+                            if let url = URL(string: gboxTarget) {
+                                UIApplication.shared.open(url) { opened in
+                                    if !opened {
+                                        if let fallback = URL(string: "\(store.cleanURL)/download/ipa") {
+                                            UIApplication.shared.open(fallback)
+                                        }
+                                    }
+                                }
+                                dismiss()
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: "shippingbox.fill")
+                                    .font(.title3)
+                                Text("📦 Instalar / Firmar con GBox (1 Toque)")
+                                    .font(.headline)
+                            }
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color(red: 0.05, green: 0.55, blue: 0.85))
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
 
                         // Button 1: Safari OTA
                         Button {

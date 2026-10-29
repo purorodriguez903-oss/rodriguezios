@@ -1707,6 +1707,9 @@ async def handle_api_app_version(request):
     version = config.get("app_version", "1.2.0")
     build = config.get("app_build", 12)
     ipa_url = config.get("ipa_url", "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa")
+    ipa_direct_url = f"{base_url}/download/ipa"
+    import urllib.parse
+    gbox_url = f"gbox://import?url={urllib.parse.quote(ipa_direct_url, safe='')}"
     manifest_url = f"{base_url}/api/ota/manifest.plist"
     ota_install_url = f"itms-services://?action=download-manifest&url={manifest_url}"
     trollstore_url = f"apple-magnifier://install?url={ipa_url}"
@@ -1720,6 +1723,7 @@ async def handle_api_app_version(request):
         "min_version": config.get("min_version", "1.0.0"),
         "release_notes": config.get("release_notes", "Conexión 100% online con Railway, ícono oficial y actualización inalámbrica OTA."),
         "ipa_url": ipa_url,
+        "gbox_url": gbox_url,
         "ota_install_url": ota_install_url,
         "trollstore_url": trollstore_url,
         "esign_url": esign_url,
@@ -1772,6 +1776,9 @@ async def handle_ota_page(request):
     version = config.get("app_version", "1.2.0")
     build = config.get("app_build", 12)
     ipa_url = config.get("ipa_url", "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa")
+    ipa_direct_url = f"{base_url}/download/ipa"
+    import urllib.parse
+    gbox_url = f"gbox://import?url={urllib.parse.quote(ipa_direct_url, safe='')}"
     manifest_url = f"{base_url}/api/ota/manifest.plist"
     ota_install_url = f"itms-services://?action=download-manifest&url={manifest_url}"
     trollstore_url = f"apple-magnifier://install?url={ipa_url}"
@@ -1867,6 +1874,11 @@ async def handle_ota_page(request):
     .btn:active {{
       transform: scale(0.98);
     }}
+    .btn-gbox {{
+      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+      color: #ffffff;
+      box-shadow: 0 8px 24px rgba(2, 132, 199, 0.4);
+    }}
     .btn-ota {{
       background: linear-gradient(135deg, #22c55e 0%, #15803d 100%);
       color: #ffffff;
@@ -1945,6 +1957,12 @@ async def handle_ota_page(request):
     <img src="/assets/bot_logo.jpg" alt="Icono rodriguezlawncareios" class="app-icon">
     <h1>rodriguezlawncareios</h1>
     <p class="subtitle">Administrador Móvil en Tiempo Real • Versión {version} (Build {build})</p>
+
+    <!-- Botón GBox: 1 Toque -->
+    <a href="{gbox_url}" class="btn btn-gbox">
+      <span>📦</span>
+      <span>Instalar / Firmar con GBox (1 Toque)</span>
+    </a>
 
     <!-- Botón 1: OTA Safari -->
     <a href="{ota_install_url}" class="btn btn-ota">
