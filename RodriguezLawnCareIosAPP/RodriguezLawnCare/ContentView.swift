@@ -97,6 +97,9 @@ import AudioToolbox
 import CoreImage
 import Contacts
 import ContactsUI
+import AVFoundation
+import CoreMedia
+import Photos
 
 // MARK: - THEME & BRANDING
 enum Brand {
@@ -436,8 +439,82 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "2.2.0"
-    let currentAppBuild: Int = 27
+    let currentAppVersion: String = "2.3.0"
+    let currentAppBuild: Int = 28
+
+    @Published var geocodedCache: [String: [Double]] = [:]
+
+    func resolveCoordinate(for rawAddress: String, clientName: String = "") -> CLLocationCoordinate2D {
+        let clean = rawAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.isEmpty {
+            return CLLocationCoordinate2D(latitude: 31.1171, longitude: -97.7278)
+        }
+        
+        if let coords = geocodedCache[clean], coords.count == 2 {
+            return CLLocationCoordinate2D(latitude: coords[0], longitude: coords[1])
+        }
+        
+        let lower = clean.lowercased()
+        var baseLat: Double = 31.1171
+        var baseLng: Double = -97.7278
+        
+        // Exact city/neighborhood centers across Bell & Coryell Counties:
+        if lower.contains("cove") || lower.contains("copperas") {
+            baseLat = 31.1241
+            baseLng = -97.9031
+        } else if lower.contains("harker") || lower.contains("heights") {
+            baseLat = 31.0835
+            baseLng = -97.6597
+        } else if lower.contains("nolanville") {
+            baseLat = 31.0888
+            baseLng = -97.6047
+        } else if lower.contains("belton") {
+            baseLat = 31.0560
+            baseLng = -97.4645
+        } else if lower.contains("temple") {
+            baseLat = 31.0982
+            baseLng = -97.3428
+        } else if lower.contains("cavazos") || lower.contains("hood") {
+            baseLat = 31.1305
+            baseLng = -97.7780
+        } else if lower.contains("kempner") {
+            baseLat = 31.0774
+            baseLng = -98.0064
+        } else if lower.contains("salado") {
+            baseLat = 30.9474
+            baseLng = -97.5386
+        } else if lower.contains("clear creek") {
+            baseLat = 31.1250
+            baseLng = -97.7850
+        } else if lower.contains("stan schlueter") || lower.contains("trimmier") {
+            baseLat = 31.0850
+            baseLng = -97.7580
+        } else if lower.contains("willow springs") {
+            baseLat = 31.1092
+            baseLng = -97.7410
+        }
+        
+        let hash = abs((clientName + clean).hashValue)
+        let latOffset = Double((hash % 30) - 15) * 0.0004
+        let lngOffset = Double(((hash / 30) % 30) - 15) * 0.0005
+        
+        geocodeAddressInBackground(clean)
+        return CLLocationCoordinate2D(latitude: baseLat + latOffset, longitude: baseLng + lngOffset)
+    }
+    
+    func geocodeAddressInBackground(_ address: String) {
+        let clean = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+        if geocodedCache[clean] != nil { return }
+        
+        let query = clean.contains("TX") ? clean : "\(clean), TX"
+        CLGeocoder().geocodeAddressString(query) { [weak self] placemarks, _ in
+            guard let self = self, let loc = placemarks?.first?.location else { return }
+            DispatchQueue.main.async {
+                self.geocodedCache[clean] = [loc.coordinate.latitude, loc.coordinate.longitude]
+            }
+        }
+    }
 
     @Published var calendarData: CalendarData = CalendarData(day_status: [:], appointments: [])
     @Published var activePromo: FlashPromotion? = nil
@@ -1399,6 +1476,7 @@ struct TopLeftDropdownMenuView: View {
         ("calculadora", "function", "Calculadora", false),
         ("reportes", "chart.bar.fill", "Reportes", false),
         ("promos", "megaphone.fill", "Promociones", false),
+        ("subir_fotos", "camera.fill", "Subir Trabajos a Web", false),
         ("ajustes", "gearshape.fill", "Ajustes", false)
     ]
     
@@ -1466,6 +1544,7 @@ struct ContentView: View {
     
     @State private var showVideoMakerSheet: Bool = false
     @State private var showFlyerMakerSheet: Bool = false
+    @State private var showUploadWorkSheet: Bool = false
     @State private var showGoogleReviewSheet: Bool = false
     @State private var showDigitalCardSheet: Bool = false
     @State private var showBeforeAfterSheet: Bool = false
@@ -1674,6 +1753,7 @@ struct ContentView: View {
         .sheet(isPresented: $showRecurringAutoPaySheet) { RecurringAutoPaySubscriptionSheetView(store: store) }
         .sheet(isPresented: $showVideoMakerSheet) { CinematicVideoMakerView(store: store) }
         .sheet(isPresented: $showFlyerMakerSheet) { SocialMediaFlyerMakerSheetView(store: store) }
+        .sheet(isPresented: $showUploadWorkSheet) { UploadWorkToWebGalleryView(store: store) }
         .sheet(isPresented: $showGoogleReviewSheet) { GoogleReviewBoosterSheetView(store: store) }
         .sheet(isPresented: $showDigitalCardSheet) { NeighborDigitalCardQRView(store: store) }
         .sheet(isPresented: $showBeforeAfterSheet) { BeforeAfterCameraSheetView(store: store) }
@@ -1714,6 +1794,8 @@ struct ContentView: View {
             showVipLoyaltySheet = true
         case "promos":
             selectedTab = 3
+        case "subir_fotos":
+            showUploadWorkSheet = true
         case "ajustes":
             selectedTab = 4
         default:
@@ -7058,6 +7140,7 @@ struct FlashPromotionsView: View {
     @State private var promoBadge: String = "OFERTA MILITAR FLASH"
     @State private var durationHours: Int = 24
     @State private var isPublishing: Bool = false
+    @State private var showUploadWorkSheet: Bool = false
 
     var body: some View {
         NavigationView {
@@ -7231,6 +7314,45 @@ struct FlashPromotionsView: View {
                         .background(Brand.card)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
 
+                        // SECCIÓN PARA SUBIR TRABAJOS A LA WEB
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 10) {
+                                ZStack {
+                                    Circle().fill(Brand.primary.opacity(0.18)).frame(width: 44, height: 44)
+                                    Image(systemName: "camera.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(Brand.primary)
+                                }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("SUBIR FOTOS DE TRABAJOS A LA WEB")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(Brand.primary)
+                                    Text("Publica fotos de tus trabajos terminados para que aparezcan al instante en tu página web.")
+                                        .font(.caption2)
+                                        .foregroundStyle(.gray)
+                                }
+                                Spacer()
+                            }
+                            
+                            Button {
+                                showUploadWorkSheet = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "plus.circle.fill")
+                                    Text("📸 Subir Nueva Foto a la Página Web")
+                                }
+                                .font(.headline)
+                                .foregroundStyle(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Brand.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+
                         // Promo History
                         if !store.promoHistory.isEmpty {
                             VStack(alignment: .leading, spacing: 10) {
@@ -7264,6 +7386,9 @@ struct FlashPromotionsView: View {
             }
             .navigationTitle("Promociones Web")
             .navigationBarHidden(true)
+            .sheet(isPresented: $showUploadWorkSheet) {
+                UploadWorkToWebGalleryView(store: store)
+            }
         }
     }
 }
@@ -9044,6 +9169,7 @@ struct TacticalTerritoryRadarView: View {
     @Environment(\.dismiss) var dismiss
     @State private var radarAngle: Double = 0
     @State private var selectedDayFilter: String = "Todas"
+    @State private var selectedCityFilter: String = "Todas"
     @State private var selectedPin: TacticalHouseClientPin? = nil
     
     // Central Texas default coordinate: Killeen TX
@@ -9055,24 +9181,29 @@ struct TacticalTerritoryRadarView: View {
     let timer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
     let days = ["Todas", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
     
-    // Generate precise persistent pins on clients' houses in Central Texas
+    let cityJumps: [(name: String, icon: String, lat: Double, lng: Double, span: Double)] = [
+        ("Toda el Área", "map.fill", 31.1171, -97.7278, 0.22),
+        ("Copperas Cove", "mountain.2.fill", 31.1241, -97.9031, 0.05),
+        ("Killeen", "building.2.fill", 31.1171, -97.7278, 0.07),
+        ("Harker Heights", "tree.fill", 31.0835, -97.6597, 0.05),
+        ("Temple", "cross.case.fill", 31.0982, -97.3428, 0.06),
+        ("Belton", "water.waves", 31.0560, -97.4645, 0.05),
+        ("Fort Cavazos", "shield.fill", 31.1305, -97.7780, 0.06)
+    ]
+    
+    // Generate precise persistent pins on clients' houses in Central Texas using real address geocoding
     var allClientPins: [TacticalHouseClientPin] {
         var list: [TacticalHouseClientPin] = []
-        let baseLat = 31.1171
-        let baseLng = -97.7278
         
         for client in store.recurringClients {
-            let hash = abs(client.name.hashValue ^ client.address.hashValue)
-            let latOffset = Double((hash % 100) - 50) * 0.0013
-            let lngOffset = Double(((hash / 100) % 100) - 50) * 0.0015
-            let coord = CLLocationCoordinate2D(latitude: baseLat + latOffset, longitude: baseLng + lngOffset)
-            
+            let addr = client.address.isEmpty ? "Propiedad en Killeen, TX" : client.address
+            let coord = store.resolveCoordinate(for: addr, clientName: client.name)
             list.append(
                 TacticalHouseClientPin(
                     id: "rec_\(client.id)",
                     name: client.name,
                     phone: client.phone,
-                    address: client.address.isEmpty ? "Propiedad en Killeen, TX" : client.address,
+                    address: addr,
                     serviceDay: client.service_day,
                     price: client.price,
                     coordinate: coord,
@@ -9082,17 +9213,14 @@ struct TacticalTerritoryRadarView: View {
         }
         
         for (idx, lead) in store.leads.enumerated() {
-            let hash = abs(lead.name.hashValue ^ (idx * 31))
-            let latOffset = Double((hash % 80) - 40) * 0.0011
-            let lngOffset = Double(((hash / 80) % 80) - 40) * 0.0013
-            let coord = CLLocationCoordinate2D(latitude: baseLat + latOffset, longitude: baseLng + lngOffset)
-            
+            let addr = lead.address ?? "Killeen, TX"
+            let coord = store.resolveCoordinate(for: addr, clientName: lead.name)
             list.append(
                 TacticalHouseClientPin(
-                    id: "lead_\(lead.id)",
+                    id: "lead_\(lead.id)_\(idx)",
                     name: lead.name,
                     phone: lead.phone,
-                    address: lead.address ?? "Killeen, TX",
+                    address: addr,
                     serviceDay: lead.date ?? "Esta Semana",
                     price: 55.0,
                     coordinate: coord,
@@ -9133,10 +9261,14 @@ struct TacticalTerritoryRadarView: View {
     }
     
     var filteredPins: [TacticalHouseClientPin] {
-        if selectedDayFilter == "Todas" {
-            return allClientPins
+        var result = allClientPins
+        if selectedDayFilter != "Todas" {
+            result = result.filter { $0.serviceDay.localizedCaseInsensitiveContains(selectedDayFilter) }
         }
-        return allClientPins.filter { $0.serviceDay.localizedCaseInsensitiveContains(selectedDayFilter) }
+        if selectedCityFilter != "Todas" {
+            result = result.filter { $0.address.localizedCaseInsensitiveContains(selectedCityFilter) }
+        }
+        return result
     }
     
     var body: some View {
@@ -9154,7 +9286,7 @@ struct TacticalTerritoryRadarView: View {
                                     .font(.caption2.bold())
                                     .foregroundStyle(Brand.primary)
                             }
-                            Text("Puntos en Casas de Clientes")
+                            Text("Puntos Reales en Casas de Clientes")
                                 .font(.headline.bold())
                                 .foregroundStyle(.white)
                         }
@@ -9170,6 +9302,39 @@ struct TacticalTerritoryRadarView: View {
                     }
                     .padding(12)
                     .background(Brand.card)
+                    
+                    // City Quick Jump Bar (Copperas Cove, Killeen, Harker Heights, Temple, etc.)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(cityJumps, id: \.name) { city in
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.7)) {
+                                        region.center = CLLocationCoordinate2D(latitude: city.lat, longitude: city.lng)
+                                        region.span = MKCoordinateSpan(latitudeDelta: city.span, longitudeDelta: city.span)
+                                    }
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: city.icon)
+                                            .font(.caption2)
+                                        Text(city.name)
+                                            .font(.caption.bold())
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(city.name.contains("Cove") ? Color.orange.opacity(0.85) : Brand.cardLight)
+                                    .foregroundStyle(.white)
+                                    .clipShape(Capsule())
+                                    .overlay(
+                                        Capsule().stroke(city.name.contains("Cove") ? Color.yellow : Brand.primary.opacity(0.4), lineWidth: 1)
+                                    )
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                    }
+                    .background(Color.black.opacity(0.85))
                     
                     // Day of Week Filter Bar (Lunes a Sábado)
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -9270,7 +9435,7 @@ struct TacticalTerritoryRadarView: View {
                         }
                         .allowsHitTesting(false)
                         
-                        // Selected Pin Callout Card
+                        // Selected Pin Callout Card with GPS Navigation Directly to the House
                         if let pin = selectedPin {
                             VStack {
                                 Spacer()
@@ -9310,8 +9475,27 @@ struct TacticalTerritoryRadarView: View {
                                         Spacer()
                                     }
                                     
-                                    // Action Buttons
+                                    // Action Buttons: Apple Maps Navigation, Waze & WhatsApp
                                     HStack(spacing: 8) {
+                                        Button {
+                                            withAnimation(.easeInOut(duration: 0.6)) {
+                                                region.center = pin.coordinate
+                                                region.span = MKCoordinateSpan(latitudeDelta: 0.003, longitudeDelta: 0.003)
+                                            }
+                                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                        } label: {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "scope")
+                                                Text("Ver Casa")
+                                            }
+                                            .font(.caption.bold())
+                                            .foregroundStyle(.white)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 8)
+                                            .background(Color.blue)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        }
+                                        
                                         Button {
                                             let clean = pin.address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
                                             if let url = URL(string: "http://maps.apple.com/?daddr=\(clean)") {
@@ -9357,7 +9541,7 @@ struct TacticalTerritoryRadarView: View {
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 16)
                                         .stroke(Brand.primary, lineWidth: 1.5)
-                                )
+                                    )
                                 .shadow(color: Color.black.opacity(0.8), radius: 15, y: 5)
                                 .padding(.horizontal, 14)
                                 .padding(.bottom, 12)
@@ -9374,14 +9558,17 @@ struct TacticalTerritoryRadarView: View {
                         }
                         
                         Button {
-                            region.center = CLLocationCoordinate2D(latitude: 31.1171, longitude: -97.7278)
-                            region.span = MKCoordinateSpan(latitudeDelta: 0.14, longitudeDelta: 0.14)
+                            withAnimation {
+                                region.center = CLLocationCoordinate2D(latitude: 31.1171, longitude: -97.7278)
+                                region.span = MKCoordinateSpan(latitudeDelta: 0.14, longitudeDelta: 0.14)
+                                selectedPin = nil
+                            }
                         } label: {
                             HStack {
-                                Image(systemName: "scope")
-                                Text("Reenfocar en Base Killeen & Fort Cavazos")
+                                Image(systemName: "location.north.circle.fill")
+                                Text("Centrar Mapa en Central Texas")
                             }
-                            .font(.caption.bold())
+                            .font(.subheadline.bold())
                             .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                             .padding(10)
@@ -9389,11 +9576,11 @@ struct TacticalTerritoryRadarView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
                     }
-                    .padding(10)
+                    .padding(12)
                     .background(Brand.card)
                 }
             }
-            .navigationTitle("Radar de Territorio")
+            .navigationTitle("Radar Táctico de Territorio")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -9402,7 +9589,7 @@ struct TacticalTerritoryRadarView: View {
                 }
             }
             .onReceive(timer) { _ in
-                radarAngle = (radarAngle + 4).truncatingRemainder(dividingBy: 360)
+                radarAngle = (radarAngle + 2).truncatingRemainder(dividingBy: 360)
             }
         }
     }
@@ -10043,15 +10230,78 @@ struct NeighborDigitalCardQRView: View {
 struct SocialMediaFlyerMakerSheetView: View {
     @ObservedObject var store: LawnCareStore
     @Environment(\.dismiss) var dismiss
-    @State private var selectedTemplate: String = "Corte de Césped $40+"
-    @State private var offerText: String = "¡Estimados 100% Gratis en Killeen y Alrededores!"
-    @State private var showSavedAlert: Bool = false
     
-    let templates = [
-        "Corte de Césped $40+",
-        "Instalación de Mulch Oscuro",
-        "Poda de Arbustos & Árboles",
-        "🎖️ 10% Descuento Militar"
+    @State private var selectedTemplateIndex: Int = 0
+    @State private var headlineText: String = "CORTE PROFESIONAL & ORILLADO"
+    @State private var offerText: String = "¡Estimados 100% Gratis en Killeen y Alrededores!"
+    @State private var priceBadge: String = "$45+"
+    @State private var customNotes: String = "Cuchillas afiladas • Soplado total de banquetas • Servicio garantizado"
+    
+    @State private var customBgImage: UIImage? = nil
+    @State private var showPhotoPicker: Bool = false
+    @State private var pickerSourceType: UIImagePickerController.SourceType = .photoLibrary
+    
+    @State private var isSquareFormat: Bool = true // true: 1:1 Instagram/FB Post, false: 9:16 Story
+    @State private var showSavedAlert: Bool = false
+    @State private var isExporting: Bool = false
+    @State private var shareSheetItem: UIImage? = nil
+    @State private var showShareSheet: Bool = false
+    
+    let proTemplates: [(title: String, price: String, headline: String, offer: String, notes: String, icon: String, badge: String)] = [
+        (
+            "🌟 Elite Lawn Care",
+            "$45+",
+            "CORTE PROFESIONAL & BORDES PERFECTOS",
+            "¡El mejor corte residencial de Killeen y Central TX!",
+            "Cuchillas afiladas • Perfilado de orillas • Soplado de concreto",
+            "sparkles",
+            "TOP SERVICIO"
+        ),
+        (
+            "🪵 Mulch Oscuro Nuevo",
+            "$65+",
+            "INSTALACIÓN DE MULCH PREMIUM",
+            "Transforma tus jardineras y camas de flores hoy",
+            "Mulch negro o café oscuro • Corte de borde de pala • Cero maleza",
+            "leaf.fill",
+            "CALIDAD 100%"
+        ),
+        (
+            "🍂 Limpieza de Yard",
+            "$85+",
+            "LIMPIEZA DE TEMPORADA & HOJAS",
+            "Retiro total de hojas, ramas secas y escombros",
+            "Rastrillado profundo • Embolsado • Dejamos tu propiedad reluciente",
+            "wind",
+            "EXPRESS"
+        ),
+        (
+            "🎖️ Descuento Militar",
+            "15% OFF",
+            "ESPECIAL MILITAR FORT CAVAZOS",
+            "Honor y respeto para nuestras tropas y sus familias",
+            "Válido en Killeen, Cove y Harker Heights • Estimados sin compromiso",
+            "shield.fill",
+            "FORT CAVAZOS"
+        ),
+        (
+            "✂️ Poda de Arbustos",
+            "$50+",
+            "PODA & PERFILADO DE ARBUSTOS",
+            "Esculpido estético y salud vegetal garantizada",
+            "Formas esféricas limpias • Retiro de ramas muertas • Acabado fino",
+            "scissors",
+            "ESTÉTICO"
+        ),
+        (
+            "💧 Aireación & Abono",
+            "$75+",
+            "AIREACIÓN & REVITALIZACIÓN",
+            "Garantiza pasto verde, grueso y sin parches secos",
+            "Apertura de suelo • Abono orgánico • Resistente al calor de Texas",
+            "drop.fill",
+            "VERDE TOTAL"
+        )
     ]
     
     var body: some View {
@@ -10061,139 +10311,227 @@ struct SocialMediaFlyerMakerSheetView: View {
                 
                 ScrollView {
                     VStack(spacing: 16) {
-                        // Square 1:1 Flyer Canvas
-                        ZStack {
-                            Image("drone_tundra_intro")
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 320, height: 320)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
-                                .overlay(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [Color.black.opacity(0.8), Color.black.opacity(0.2), Color.black.opacity(0.85)]),
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                            
-                            VStack(spacing: 8) {
-                                // Top Badge
-                                HStack {
-                                    HStack(spacing: 6) {
-                                        Image("AppIcon")
-                                            .resizable()
-                                            .frame(width: 32, height: 32)
-                                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                                        Text("RODRIGUEZ LAWN CARE")
-                                            .font(.caption.bold())
-                                            .foregroundStyle(Brand.primary)
-                                    }
-                                    Spacer()
-                                    Text("Killeen, TX")
-                                        .font(.caption2.bold())
-                                        .foregroundStyle(.white)
+                        // Format Switcher
+                        HStack(spacing: 8) {
+                            Button {
+                                isSquareFormat = true
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "square.fill")
+                                    Text("Post Cuadrado (1:1)")
                                 }
+                                .font(.caption.bold())
                                 .padding(.horizontal, 14)
-                                .padding(.top, 14)
-                                
-                                Spacer()
-                                
-                                // Center Offer Badge
-                                VStack(spacing: 4) {
-                                    Text(selectedTemplate.uppercased())
-                                        .font(.title3.bold())
-                                        .foregroundStyle(.white)
-                                        .multilineTextAlignment(.center)
-                                    Text(offerText)
-                                        .font(.caption)
-                                        .foregroundStyle(Brand.primary)
-                                        .multilineTextAlignment(.center)
-                                }
-                                .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
-                                .background(Color.black.opacity(0.6))
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                
-                                Spacer()
-                                
-                                // Footer Call to Action
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("LLAMA O MANDA WHATSAPP:")
-                                            .font(.system(size: 8, weight: .bold))
-                                            .foregroundStyle(.gray)
-                                        Text("(254) 852-8163")
-                                            .font(.headline.bold())
-                                            .foregroundStyle(Brand.primary)
-                                    }
-                                    Spacer()
-                                    Text("Zelle & Cash App")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundStyle(.black)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.green)
-                                        .clipShape(Capsule())
+                                .background(isSquareFormat ? Brand.primary : Brand.cardLight)
+                                .foregroundStyle(isSquareFormat ? .black : .white)
+                                .clipShape(Capsule())
+                            }
+                            
+                            Button {
+                                isSquareFormat = false
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "rectangle.portrait.fill")
+                                    Text("Historia / Story (9:16)")
                                 }
+                                .font(.caption.bold())
                                 .padding(.horizontal, 14)
-                                .padding(.bottom, 14)
+                                .padding(.vertical, 8)
+                                .background(!isSquareFormat ? Brand.primary : Brand.cardLight)
+                                .foregroundStyle(!isSquareFormat ? .black : .white)
+                                .clipShape(Capsule())
                             }
                         }
-                        .frame(width: 320, height: 320)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .padding(.top, 6)
+                        
+                        // Flyer Canvas Render Target
+                        FlyerCanvasView(
+                            isSquare: isSquareFormat,
+                            bgImage: customBgImage,
+                            badge: proTemplates[selectedTemplateIndex].badge,
+                            headline: headlineText,
+                            offer: offerText,
+                            price: priceBadge,
+                            notes: customNotes
+                        )
+                        .frame(width: 330, height: isSquareFormat ? 330 : 460)
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16)
+                            RoundedRectangle(cornerRadius: 18)
                                 .stroke(Brand.primary, lineWidth: 2)
                         )
-                        .shadow(color: Brand.primary.opacity(0.3), radius: 10)
+                        .shadow(color: Brand.primary.opacity(0.4), radius: 14)
                         
-                        // Template Picker
+                        // Background Photo Controls
+                        HStack(spacing: 10) {
+                            Button {
+                                pickerSourceType = .camera
+                                showPhotoPicker = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "camera.fill")
+                                    Text("Tomar Foto")
+                                }
+                                .font(.caption.bold())
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Brand.cardLight)
+                                .clipShape(Capsule())
+                            }
+                            
+                            Button {
+                                pickerSourceType = .photoLibrary
+                                showPhotoPicker = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "photo.on.rectangle")
+                                    Text("Elegir de Galería")
+                                }
+                                .font(.caption.bold())
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Brand.cardLight)
+                                .clipShape(Capsule())
+                            }
+                            
+                            if customBgImage != nil {
+                                Button {
+                                    customBgImage = nil
+                                } label: {
+                                    Text("Fondo Pro")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.orange)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 8)
+                                        .background(Color.orange.opacity(0.15))
+                                        .clipShape(Capsule())
+                                }
+                            }
+                        }
+                        
+                        // Template Carousel
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("SELECCIONAR TIPO DE SERVICIO")
+                            Text("PLANTILLAS CHINGONAS DE ALTO IMPACTO:")
                                 .font(.caption.bold())
                                 .foregroundStyle(Brand.primary)
+                                .padding(.horizontal)
                             
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 8) {
-                                    ForEach(templates, id: \.self) { t in
+                                    ForEach(0..<proTemplates.count, id: \.self) { idx in
+                                        let t = proTemplates[idx]
                                         Button {
-                                            selectedTemplate = t
+                                            selectedTemplateIndex = idx
+                                            headlineText = t.headline
+                                            offerText = t.offer
+                                            priceBadge = t.price
+                                            customNotes = t.notes
+                                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                                         } label: {
-                                            Text(t)
-                                                .font(.caption.bold())
-                                                .padding(.horizontal, 12)
-                                                .padding(.vertical, 8)
-                                                .background(selectedTemplate == t ? Brand.primary : Brand.card)
-                                                .foregroundStyle(selectedTemplate == t ? .black : .white)
-                                                .clipShape(Capsule())
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                HStack {
+                                                    Image(systemName: t.icon)
+                                                        .font(.caption)
+                                                    Text(t.title)
+                                                        .font(.caption.bold())
+                                                }
+                                                Text(t.price)
+                                                    .font(.caption2.bold())
+                                                    .foregroundStyle(selectedTemplateIndex == idx ? .black : Brand.primary)
+                                            }
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 8)
+                                            .background(selectedTemplateIndex == idx ? Brand.primary : Brand.card)
+                                            .foregroundStyle(selectedTemplateIndex == idx ? .black : .white)
+                                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .stroke(Brand.primary.opacity(0.4), lineWidth: 1)
+                                            )
                                         }
                                     }
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
+                        
+                        // Custom Editable Fields
+                        VStack(spacing: 10) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("ENCABEZADO:").font(.system(size: 9, weight: .bold)).foregroundStyle(.gray)
+                                TextField("Título", text: $headlineText)
+                                    .font(.caption.bold())
+                                    .padding(8).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 8)).foregroundStyle(.white)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("OFERTA / SUBTÍTULO:").font(.system(size: 9, weight: .bold)).foregroundStyle(.gray)
+                                TextField("Oferta", text: $offerText)
+                                    .font(.caption)
+                                    .padding(8).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 8)).foregroundStyle(.white)
+                            }
+                            
+                            HStack(spacing: 10) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("PRECIO / DESCUENTO:").font(.system(size: 9, weight: .bold)).foregroundStyle(.gray)
+                                    TextField("$45+", text: $priceBadge)
+                                        .font(.caption.bold())
+                                        .padding(8).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 8)).foregroundStyle(Brand.primary)
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("DETALLES INCLUIDOS:").font(.system(size: 9, weight: .bold)).foregroundStyle(.gray)
+                                    TextField("Notas", text: $customNotes)
+                                        .font(.caption)
+                                        .padding(8).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 8)).foregroundStyle(.white)
                                 }
                             }
                         }
                         .padding(.horizontal)
                         
-                        // Actions
-                        Button {
-                            showSavedAlert = true
-                        } label: {
-                            HStack {
-                                Image(systemName: "square.and.arrow.down.fill")
-                                Text("Guardar Flyer en Fotos de iPhone")
+                        // Action Buttons: Save to Photos & Share
+                        HStack(spacing: 12) {
+                            Button {
+                                exportAndSaveFlyer(shareDirectly: false)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "square.and.arrow.down.fill")
+                                    Text("Guardar en Fotos")
+                                }
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding(14)
+                                .background(Brand.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.black)
-                            .frame(maxWidth: .infinity)
-                            .padding(14)
-                            .background(Brand.primary)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            
+                            Button {
+                                exportAndSaveFlyer(shareDirectly: true)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "square.and.arrow.up.fill")
+                                    Text("Compartir")
+                                }
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(14)
+                                .background(Color.blue)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
                         }
                         .padding(.horizontal)
+                        .padding(.bottom, 20)
                     }
-                    .padding(.vertical)
                 }
             }
-            .navigationTitle("Creador de Flyers")
+            .navigationTitle("Flyer Studio Pro Ultra")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -10201,13 +10539,214 @@ struct SocialMediaFlyerMakerSheetView: View {
                         .foregroundStyle(Brand.primary)
                 }
             }
-            .alert("Flyer Guardado", isPresented: $showSavedAlert) {
-                Button("OK", role: .cancel) {}
+            .sheet(isPresented: $showPhotoPicker) {
+                PhotoLibraryPicker(selectedImage: $customBgImage, sourceType: pickerSourceType)
+            }
+            .sheet(isPresented: $showShareSheet) {
+                if let img = shareSheetItem {
+                    FlyerShareSheetRepresentable(items: [img])
+                }
+            }
+            .alert("Flyer Guardado con Éxito", isPresented: $showSavedAlert) {
+                Button("¡Chingón!", role: .cancel) {}
             } message: {
-                Text("Tu flyer profesional fue generado y guardado en tu galería de fotos listo para subir a Facebook e Instagram.")
+                Text("Tu flyer publicitario en alta definición fue guardado directamente en la galería de fotos de tu iPhone listo para publicar en Facebook, Instagram y WhatsApp.")
             }
         }
     }
+    
+    private func exportAndSaveFlyer(shareDirectly: Bool) {
+        let size = isSquareFormat ? CGSize(width: 1080, height: 1080) : CGSize(width: 1080, height: 1440)
+        let renderView = FlyerCanvasView(
+            isSquare: isSquareFormat,
+            bgImage: customBgImage,
+            badge: proTemplates[selectedTemplateIndex].badge,
+            headline: headlineText,
+            offer: offerText,
+            price: priceBadge,
+            notes: customNotes
+        )
+        .frame(width: size.width, height: size.height)
+        
+        let controller = UIHostingController(rootView: renderView)
+        controller.view.frame = CGRect(origin: .zero, size: size)
+        controller.view.backgroundColor = .clear
+        
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { _ in
+            controller.view.drawHierarchy(in: controller.view.bounds, afterScreenUpdates: true)
+        }
+        
+        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        
+        if shareDirectly {
+            shareSheetItem = image
+            showShareSheet = true
+        } else {
+            showSavedAlert = true
+        }
+    }
+}
+
+// Subview representing the Flyer Canvas
+struct FlyerCanvasView: View {
+    var isSquare: Bool
+    var bgImage: UIImage?
+    var badge: String
+    var headline: String
+    var offer: String
+    var price: String
+    var notes: String
+    
+    var body: some View {
+        ZStack {
+            // Background
+            if let img = bgImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image("drone_tundra_intro")
+                    .resizable()
+                    .scaledToFill()
+            }
+            
+            // Rich Dark Gradient Overlay
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color.black.opacity(0.85),
+                    Color.black.opacity(0.35),
+                    Color.black.opacity(0.92)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            
+            VStack(spacing: 8) {
+                // Header Bar with Brand & Badge
+                HStack(alignment: .center) {
+                    HStack(spacing: 8) {
+                        Image("AppIcon")
+                            .resizable()
+                            .frame(width: 36, height: 36)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("RODRIGUEZ LAWN CARE")
+                                .font(.system(size: 11, weight: .black))
+                                .foregroundStyle(Brand.primary)
+                            Text("QUALITY LAWNS • HAPPY HOMES")
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.8))
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    Text(badge)
+                        .font(.system(size: 9, weight: .black))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.yellow)
+                        .clipShape(Capsule())
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 14)
+                
+                Spacer()
+                
+                // Central High-Impact Headline & Price Callout
+                VStack(spacing: 6) {
+                    Text(headline.uppercased())
+                        .font(.system(size: 15, weight: .black))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .shadow(color: .black, radius: 4)
+                    
+                    Text(offer)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Brand.primary)
+                        .multilineTextAlignment(.center)
+                    
+                    // Golden Price Badge
+                    HStack(spacing: 4) {
+                        Text("DESDE:")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.8))
+                        Text(price)
+                            .font(.system(size: 20, weight: .black))
+                            .foregroundStyle(Color.yellow)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 4)
+                    .background(Color.black.opacity(0.75))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.yellow, lineWidth: 1.5))
+                    
+                    Text(notes)
+                        .font(.system(size: 8, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                }
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.55))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Brand.primary.opacity(0.4), lineWidth: 1))
+                .padding(.horizontal, 10)
+                
+                Spacer()
+                
+                // Footer: Phone, WhatsApp, QR Code & Service Areas
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 4) {
+                            Circle().fill(Color.green).frame(width: 6, height: 6)
+                            Text("LLAMA O MANDA WHATSAPP HOY:")
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundStyle(Brand.primary)
+                        }
+                        
+                        Text("(254) 852-8163")
+                            .font(.system(size: 16, weight: .black))
+                            .foregroundStyle(.white)
+                        
+                        Text("Killeen • Copperas Cove • Harker Heights • Belton")
+                            .font(.system(size: 7, weight: .semibold))
+                            .foregroundStyle(.gray)
+                    }
+                    
+                    Spacer()
+                    
+                    // Payment Badges
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("PAGOS SEGUROS:")
+                            .font(.system(size: 6, weight: .bold))
+                            .foregroundStyle(.gray)
+                        Text("Zelle • Cash App • Card")
+                            .font(.system(size: 8, weight: .black))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.green)
+                            .clipShape(Capsule())
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 14)
+            }
+        }
+    }
+}
+
+struct FlyerShareSheetRepresentable: UIViewControllerRepresentable {
+    var items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - 7. POTENCIADOR DE RESEÑAS 5★ EN GOOGLE MAPS
@@ -10338,143 +10877,429 @@ Aquí tienes nuestro enlace oficial: \(googleReviewURL)
 }
 
 // MARK: - 8. CREADOR DE VIDEOS ANTES Y DESPUÉS PARA TIKTOK / REELS
+// MARK: - 8. CREADOR DE VIDEOS ANTES Y DESPUÉS PARA TIKTOK / REELS CON IA
 struct CinematicVideoMakerView: View {
     @ObservedObject var store: LawnCareStore
     @Environment(\.dismiss) var dismiss
+    
     @State private var wipeProgress: Double = 0.5
     @State private var isPlayingAnimation: Bool = false
+    
+    // Custom Photos Uploaded by User
+    @State private var beforeImage: UIImage? = nil
+    @State private var afterImage: UIImage? = nil
+    
+    @State private var showPhotoPicker: Bool = false
+    @State private var pickerTargetIsBefore: Bool = true
+    @State private var pickerSourceType: UIImagePickerController.SourceType = .photoLibrary
+    
+    // AI Video & Hook Generator
+    @State private var selectedHookIndex: Int = 0
+    @State private var selectedSoundIndex: Int = 0
+    @State private var customVoiceoverText: String = "¡Mira la transformación de esta yarda en Killeen! De pastizal abandonado a un corte con líneas de navaja. Llámanos al (254) 852-8163 para tu estimado gratis."
+    
+    @State private var isRenderingVideo: Bool = false
+    @State private var renderProgress: Double = 0.0
+    @State private var showVideoSavedAlert: Bool = false
+    @State private var exportedVideoURL: URL? = nil
+    @State private var showShareSheet: Bool = false
+    
+    let viralHooks = [
+        "🔥 De Jungla Texana a Campo de Golf en Killeen TX",
+        "✨ La transformación más satisfactoria de la semana #OddlySatisfying",
+        "✂️ Mira cómo dejamos estas orillas... pura precisión con navaja",
+        "💰 Cliente en Copperas Cove pensaba que no tenía arreglo... mira el final"
+    ]
+    
+    let viralSounds = [
+        "🎵 Phonk Lawn Drop (TikTok Viral Trend)",
+        "🎵 Summer Acoustic Yard Beat (Reels)",
+        "🎵 Heavy Bass Mower Satisfaction Beat"
+    ]
     
     var body: some View {
         NavigationView {
             ZStack {
                 Brand.background.ignoresSafeArea()
                 
-                VStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("REELS & TIKTOK TRANSFORMACIÓN")
-                            .font(.headline.bold())
-                            .foregroundStyle(Brand.primary)
-                        Text("Desliza la barra para ver la transición de corte y genera tu video para redes sociales.")
-                            .font(.caption)
-                            .foregroundStyle(.gray)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-                    
-                    // Vertical Reel Preview Container
-                    GeometryReader { geo in
-                        ZStack {
-                            // After Image (Base)
-                            Image("drone_tundra_intro")
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: geo.size.width, height: 360)
-                                .clipped()
-                            
-                            // Before Image (Masked by wipe progress)
-                            Image("drone_intro")
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: geo.size.width, height: 360)
-                                .clipped()
-                                .mask(
-                                    HStack(spacing: 0) {
-                                        Rectangle()
-                                            .frame(width: geo.size.width * wipeProgress)
-                                        Spacer(minLength: 0)
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Header HUD
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Circle().fill(Color.purple).frame(width: 8, height: 8)
+                                Text("TIKTOK & REELS STUDIO IA")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(Color.purple)
+                            }
+                            Text("Transformación Antes & Después con IA")
+                                .font(.headline.bold())
+                                .foregroundStyle(.white)
+                            Text("Sube tus fotos de antes y después, genera ganchos virales con IA y renderiza tu video vertical listo para TikTok e Instagram.")
+                                .font(.caption)
+                                .foregroundStyle(.gray)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                        
+                        // Vertical Reel Preview Container (9:16 Aspect)
+                        GeometryReader { geo in
+                            ZStack {
+                                // After Image (Base)
+                                if let img = afterImage {
+                                    Image(uiImage: img)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: geo.size.width, height: 380)
+                                        .clipped()
+                                } else {
+                                    Image("drone_tundra_intro")
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: geo.size.width, height: 380)
+                                        .clipped()
+                                }
+                                
+                                // Before Image (Masked by wipe progress)
+                                if let img = beforeImage {
+                                    Image(uiImage: img)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: geo.size.width, height: 380)
+                                        .clipped()
+                                        .mask(
+                                            HStack(spacing: 0) {
+                                                Rectangle()
+                                                    .frame(width: geo.size.width * wipeProgress)
+                                                Spacer(minLength: 0)
+                                            }
+                                        )
+                                } else {
+                                    Image("drone_intro")
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: geo.size.width, height: 380)
+                                        .clipped()
+                                        .mask(
+                                            HStack(spacing: 0) {
+                                                Rectangle()
+                                                    .frame(width: geo.size.width * wipeProgress)
+                                                Spacer(minLength: 0)
+                                            }
+                                        )
+                                }
+                                
+                                // Divider Line
+                                Rectangle()
+                                    .fill(Brand.primary)
+                                    .frame(width: 3.5, height: 380)
+                                    .position(x: geo.size.width * wipeProgress, y: 190)
+                                    .shadow(color: Brand.primary, radius: 8)
+                                
+                                // Overlay Labels & Viral Hook
+                                VStack {
+                                    HStack {
+                                        Text("ANTES")
+                                            .font(.caption.bold())
+                                            .foregroundStyle(.white)
+                                            .padding(6)
+                                            .background(Color.black.opacity(0.75))
+                                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.red, lineWidth: 1))
+                                        Spacer()
+                                        Text("DESPUÉS")
+                                            .font(.caption.bold())
+                                            .foregroundStyle(.black)
+                                            .padding(6)
+                                            .background(Brand.primary)
+                                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white, lineWidth: 1))
                                     }
-                                )
-                            
-                            // Divider Line
-                            Rectangle()
-                                .fill(Brand.primary)
-                                .frame(width: 3, height: 360)
-                                .position(x: geo.size.width * wipeProgress, y: 180)
-                                .shadow(color: Brand.primary, radius: 6)
-                            
-                            // Overlay Labels
-                            VStack {
-                                HStack {
-                                    Text("ANTES")
+                                    .padding(10)
+                                    
+                                    // Viral Hook Text Overlay on Reel
+                                    Text(viralHooks[selectedHookIndex])
+                                        .font(.system(size: 11, weight: .black))
+                                        .foregroundStyle(.white)
+                                        .multilineTextAlignment(.center)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(Color.black.opacity(0.8))
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.yellow, lineWidth: 1))
+                                        .padding(.horizontal, 12)
+                                    
+                                    Spacer()
+                                    
+                                    // Footer Overlay
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("RODRIGUEZ LAWN CARE")
+                                                .font(.caption.bold())
+                                                .foregroundStyle(Brand.primary)
+                                            Text("(254) 852-8163 • Killeen & Central TX")
+                                                .font(.system(size: 9, weight: .bold))
+                                                .foregroundStyle(.white)
+                                        }
+                                        Spacer()
+                                        Text(viralSounds[selectedSoundIndex].prefix(16) + "...")
+                                            .font(.system(size: 8, weight: .bold))
+                                            .foregroundStyle(Color.yellow)
+                                            .padding(4)
+                                            .background(Color.black.opacity(0.7))
+                                            .clipShape(Capsule())
+                                    }
+                                    .padding(10)
+                                    .background(Color.black.opacity(0.75))
+                                }
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Brand.primary.opacity(0.6), lineWidth: 2)
+                            )
+                        }
+                        .frame(height: 380)
+                        .padding(.horizontal)
+                        
+                        // Photo Upload Slots (Antes & Después)
+                        HStack(spacing: 12) {
+                            // Slot 1: Foto ANTES
+                            VStack(spacing: 6) {
+                                Text("FOTO ANTES").font(.system(size: 9, weight: .black)).foregroundStyle(.red)
+                                HStack(spacing: 6) {
+                                    Button {
+                                        pickerTargetIsBefore = true
+                                        pickerSourceType = .camera
+                                        showPhotoPicker = true
+                                    } label: {
+                                        Image(systemName: "camera.fill")
+                                            .font(.caption)
+                                            .foregroundStyle(.white)
+                                            .padding(8)
+                                            .background(Brand.cardLight)
+                                            .clipShape(Circle())
+                                    }
+                                    
+                                    Button {
+                                        pickerTargetIsBefore = true
+                                        pickerSourceType = .photoLibrary
+                                        showPhotoPicker = true
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "photo")
+                                            Text(beforeImage == nil ? "Subir" : "Cambiar")
+                                        }
                                         .font(.caption.bold())
                                         .foregroundStyle(.white)
-                                        .padding(6)
-                                        .background(Color.black.opacity(0.6))
-                                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                                    Spacer()
-                                    Text("DESPUÉS")
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 6)
+                                        .background(Color.red.opacity(0.3))
+                                        .clipShape(Capsule())
+                                    }
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(10)
+                            .background(Brand.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            
+                            // Slot 2: Foto DESPUÉS
+                            VStack(spacing: 6) {
+                                Text("FOTO DESPUÉS").font(.system(size: 9, weight: .black)).foregroundStyle(Brand.primary)
+                                HStack(spacing: 6) {
+                                    Button {
+                                        pickerTargetIsBefore = false
+                                        pickerSourceType = .camera
+                                        showPhotoPicker = true
+                                    } label: {
+                                        Image(systemName: "camera.fill")
+                                            .font(.caption)
+                                            .foregroundStyle(.white)
+                                            .padding(8)
+                                            .background(Brand.cardLight)
+                                            .clipShape(Circle())
+                                    }
+                                    
+                                    Button {
+                                        pickerTargetIsBefore = false
+                                        pickerSourceType = .photoLibrary
+                                        showPhotoPicker = true
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "photo")
+                                            Text(afterImage == nil ? "Subir" : "Cambiar")
+                                        }
                                         .font(.caption.bold())
                                         .foregroundStyle(.black)
-                                        .padding(6)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 6)
                                         .background(Brand.primary)
-                                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                                }
-                                .padding()
-                                
-                                Spacer()
-                                
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("RODRIGUEZ LAWN CARE")
-                                            .font(.caption.bold())
-                                            .foregroundStyle(Brand.primary)
-                                        Text("(254) 852-8163 • Killeen, TX")
-                                            .font(.caption2)
-                                            .foregroundStyle(.white)
+                                        .clipShape(Capsule())
                                     }
-                                    Spacer()
                                 }
-                                .padding()
-                                .background(Color.black.opacity(0.6))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(10)
+                            .background(Brand.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .padding(.horizontal)
+                        
+                        // Wipe Transition Slider
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text("TRANSICIÓN INTERACTIVA:")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.gray)
+                                Spacer()
+                                Text("\(Int(wipeProgress * 100))%")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.primary)
+                            }
+                            Slider(value: $wipeProgress, in: 0...1)
+                                .tint(Brand.primary)
+                        }
+                        .padding(.horizontal)
+                        
+                        // Play Auto Wipe Button
+                        Button {
+                            playAutoWipe()
+                        } label: {
+                            HStack {
+                                Image(systemName: "play.circle.fill")
+                                Text("▶️ Reproducir Transición de Video")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(10)
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .padding(.horizontal)
+                        
+                        // Bot IA Hooks Selector
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: "sparkles")
+                                    .foregroundStyle(Color.yellow)
+                                Text("GANCHOS VIRALES IA PARA TIKTOK:")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                            }
+                            
+                            ForEach(0..<viralHooks.count, id: \.self) { idx in
+                                Button {
+                                    selectedHookIndex = idx
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                } label: {
+                                    HStack {
+                                        Image(systemName: selectedHookIndex == idx ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(selectedHookIndex == idx ? Brand.primary : .gray)
+                                        Text(viralHooks[idx])
+                                            .font(.caption.bold())
+                                            .foregroundStyle(.white)
+                                            .multilineTextAlignment(.leading)
+                                        Spacer()
+                                    }
+                                    .padding(8)
+                                    .background(selectedHookIndex == idx ? Brand.cardLight : Brand.card)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
                             }
                         }
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(Brand.primary.opacity(0.4), lineWidth: 1.5)
-                        )
-                    }
-                    .frame(height: 360)
-                    .padding(.horizontal)
-                    
-                    // Wipe Slider
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("CONTROL DE TRANSICIÓN:")
-                            .font(.caption2.bold())
-                            .foregroundStyle(.gray)
-                        Slider(value: $wipeProgress, in: 0...1)
-                            .tint(Brand.primary)
-                    }
-                    .padding(.horizontal)
-                    
-                    // Animate Button
-                    Button {
-                        playAutoWipe()
-                    } label: {
-                        HStack {
-                            Image(systemName: "play.circle.fill")
-                            Text("Reproducir Transición Automática")
+                        .padding(.horizontal)
+                        
+                        // Bot IA Voiceover Script
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("GUION Y VOZ EN OFF (IA):")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.gray)
+                                Spacer()
+                                Button {
+                                    UIPasteboard.general.string = customVoiceoverText
+                                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "doc.on.doc.fill")
+                                        Text("Copiar Guion")
+                                    }
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(Brand.primary)
+                                }
+                            }
+                            TextEditor(text: $customVoiceoverText)
+                                .font(.caption)
+                                .frame(height: 70)
+                                .padding(6)
+                                .background(Brand.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .foregroundStyle(.white)
                         }
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
-                        .padding(12)
-                        .background(Brand.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .padding(.horizontal)
+                        
+                        // 🎬 Export / Render MP4 Vertical Video
+                        Button {
+                            renderAndExportVideo()
+                        } label: {
+                            HStack {
+                                if isRenderingVideo {
+                                    ProgressView().tint(.white).padding(.trailing, 6)
+                                    Text("Renderizando Video IA (\(Int(renderProgress * 100))%)...")
+                                } else {
+                                    Image(systemName: "film.fill")
+                                    Text("🎬 Renderizar & Guardar Video para TikTok")
+                                }
+                            }
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                            .background(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.purple, Color.blue]),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .shadow(color: Color.purple.opacity(0.5), radius: 10)
+                        }
+                        .disabled(isRenderingVideo)
+                        .padding(.horizontal)
+                        .padding(.bottom, 20)
                     }
-                    .padding(.horizontal)
-                    
-                    Spacer()
                 }
-                .padding(.top)
             }
-            .navigationTitle("Video TikTok & Reels")
+            .navigationTitle("Video TikTok & Reels IA")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Cerrar") { dismiss() }
                         .foregroundStyle(Brand.primary)
                 }
+            }
+            .sheet(isPresented: $showPhotoPicker) {
+                if pickerTargetIsBefore {
+                    PhotoLibraryPicker(selectedImage: $beforeImage, sourceType: pickerSourceType)
+                } else {
+                    PhotoLibraryPicker(selectedImage: $afterImage, sourceType: pickerSourceType)
+                }
+            }
+            .sheet(isPresented: $showShareSheet) {
+                if let url = exportedVideoURL {
+                    FlyerShareSheetRepresentable(items: [url])
+                }
+            }
+            .alert("Video Guardado en Fotos", isPresented: $showVideoSavedAlert) {
+                Button("Compartir en TikTok", role: .none) {
+                    showShareSheet = true
+                }
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("¡Tu video vertical de antes y después fue generado y guardado en la galería de fotos de tu iPhone listo para publicar en TikTok, Instagram Reels o WhatsApp!")
             }
         }
     }
@@ -10485,10 +11310,478 @@ struct CinematicVideoMakerView: View {
             wipeProgress = 0.0
         }
     }
+    
+    private func renderAndExportVideo() {
+        isRenderingVideo = true
+        renderProgress = 0.1
+        
+        // Render 1080x1920 vertical frames and compile to MP4 using AVAssetWriter
+        DispatchQueue.global(qos: .userInitiated).async {
+            let outputSize = CGSize(width: 720, height: 1280) // Fast high-quality 720p vertical
+            let tempDir = FileManager.default.temporaryDirectory
+            let outputURL = tempDir.appendingPathComponent("RodriguezLawnCare_TikTok_\(UUID().uuidString).mp4")
+            
+            try? FileManager.default.removeItem(at: outputURL)
+            
+            guard let writer = try? AVAssetWriter(outputURL: outputURL, fileType: .mp4) else {
+                DispatchQueue.main.async { self.isRenderingVideo = false }
+                return
+            }
+            
+            let videoSettings: [String: Any] = [
+                AVVideoCodecKey: AVVideoCodecType.h264,
+                AVVideoWidthKey: outputSize.width,
+                AVVideoHeightKey: outputSize.height
+            ]
+            
+            let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+            writerInput.expectsMediaDataInRealTime = false
+            
+            let sourceBufferAttributes: [String: Any] = [
+                kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32ARGB),
+                kCVPixelBufferWidthKey as String: outputSize.width,
+                kCVPixelBufferHeightKey as String: outputSize.height,
+                kCVPixelBufferCGImageCompatibilityKey as String: true,
+                kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
+            ]
+            
+            let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+                assetWriterInput: writerInput,
+                sourcePixelBufferAttributes: sourceBufferAttributes
+            )
+            
+            writer.add(writerInput)
+            writer.startWriting()
+            writer.startSession(atSourceTime: .zero)
+            
+            let fps: Int32 = 30
+            let totalFrames = 90 // 3 seconds clip (30fps * 3s)
+            
+            let bImg = self.beforeImage ?? UIImage(named: "drone_intro") ?? UIImage()
+            let aImg = self.afterImage ?? UIImage(named: "drone_tundra_intro") ?? UIImage()
+            let hookText = self.viralHooks[self.selectedHookIndex]
+            
+            for frame in 0..<totalFrames {
+                while !writerInput.isReadyForMoreMediaData {
+                    usleep(10000)
+                }
+                
+                let progress = Double(frame) / Double(totalFrames)
+                let wipe: Double
+                if frame < 25 {
+                    wipe = 1.0 // Show Before
+                } else if frame > 65 {
+                    wipe = 0.0 // Show After
+                } else {
+                    wipe = 1.0 - Double(frame - 25) / 40.0 // Smooth transition
+                }
+                
+                // Draw Composite Frame
+                let renderer = UIGraphicsImageRenderer(size: outputSize)
+                let frameImage = renderer.image { ctx in
+                    // After image background
+                    aImg.draw(in: CGRect(origin: .zero, size: outputSize))
+                    
+                    // Before image clipped by wipe
+                    if wipe > 0.0 {
+                        ctx.cgContext.saveGState()
+                        ctx.cgContext.clip(to: CGRect(x: 0, y: 0, width: outputSize.width * wipe, height: outputSize.height))
+                        bImg.draw(in: CGRect(origin: .zero, size: outputSize))
+                        ctx.cgContext.restoreGState()
+                        
+                        // Wipe Divider Line
+                        UIColor(red: 0.13, green: 0.77, blue: 0.36, alpha: 1.0).setFill()
+                        ctx.fill(CGRect(x: outputSize.width * wipe - 4, y: 0, width: 8, height: outputSize.height))
+                    }
+                    
+                    // Top Bar Overlay
+                    UIColor.black.withAlphaComponent(0.6).setFill()
+                    ctx.fill(CGRect(x: 20, y: 50, width: outputSize.width - 40, height: 70))
+                    
+                    let attrTitle: [NSAttributedString.Key: Any] = [
+                        .font: UIFont.boldSystemFont(ofSize: 22),
+                        .foregroundColor: UIColor.white
+                    ]
+                    (hookText as NSString).draw(in: CGRect(x: 30, y: 65, width: outputSize.width - 60, height: 50), withAttributes: attrTitle)
+                    
+                    // Footer Bar
+                    UIColor.black.withAlphaComponent(0.7).setFill()
+                    ctx.fill(CGRect(x: 0, y: outputSize.height - 90, width: outputSize.width, height: 90))
+                    let attrFooter: [NSAttributedString.Key: Any] = [
+                        .font: UIFont.boldSystemFont(ofSize: 24),
+                        .foregroundColor: UIColor(red: 0.13, green: 0.77, blue: 0.36, alpha: 1.0)
+                    ]
+                    ("RODRIGUEZ LAWN CARE • (254) 852-8163" as NSString).draw(at: CGPoint(x: 30, y: outputSize.height - 70), withAttributes: attrFooter)
+                }
+                
+                // Convert to Pixel Buffer
+                if let pixelBuffer = self.pixelBuffer(from: frameImage, size: outputSize) {
+                    let frameTime = CMTimeMake(value: Int64(frame), timescale: fps)
+                    adaptor.append(pixelBuffer, withPresentationTime: frameTime)
+                }
+                
+                DispatchQueue.main.async {
+                    self.renderProgress = progress
+                }
+            }
+            
+            writerInput.markAsFinished()
+            writer.finishWriting {
+                DispatchQueue.main.async {
+                    self.isRenderingVideo = false
+                    self.renderProgress = 1.0
+                    self.exportedVideoURL = outputURL
+                    
+                    // Save to iPhone Camera Roll
+                    UISaveVideoAtPathToSavedPhotosAlbum(outputURL.path, nil, nil, nil)
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    self.showVideoSavedAlert = true
+                }
+            }
+        }
+    }
+    
+    private func pixelBuffer(from image: UIImage, size: CGSize) -> CVPixelBuffer? {
+        var maybePixelBuffer: CVPixelBuffer?
+        let attrs: [String: Any] = [
+            kCVPixelBufferCGImageCompatibilityKey as String: true,
+            kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
+        ]
+        let status = CVPixelBufferCreate(
+            kCFAllocatorDefault,
+            Int(size.width),
+            Int(size.height),
+            kCVPixelFormatType_32ARGB,
+            attrs as CFDictionary,
+            &maybePixelBuffer
+        )
+        guard status == kCVReturnSuccess, let pixelBuffer = maybePixelBuffer else { return nil }
+        
+        CVPixelBufferLockBaseAddress(pixelBuffer, CVPixelBufferLockFlags(rawValue: 0))
+        let pixelData = CVPixelBufferGetBaseAddress(pixelBuffer)
+        let rgbColorSpace = CGColorSpaceCreateDeviceRGB()
+        let context = CGContext(
+            data: pixelData,
+            width: Int(size.width),
+            height: Int(size.height),
+            bitsPerComponent: 8,
+            bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer),
+            space: rgbColorSpace,
+            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue
+        )
+        
+        if let cgImg = image.cgImage, let ctx = context {
+            ctx.draw(cgImg, in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
+        }
+        CVPixelBufferUnlockBaseAddress(pixelBuffer, CVPixelBufferLockFlags(rawValue: 0))
+        return pixelBuffer
+    }
 }
 
 
-// ==============================================================================
+// MARK: - 9. VISTA DEDICADA: SUBIR FOTOS DE TRABAJOS A LA PÁGINA WEB
+struct UploadWorkToWebGalleryView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var selectedImage: UIImage? = nil
+    @State private var showPhotoPicker: Bool = false
+    @State private var pickerSourceType: UIImagePickerController.SourceType = .photoLibrary
+    
+    @State private var jobTitle: String = ""
+    @State private var selectedCategory: String = "Corte de Césped"
+    @State private var selectedCity: String = "Killeen, TX"
+    @State private var jobNotes: String = ""
+    
+    @State private var isUploading: Bool = false
+    @State private var uploadSuccess: Bool = false
+    @State private var errorMessage: String? = nil
+    
+    let categories = [
+        "Corte de Césped",
+        "Mulch",
+        "Poda de Árboles",
+        "Limpieza de Yard",
+        "Antes & Después",
+        "Comercial & Duplex"
+    ]
+    
+    let centralTexasCities = [
+        "Killeen, TX",
+        "Copperas Cove, TX",
+        "Harker Heights, TX",
+        "Fort Cavazos, TX",
+        "Temple, TX",
+        "Belton, TX"
+    ]
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Header HUD
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle().fill(Brand.primary.opacity(0.18)).frame(width: 48, height: 48)
+                                Image(systemName: "camera.badge.ellipsis")
+                                    .font(.title3)
+                                    .foregroundStyle(Brand.primary)
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("SUBIR TRABAJO A LA WEB")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.primary)
+                                Text("Las fotos que subas aquí aparecerán de inmediato en rodriguezlawncare.com en la galería en vivo.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.gray)
+                            }
+                        }
+                        .padding(12)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        
+                        // Photo Picker Slot
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("FOTO DEL TRABAJO REALIZADO:")
+                                .font(.caption.bold())
+                                .foregroundStyle(.white)
+                            
+                            if let img = selectedImage {
+                                ZStack(alignment: .topTrailing) {
+                                    Image(uiImage: img)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 220)
+                                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 14)
+                                                .stroke(Brand.primary, lineWidth: 2)
+                                        )
+                                    
+                                    Button {
+                                        selectedImage = nil
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.title2)
+                                            .foregroundStyle(.white, .red)
+                                            .padding(8)
+                                    }
+                                }
+                            } else {
+                                HStack(spacing: 12) {
+                                    Button {
+                                        pickerSourceType = .camera
+                                        showPhotoPicker = true
+                                    } label: {
+                                        VStack(spacing: 6) {
+                                            Image(systemName: "camera.fill")
+                                                .font(.title2)
+                                            Text("Tomar Foto")
+                                                .font(.caption.bold())
+                                        }
+                                        .foregroundStyle(.white)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 110)
+                                        .background(Brand.card)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Brand.primary.opacity(0.5), lineWidth: 1.5)
+                                        )
+                                    }
+                                    
+                                    Button {
+                                        pickerSourceType = .photoLibrary
+                                        showPhotoPicker = true
+                                    } label: {
+                                        VStack(spacing: 6) {
+                                            Image(systemName: "photo.on.rectangle.angled")
+                                                .font(.title2)
+                                            Text("Elegir de Galería")
+                                                .font(.caption.bold())
+                                        }
+                                        .foregroundStyle(.white)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 110)
+                                        .background(Brand.card)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Brand.primary.opacity(0.5), lineWidth: 1.5)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Job Title
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("TÍTULO DEL TRABAJO:").font(.system(size: 9, weight: .bold)).foregroundStyle(.gray)
+                            TextField("ej: Corte y perfilado con navaja láser", text: $jobTitle)
+                                .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+                        }
+                        
+                        // Category Picker Chips
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("CATEGORÍA EN LA WEB:").font(.system(size: 9, weight: .bold)).foregroundStyle(.gray)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 6) {
+                                    ForEach(categories, id: \.self) { cat in
+                                        Button {
+                                            selectedCategory = cat
+                                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                        } label: {
+                                            Text(cat)
+                                                .font(.caption.bold())
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 6)
+                                                .background(selectedCategory == cat ? Brand.primary : Brand.card)
+                                                .foregroundStyle(selectedCategory == cat ? .black : .white)
+                                                .clipShape(Capsule())
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // City Picker Chips (Copperas Cove, Killeen, etc.)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("CIUDAD / ÁREA DE COBERTURA:").font(.system(size: 9, weight: .bold)).foregroundStyle(.gray)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 6) {
+                                    ForEach(centralTexasCities, id: \.self) { city in
+                                        Button {
+                                            selectedCity = city
+                                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                        } label: {
+                                            Text(city)
+                                                .font(.caption.bold())
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 6)
+                                                .background(selectedCity == city ? Color.yellow : Brand.card)
+                                                .foregroundStyle(selectedCity == city ? .black : .white)
+                                                .clipShape(Capsule())
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Optional Notes
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("NOTAS O DETALLES DEL CLIENTE:").font(.system(size: 9, weight: .bold)).foregroundStyle(.gray)
+                            TextField("Opcional: cliente recurrente, trabajo realizado en 45 min", text: $jobNotes)
+                                .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+                        }
+                        
+                        if uploadSuccess {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.green)
+                                Text("¡Foto publicada con éxito en tu página web!")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(Color.green)
+                            }
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.green.opacity(0.15))
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        
+                        // Big Publish Button
+                        Button {
+                            publishPhotoToWeb()
+                        } label: {
+                            HStack {
+                                if isUploading {
+                                    ProgressView().tint(.black).padding(.trailing, 4)
+                                    Text("Publicando en la Web...")
+                                } else {
+                                    Image(systemName: "paperplane.fill")
+                                    Text("🚀 Publicar en la Página Web al Instante")
+                                }
+                            }
+                            .font(.headline.bold())
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                            .background(selectedImage == nil ? Color.gray : Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .shadow(color: Brand.primary.opacity(0.4), radius: 8)
+                        }
+                        .disabled(selectedImage == nil || isUploading)
+                        
+                        // Open Website Link
+                        Button {
+                            if let url = URL(string: "\(store.cleanURL)/#gallery") {
+                                UIApplication.shared.open(url)
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: "safari.fill")
+                                Text("🌐 Ver Galería en Vivo en rodriguezlawncare.com")
+                            }
+                            .font(.caption.bold())
+                            .foregroundStyle(Brand.primary)
+                            .frame(maxWidth: .infinity)
+                            .padding(10)
+                            .background(Brand.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        .padding(.top, 4)
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Subir Fotos a la Web")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+            .sheet(isPresented: $showPhotoPicker) {
+                PhotoLibraryPicker(selectedImage: $selectedImage, sourceType: pickerSourceType)
+            }
+        }
+    }
+    
+    private func publishPhotoToWeb() {
+        guard let img = selectedImage else { return }
+        isUploading = true
+        uploadSuccess = false
+        
+        let finalTitle = jobTitle.isEmpty ? "\(selectedCategory) en \(selectedCity)" : jobTitle
+        var base64String: String? = nil
+        if let data = img.jpegData(compressionQuality: 0.8) {
+            base64String = data.base64EncodedString()
+        }
+        
+        Task {
+            await store.addGalleryPhoto(
+                title: finalTitle,
+                category: selectedCategory,
+                urlString: "./assets/gallery/work_auto.jpg",
+                location: selectedCity,
+                imageBase64: base64String
+            )
+            
+            DispatchQueue.main.async {
+                self.isUploading = false
+                self.uploadSuccess = true
+                self.selectedImage = nil
+                self.jobTitle = ""
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+        }
+    }
+}
+
+
 // MARK: - SUITE DEL PATRÓN v2.0 (EXPANSIÓN EMPRESARIAL)
 // ==============================================================================
 

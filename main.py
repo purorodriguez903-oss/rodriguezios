@@ -2302,8 +2302,8 @@ async def handle_send_ipa_discord(request):
 async def handle_download_ipa(request):
     """Serves the latest compiled IPA (v2.2.0 Build 27) with no-cache headers or redirects to latest GitHub Release."""
     config = load_cloud_config()
-    version = config.get("app_version", "2.2.0")
-    build = config.get("app_build", 27)
+    version = config.get("app_version", "2.3.0")
+    build = config.get("app_build", 28)
     target_name = f"RodriguezLawnCare_v{version}_Build{build}.ipa"
     candidate_paths = [
         os.path.join(BASE_DIR, "ipa nuevo", target_name),
@@ -2336,8 +2336,8 @@ async def handle_ota_page(request):
     host = request.headers.get("X-Forwarded-Host", request.host)
     base_url = f"{scheme}://{host}"
     config = load_cloud_config()
-    version = config.get("app_version", "2.2.0")
-    build = config.get("app_build", 27)
+    version = config.get("app_version", "2.3.0")
+    build = config.get("app_build", 28)
     target_name = f"RodriguezLawnCare_v{version}_Build{build}.ipa"
     ipa_direct_url = f"{base_url}/download/{target_name}"
     import urllib.parse
