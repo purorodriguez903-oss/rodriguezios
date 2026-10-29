@@ -1328,6 +1328,14 @@ async def handle_api_create_lead(request):
         leads.insert(0, new_lead)
         save_leads(leads)
 
+        # Update real analytics
+        analytics = load_analytics()
+        analytics["quotes_submitted"] = analytics.get("quotes_submitted", 0) + 1
+        tot = analytics.get("total_visits", 0)
+        quotes = analytics.get("quotes_submitted", 0)
+        analytics["conversion_rate"] = f"{(quotes / tot * 100):.1f}%" if tot > 0 else "0.0%"
+        save_analytics(analytics)
+
         # Notify Discord as well
         asyncio.create_task(forward_lead_to_discord(name, phone, services, address, date_val, time_val, frequency, f"[App] {description}", source))
 

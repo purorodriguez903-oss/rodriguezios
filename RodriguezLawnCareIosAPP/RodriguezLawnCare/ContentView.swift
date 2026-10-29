@@ -224,8 +224,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "1.5.0"
-    let currentAppBuild: Int = 15
+    let currentAppVersion: String = "1.5.1"
+    let currentAppBuild: Int = 16
 
     @AppStorage("api_server_url") var serverURL: String = "https://web-production-b6891b.up.railway.app"
 
@@ -461,6 +461,7 @@ class LawnCareStore: ObservableObject {
                 }
                 isFirstLoad = false
                 knownLeadIds = Set(decoded.leads.map { $0.id })
+                UserDefaults.standard.set(decoded.leads.map { $0.id }, forKey: "known_lead_ids_bg")
                 self.leads = decoded.leads
             }
         } catch {

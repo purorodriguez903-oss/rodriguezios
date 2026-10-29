@@ -292,7 +292,7 @@ function setupMusicEngine() {
     if (playIcon) playIcon.style.display = 'none';
     if (pauseIcon) pauseIcon.style.display = 'inline-block';
     if (genreEl && globalMusicConfig) {
-      genreEl.textContent = Sonando • %;
+      genreEl.textContent = "Sonando • " + (globalMusicConfig.genre || "Musica Activa");
     }
   });
 
@@ -358,7 +358,7 @@ function handleLiveWebMusic(music) {
   widget.style.display = 'flex';
   if (titleEl && music.title) titleEl.textContent = music.title;
   if (genreEl && !isAudioPlaying) {
-    genreEl.textContent = music.genre ? ${music.genre} • Toca para escuchar 🎵 : 'Toca para escuchar 🎵';
+    genreEl.textContent = music.genre ? (music.genre + " • Toca para escuchar") : "Toca para escuchar";
   }
 
   // Apply volume
@@ -794,7 +794,7 @@ function initBookingForms() {
       `;
     }
 
-    // Instantly notify Discord Bot via /api/lead (Channel: 1557306528078237706)
+    // Instantly notify Backend & iOS App via /api/lead (and fallback to /api/leads)
     try {
       fetch('/api/lead', {
         method: 'POST',
@@ -802,8 +802,15 @@ function initBookingForms() {
         body: JSON.stringify(data)
       })
       .then(res => res.json())
-      .then(res => console.log('Lead forwarded to Discord logs channel:', res))
-      .catch(err => console.warn('Lead notification error:', err));
+      .then(res => console.log('Lead registered successfully:', res))
+      .catch(err => {
+        console.warn('Lead endpoint retry via /api/leads:', err);
+        fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        }).catch(e => console.warn('Fallback lead endpoint failed:', e));
+      });
     } catch (e) {
       console.warn('Fetch lead failed:', e);
     }
