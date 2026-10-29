@@ -2560,251 +2560,295 @@ struct WebAdminView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        // 1. OTA & ONLINE UPDATES CENTER
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Image(systemName: "bolt.horizontal.fill")
-                                    .foregroundStyle(Brand.accent)
-                                Text("CENTRO DE ACTUALIZACIONES ONLINE (OTA)")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(.white)
-                                Spacer()
-                                Text("v\(store.currentAppVersion)")
-                                    .font(.caption2.bold())
-                                    .foregroundStyle(Brand.primary)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(Brand.primaryDark.opacity(0.3))
-                                    .clipShape(Capsule())
-                            }
+                        otaUpdatesCard
+                        analyticsCard
+                        heroManagerCard
+                        serverHealthCard
+                        serverUrlSettingsCard
 
-                            Text("Actualiza la app inalámbricamente por el aire sin necesidad de conectarla por cable a la PC ni reenviar archivos.")
-                                .font(.caption)
-                                .foregroundStyle(.gray)
-
-                            HStack {
-                                Text("Estado:")
-                                    .font(.caption).foregroundStyle(.gray)
-                                Spacer()
-                                Text(store.updateCheckStatus)
-                                    .font(.caption.bold())
-                                    .foregroundStyle(Brand.primary)
-                            }
-
-                            HStack(spacing: 10) {
-                                Button {
-                                    Task { await store.checkOTAUpdate(manual: true) }
-                                } label: {
-                                    HStack {
-                                        if store.isCheckingUpdate {
-                                            ProgressView().tint(.white).scaleEffect(0.8)
-                                        } else {
-                                            Image(systemName: "arrow.triangle.2.circlepath")
-                                        }
-                                        Text("Buscar Actualizaciones")
-                                    }
-                                    .font(.caption.bold())
-                                    .foregroundStyle(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(10)
-                                    .background(Brand.cardLight)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                }
-
-                                Button {
-                                    if let url = URL(string: "\(store.cleanURL)/instalar") {
-                                        UIApplication.shared.open(url)
-                                    }
-                                } label: {
-                                    HStack {
-                                        Image(systemName: "arrow.down.circle.fill")
-                                        Text("Instalar OTA")
-                                    }
-                                    .font(.caption.bold())
-                                    .foregroundStyle(.black)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(10)
-                                    .background(Brand.primary)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                }
-                            }
+                        VStack(spacing: 4) {
+                            Text("rodriguezlawncareios • Versión \(store.currentAppVersion) (Build \(store.currentAppBuild))")
+                                .font(.caption2.bold()).foregroundStyle(.gray)
+                            Text("Conexión 100% online con Railway y compilación inalámbrica OTA")
+                                .font(.caption2).foregroundStyle(.gray.opacity(0.7))
                         }
-                        .padding()
-                        .background(Brand.card)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Brand.accent.opacity(0.4), lineWidth: 1)
-                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 10)
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Ajustes & Sistema OTA ⚙️")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                serverInput = store.serverURL
+            }
+            .sheet(isPresented: $showHeroManagerSheet) {
+                HeroBackgroundManagerSheet(store: store)
+            }
+            .alert("Configuración Guardada", isPresented: $showSavedAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Se ha actualizado la dirección del servidor.")
+            }
+        }
+    }
 
-                        // 2. Analytics Card (Visitas en Vivo)
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Image(systemName: "chart.bar.xaxis")
-                                    .foregroundStyle(Brand.primary)
-                                Text("ESTADÍSTICAS & VISITAS EN VIVO")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(.white)
-                                Spacer()
-                                Circle().fill(Color.green).frame(width: 8, height: 8)
-                                Text("En Vivo")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.green)
-                            }
+    // 1. OTA & ONLINE UPDATES CENTER
+    private var otaUpdatesCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "bolt.horizontal.fill")
+                    .foregroundStyle(Brand.accent)
+                Text("CENTRO DE ACTUALIZACIONES ONLINE (OTA)")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                Spacer()
+                Text("v\(store.currentAppVersion)")
+                    .font(.caption2.bold())
+                    .foregroundStyle(Brand.primary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Brand.primaryDark.opacity(0.3))
+                    .clipShape(Capsule())
+            }
 
-                            HStack(spacing: 12) {
-                                AnalyticsMetricBox(title: "Visitas Web", value: "\(store.stats?.total_visits ?? 0)", icon: "eye.fill", color: .blue)
-                                AnalyticsMetricBox(title: "Visitas Hoy", value: (store.stats != nil && store.stats!.visits_today > 0 ? "+\(store.stats!.visits_today)" : "0"), icon: "flame.fill", color: .orange)
-                            }
+            Text("Actualiza la app inalámbricamente por el aire sin necesidad de conectarla por cable a la PC ni reenviar archivos.")
+                .font(.caption)
+                .foregroundStyle(.gray)
 
-                            HStack(spacing: 12) {
-                                AnalyticsMetricBox(title: "Citas Recibidas", value: "\(store.stats?.total_leads ?? store.leads.count)", icon: "bell.fill", color: Brand.primary)
-                                AnalyticsMetricBox(title: "Conversión", value: store.stats?.conversion_rate ?? "0.0%", icon: "percent", color: .purple)
-                            }
+            HStack {
+                Text("Estado:")
+                    .font(.caption).foregroundStyle(.gray)
+                Spacer()
+                Text(store.updateCheckStatus)
+                    .font(.caption.bold())
+                    .foregroundStyle(Brand.primary)
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    Task { await store.checkOTAUpdate(manual: true) }
+                } label: {
+                    HStack {
+                        if store.isCheckingUpdate {
+                            ProgressView().tint(.white).scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "arrow.triangle.2.circlepath")
                         }
-                        .padding()
-                        .background(Brand.card)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        Text("Buscar Actualizaciones")
+                    }
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(10)
+                    .background(Brand.cardLight)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
 
-                        // 3. HERO BACKGROUND MANAGER
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("ADMINISTRADOR DEL FONDO DE LA PÁGINA")
-                                .font(.caption.bold())
-                                .foregroundStyle(.gray)
+                Button {
+                    if let url = URL(string: "\(store.cleanURL)/instalar") {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.down.circle.fill")
+                        Text("Instalar OTA")
+                    }
+                    .font(.caption.bold())
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(10)
+                    .background(Brand.primary)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+            }
+        }
+        .padding()
+        .background(Brand.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Brand.accent.opacity(0.4), lineWidth: 1)
+        )
+    }
 
-                            Button {
-                                showHeroManagerSheet = true
-                            } label: {
-                                HStack(spacing: 14) {
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .fill(Brand.primaryDark.opacity(0.4))
-                                            .frame(width: 48, height: 48)
-                                        Image(systemName: store.settings?.hero_type == "video" ? "video.fill" : "photo.fill")
-                                            .font(.title3)
-                                            .foregroundStyle(Brand.primary)
-                                    }
+    // 2. Analytics Card (Visitas en Vivo)
+    private var analyticsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "chart.bar.xaxis")
+                    .foregroundStyle(Brand.primary)
+                Text("ESTADÍSTICAS & VISITAS EN VIVO")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                Spacer()
+                Circle().fill(Color.green).frame(width: 8, height: 8)
+                Text("En Vivo")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.green)
+            }
 
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text("Cambiar Fondo Principal (Hero)")
-                                            .font(.subheadline.bold())
-                                            .foregroundStyle(.white)
-                                        Text(store.settings?.hero_type == "video" ? "Modo Activo: 🎬 Video con Dron y Créditos" : "Modo Activo: 📸 Foto Estática")
-                                            .font(.caption2)
-                                            .foregroundStyle(Brand.accent)
-                                    }
+            HStack(spacing: 12) {
+                AnalyticsMetricBox(title: "Visitas Web", value: "\(store.stats?.total_visits ?? 0)", icon: "eye.fill", color: .blue)
+                AnalyticsMetricBox(title: "Visitas Hoy", value: (store.stats != nil && store.stats!.visits_today > 0 ? "+\(store.stats!.visits_today)" : "0"), icon: "flame.fill", color: .orange)
+            }
 
-                                    Spacer()
+            HStack(spacing: 12) {
+                AnalyticsMetricBox(title: "Citas Recibidas", value: "\(store.stats?.total_leads ?? store.leads.count)", icon: "bell.fill", color: Brand.primary)
+                AnalyticsMetricBox(title: "Conversión", value: store.stats?.conversion_rate ?? "0.0%", icon: "percent", color: .purple)
+            }
+        }
+        .padding()
+        .background(Brand.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
 
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption.bold())
-                                        .foregroundStyle(.gray)
-                                }
-                                .padding(12)
-                                .background(Brand.card)
-                                .clipShape(RoundedRectangle(cornerRadius: 14))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(Brand.primary.opacity(0.4), lineWidth: 1)
-                                 )
-                            }
-                        }
+    // 3. HERO BACKGROUND MANAGER
+    private var heroManagerCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("ADMINISTRADOR DEL FONDO DE LA PÁGINA")
+                .font(.caption.bold())
+                .foregroundStyle(.gray)
 
-                        // 4. Server Health & Status
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Circle()
-                                    .fill(store.isOnline ? Brand.primary : .red)
-                                    .frame(width: 12, height: 12)
-                                Text(store.isOnline ? "Servidor Conectado & Operativo" : "Sin Conexión al Servidor")
-                                    .font(.headline)
-                                    .foregroundStyle(.white)
-                                Spacer()
-                            }
+            Button {
+                showHeroManagerSheet = true
+            } label: {
+                HStack(spacing: 14) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Brand.primaryDark.opacity(0.4))
+                            .frame(width: 48, height: 48)
+                        Image(systemName: store.settings?.hero_type == "video" ? "video.fill" : "photo.fill")
+                            .font(.title3)
+                            .foregroundStyle(Brand.primary)
+                    }
 
-                            Divider().background(Color.white.opacity(0.1))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Cambiar Fondo Principal (Hero)")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.white)
+                        Text(store.settings?.hero_type == "video" ? "Modo Activo: 🎬 Video con Dron y Créditos" : "Modo Activo: 📸 Foto Estática")
+                            .font(.caption2)
+                            .foregroundStyle(Brand.accent)
+                    }
 
-                            HStack {
-                                Text("Última Sincronización:")
-                                    .font(.caption).foregroundStyle(.gray)
-                                Spacer()
-                                Text(store.lastSyncTime)
-                                    .font(.caption.bold()).foregroundStyle(.white)
-                            }
+                    Spacer()
 
-                            if let stats = store.stats {
-                                HStack {
-                                    Text("Bot de Discord:")
-                                        .font(.caption).foregroundStyle(.gray)
-                                    Spacer()
-                                    Text(stats.bot_online == true ? "Activo (24/7)" : "Inactivo")
-                                        .font(.caption.bold())
-                                        .foregroundStyle(stats.bot_online == true ? Brand.primary : .red)
-                                }
-                            }
+                    Image(systemName: "chevron.right")
+                        .font(.caption.bold())
+                        .foregroundStyle(.gray)
+                }
+                .padding(12)
+                .background(Brand.card)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Brand.primary.opacity(0.4), lineWidth: 1)
+                 )
+            }
+        }
+    }
 
-                            Button {
-                                Task { await store.refreshAll() }
-                            } label: {
-                                HStack {
-                                    Image(systemName: "arrow.clockwise")
-                                    Text("Probar Conexión Ahora")
-                                }
-                                .font(.caption.bold())
-                                .foregroundStyle(Brand.primary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 8)
-                                .background(Brand.primary.opacity(0.12))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
-                        }
-                        .padding()
-                        .background(Brand.card)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
+    // 4. Server Health & Status
+    private var serverHealthCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Circle()
+                    .fill(store.isOnline ? Brand.primary : .red)
+                    .frame(width: 12, height: 12)
+                Text(store.isOnline ? "Servidor Conectado & Operativo" : "Sin Conexión al Servidor")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                Spacer()
+            }
 
-                        // 5. Server URL Settings
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("URL DEL SERVIDOR WEB").font(.caption.bold()).foregroundStyle(.gray)
-                            TextField("https://web-production-b6891b.up.railway.app", text: $serverInput)
-                                .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+            Divider().background(Color.white.opacity(0.1))
 
-                            HStack(spacing: 8) {
-                                Button {
-                                    serverInput = "https://web-production-b6891b.up.railway.app"
-                                    store.serverURL = serverInput
-                                    Task {
-                                        await store.refreshAll()
-                                        showSavedAlert = true
-                                    }
-                                } label: {
-                                    HStack {
-                                        Image(systemName: "arrow.counterclockwise")
-                                        Text("Oficial")
-                                    }
-                                    .font(.caption.bold())
-                                    .foregroundStyle(.white)
-                                    .padding(12)
-                                    .background(Brand.cardLight)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                }
+            HStack {
+                Text("Última Sincronización:")
+                    .font(.caption).foregroundStyle(.gray)
+                Spacer()
+                Text(store.lastSyncTime)
+                    .font(.caption.bold()).foregroundStyle(.white)
+            }
 
-                                Button {
-                                    store.serverURL = serverInput
-                                    Task {
-                                        await store.refreshAll()
-                                        showSavedAlert = true
-                                    }
-                                } label: {
-                                    Text("Guardar y Conectar")
-                                        .font(.subheadline.bold())
-                                        .foregroundStyle(.black)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(12)
-                                        .background(Brand.primary)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                }
-                            }
-                        }
+            if let stats = store.stats {
+                HStack {
+                    Text("Bot de Discord:")
+                        .font(.caption).foregroundStyle(.gray)
+                    Spacer()
+                    Text(stats.bot_online == true ? "Activo (24/7)" : "Inactivo")
+                        .font(.caption.bold())
+                        .foregroundStyle(stats.bot_online == true ? Brand.primary : .red)
+                }
+            }
+
+            Button {
+                Task { await store.refreshAll() }
+            } label: {
+                HStack {
+                    Image(systemName: "arrow.clockwise")
+                    Text("Probar Conexión Ahora")
+                }
+                .font(.caption.bold())
+                .foregroundStyle(Brand.primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(Brand.primary.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .padding()
+        .background(Brand.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    // 5. Server URL Settings
+    private var serverUrlSettingsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("URL DEL SERVIDOR WEB").font(.caption.bold()).foregroundStyle(.gray)
+            TextField("https://web-production-b6891b.up.railway.app", text: $serverInput)
+                .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+
+            HStack(spacing: 8) {
+                Button {
+                    serverInput = "https://web-production-b6891b.up.railway.app"
+                    store.serverURL = serverInput
+                    Task {
+                        await store.refreshAll()
+                        showSavedAlert = true
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.counterclockwise")
+                        Text("Oficial")
+                    }
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .padding(12)
+                    .background(Brand.cardLight)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+
+                Button {
+                    store.serverURL = serverInput
+                    Task {
+                        await store.refreshAll()
+                        showSavedAlert = true
+                    }
+                } label: {
+                    Text("Guardar y Conectar")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(12)
+                        .background(Brand.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+            }
+        }
+    }
 
                         VStack(spacing: 4) {
                             Text("rodriguezlawncareios • Versión \(store.currentAppVersion) (Build \(store.currentAppBuild))")
