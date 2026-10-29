@@ -3,6 +3,9 @@
   "app_version": "1.2.0",
   "app_build": 12,
   "min_version": "1.0.0",
+  "ipa_online_folder": "ipa online",
+  "auto_update": true,
+  "live_cloud_sync": true,
   "release_notes": "Conexión 100% online con Railway, ícono oficial y actualización inalámbrica OTA sin cables.",
   "ipa_url": "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa",
   "ipa_fallback_url": "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/RodriguezLawnCare.ipa",
@@ -33,4 +36,3 @@
     "message": "Sistema 100% en línea sincronizado."
   }
 }
-

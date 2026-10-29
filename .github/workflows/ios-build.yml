@@ -45,22 +45,26 @@ jobs:
           /usr/bin/zip -qry ../rodriguezlawncareios-unsigned.ipa Payload
           cd ..
 
-      - name: Copy IPA to 'ipa here' folder
+      - name: Copy IPA to 'ipa online' folder
         run: |
+          mkdir -p "ipa online"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa online/rodriguezlawncareios.ipa"
+          mkdir -p "RodriguezLawnCareIosAPP/ipa online"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa online/rodriguezlawncareios.ipa"
           mkdir -p "ipa here"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare.ipa"
           mkdir -p "RodriguezLawnCareIosAPP/ipa here"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare.ipa"
-          ls -la "ipa here"
+          ls -la "ipa online"
 
       - name: Commit and push IPA to repository
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add "ipa here/" "RodriguezLawnCareIosAPP/ipa here/"
-          git commit -m "Automated build: Update rodriguezlawncareios.ipa in 'ipa here' [skip ci]" || echo "No changes to commit"
+          git add "ipa online/" "RodriguezLawnCareIosAPP/ipa online/" "ipa here/" "RodriguezLawnCareIosAPP/ipa here/"
+          git commit -m "Automated build: Update rodriguezlawncareios.ipa in 'ipa online' [skip ci]" || echo "No changes to commit"
           git push origin main
 
       - name: Upload IPA Artifact
@@ -68,8 +72,8 @@ jobs:
         with:
           name: rodriguezlawncareios-IPA
           path: |
+            ipa online/rodriguezlawncareios.ipa
             ipa here/rodriguezlawncareios.ipa
-            ipa here/RodriguezLawnCare.ipa
             RodriguezLawnCareIosAPP/build.log
           if-no-files-found: error
           retention-days: 14
@@ -82,5 +86,6 @@ jobs:
           name: "rodriguezlawncareios App (Latest IPA)"
           body: "Descarga directa de rodriguezlawncareios.ipa compilada automáticamente por GitHub Actions."
           files: |
+            ipa online/rodriguezlawncareios.ipa
             ipa here/rodriguezlawncareios.ipa
             ipa here/RodriguezLawnCare.ipa

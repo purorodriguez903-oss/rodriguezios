@@ -672,6 +672,7 @@ class LawnCareStore: ObservableObject {
 struct ContentView: View {
     @StateObject private var store = LawnCareStore()
     @State private var selectedTab = 0
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -759,6 +760,14 @@ struct ContentView: View {
         }
         .sheet(isPresented: $store.showUpdateModal) {
             OTAUpdateSheetView(store: store)
+        }
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .active {
+                Task {
+                    await store.refreshAll(silent: true)
+                    await store.checkOTAUpdate(manual: false)
+                }
+            }
         }
     }
 }

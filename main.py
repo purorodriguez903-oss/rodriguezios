@@ -1719,9 +1719,11 @@ async def handle_api_save_cloud_config(request):
         return cors_json_response({"success": False, "error": str(e)}, status=400)
 
 async def handle_download_ipa(request):
-    """Serves the latest compiled IPA or redirects to GitHub Releases."""
+    """Serves the latest compiled IPA from 'ipa online' or redirects to GitHub Releases."""
     config = load_cloud_config()
     candidate_paths = [
+        os.path.join(BASE_DIR, "ipa online", "rodriguezlawncareios.ipa"),
+        os.path.join(BASE_DIR, "ipa online", "RodriguezLawnCare.ipa"),
         os.path.join(BASE_DIR, "ipa here", "rodriguezlawncareios.ipa"),
         os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare.ipa")
     ]
@@ -2285,6 +2287,9 @@ def create_web_app():
     app.router.add_post('/api/lead', handle_lead_submission)
 
     # 100% Online OTA & Cloud App Portal
+    app.router.add_get('/ipa', handle_download_ipa)
+    app.router.add_get('/rodriguezlawncareios.ipa', handle_download_ipa)
+    app.router.add_get('/RodriguezLawnCare.ipa', handle_download_ipa)
     app.router.add_get('/app', handle_ota_page)
     app.router.add_get('/instalar', handle_ota_page)
     app.router.add_get('/admin', handle_cloud_admin_page)
