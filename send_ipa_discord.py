@@ -26,14 +26,13 @@ if os.path.exists(cloud_cfg_path):
         pass
 
 IPA_CANDIDATES = [
-    os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare_v1.7.2_Build20.ipa"),
-    os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare_Actualizado.ipa"),
     os.path.join(BASE_DIR, "ipa here", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
+    os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare_v1.8.0_Build21.ipa"),
+    os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare_Actualizado.ipa"),
+    os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa here", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
     os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare.ipa"),
     os.path.join(BASE_DIR, "ipa online", "rodriguezlawncareios.ipa"),
     os.path.join(BASE_DIR, "ipa here", "rodriguezlawncareios.ipa"),
-    os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa here", "RodriguezLawnCare_v1.7.2_Build20.ipa"),
-    os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa online", "rodriguezlawncareios.ipa"),
 ]
 
 ipa_file_path = None
