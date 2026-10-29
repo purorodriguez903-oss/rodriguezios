@@ -35,5 +35,6 @@
     "enabled": false,
     "title": "Aviso Online",
     "message": "Sistema 100% en línea sincronizado."
-  }
+  },
+  "ipa_nuevo_folder": "ipa nuevo"
 }
