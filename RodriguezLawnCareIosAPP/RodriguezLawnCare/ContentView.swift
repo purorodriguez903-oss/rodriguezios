@@ -339,8 +339,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "1.7.1"
-    let currentAppBuild: Int = 19
+    let currentAppVersion: String = "1.7.2"
+    let currentAppBuild: Int = 20
 
     @Published var calendarData: CalendarData = CalendarData(day_status: [:], appointments: [])
     @Published var activePromo: FlashPromotion? = nil
@@ -6144,7 +6144,7 @@ struct ReviewsManagerView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 HStack(spacing: 2) {
-                    ForEach(0..<r.rating, id: \.self) { _ in
+                    ForEach(0..<max(0, min(5, r.rating)), id: \.self) { _ in
                         Image(systemName: "star.fill")
                             .font(.caption)
                             .foregroundStyle(Color.yellow)
@@ -6579,7 +6579,7 @@ struct WebMusicSettingsSheetView: View {
             }
             .onAppear {
                 if let m = store.settings?.music {
-                    self.isEnabled = m.enabled
+                    self.isEnabled = m.enabled ?? false
                     self.selectedPresetId = m.preset_id ?? "texas_guitar"
                     self.musicVolume = m.volume ?? 0.40
                 }
