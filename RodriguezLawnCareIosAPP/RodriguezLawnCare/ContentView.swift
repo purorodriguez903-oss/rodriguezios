@@ -418,6 +418,8 @@ class LawnCareStore: ObservableObject {
     @AppStorage("sound_effects_enabled") var soundEffectsEnabled: Bool = true
 
     @AppStorage("api_server_url") var serverURL: String = "https://rodriguezlawncare.xyz"
+    @Published var activeEffectiveURL: String = "https://rodriguezlawncare.xyz"
+    let fallbackServerURL: String = "https://web-production-b6891b.up.railway.app"
 
     private var knownLeadIds: Set<Int> = []
     private var isFirstLoad: Bool = true
@@ -432,6 +434,7 @@ class LawnCareStore: ObservableObject {
         requestNotificationPermissions()
         startRealtimePolling()
         Task { @MainActor in
+            await testAndSelectActiveServer()
             await checkOTAUpdate(manual: false)
             await fetchCloudConfig()
             await fetchCalendar()
@@ -529,7 +532,7 @@ class LawnCareStore: ObservableObject {
     }
 
     var cleanURL: String {
-        var base = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        var base = activeEffectiveURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if base.isEmpty || base.contains("rodriguezlawncarenuevaa") {
             base = "https://rodriguezlawncare.xyz"
         }
@@ -623,20 +626,48 @@ class LawnCareStore: ObservableObject {
     }
 
     @MainActor
+    func testAndSelectActiveServer() async {
+        let primary = "https://rodriguezlawncare.xyz"
+        if let url = URL(string: "\(primary)/api/stats") {
+            var req = URLRequest(url: url)
+            req.timeoutInterval = 3
+            if let (_, resp) = try? await URLSession.shared.data(for: req),
+               let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) {
+                self.activeEffectiveURL = primary
+                return
+            }
+        }
+        self.activeEffectiveURL = fallbackServerURL
+    }
+
+    @MainActor
     func fetchStats() async {
         guard let url = URL(string: "\(cleanURL)/api/stats") else { return }
         do {
             var req = URLRequest(url: url)
-            req.timeoutInterval = 6
+            req.timeoutInterval = 4
             let (data, resp) = try await URLSession.shared.data(for: req)
             if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
                 let decoded = try JSONDecoder().decode(StatsResponse.self, from: data)
                 self.stats = decoded.stats
                 self.isOnline = true
-            } else {
-                self.isOnline = false
+                return
             }
         } catch {
+            if activeEffectiveURL.contains("rodriguezlawncare.xyz") {
+                if let fbUrl = URL(string: "\(fallbackServerURL)/api/stats") {
+                    var fbReq = URLRequest(url: fbUrl)
+                    fbReq.timeoutInterval = 4
+                    if let (fbData, fbResp) = try? await URLSession.shared.data(for: fbReq),
+                       let fbHttp = fbResp as? HTTPURLResponse, fbHttp.statusCode == 200 {
+                        let decoded = try? JSONDecoder().decode(StatsResponse.self, from: fbData)
+                        self.stats = decoded?.stats
+                        self.activeEffectiveURL = fallbackServerURL
+                        self.isOnline = true
+                        return
+                    }
+                }
+            }
             self.isOnline = false
         }
     }
