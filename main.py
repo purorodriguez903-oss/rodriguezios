@@ -46,6 +46,7 @@ BOT_TOKEN = get_env_var("BOT_TOKEN", "")
 SERVER_ID = int(get_env_var("SERVER_ID", "1538269421020258304"))
 CHANNEL_ID = int(get_env_var("CHANNEL_ID", "1557277046491578379"))
 LEADS_CHANNEL_ID = int(get_env_var("LEADS_CHANNEL_ID", "1557306528078237706"))
+IPA_CHANNEL_ID = int(get_env_var("IPA_CHANNEL_ID", "1565299006932914176"))
 PORT = int(get_env_var("PORT", "8080"))
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -57,6 +58,7 @@ ANALYTICS_JSON_PATH = os.path.join(BASE_DIR, "analytics.json")
 CLOUD_CONFIG_JSON_PATH = os.path.join(BASE_DIR, "cloud_config.json")
 CALENDAR_JSON_PATH = os.path.join(BASE_DIR, "calendar.json")
 PROMOTIONS_JSON_PATH = os.path.join(BASE_DIR, "promotions.json")
+IPA_DELIVERY_JSON_PATH = os.path.join(BASE_DIR, "ipa_delivery.json")
 UPLOADS_LEADS_FOLDER = os.path.join(BASE_DIR, "assets", "uploads", "leads")
 os.makedirs(UPLOADS_LEADS_FOLDER, exist_ok=True)
 
@@ -401,6 +403,112 @@ def parse_job_details(text: str):
         "icon": "✨",
         "title": clean[0].upper() + clean[1:]
     }
+
+
+# ----------------- IPA AUTO DELIVERY HELPER -----------------
+def get_ipa_file_path():
+    candidates = [
+        os.path.join(BASE_DIR, "ipa online", "rodriguezlawncareios.ipa"),
+        os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa online", "rodriguezlawncareios.ipa"),
+        os.path.join(BASE_DIR, "ipa here", "rodriguezlawncareios.ipa"),
+        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare.ipa"),
+    ]
+    for p in candidates:
+        if os.path.exists(p) and os.path.getsize(p) > 100000:
+            return p
+    return None
+
+async def send_ipa_to_discord(bot_instance, channel_id=IPA_CHANNEL_ID, force=False):
+    """Sends the latest compiled iOS IPA directly to the specified Discord channel."""
+    try:
+        ipa_path = get_ipa_file_path()
+        if not ipa_path:
+            print("[IPA Delivery] No se encontró ningún archivo IPA válido.")
+            return False, "No se encontró el archivo IPA compilado."
+
+        file_size_bytes = os.path.getsize(ipa_path)
+        file_size_mb = file_size_bytes / (1024 * 1024)
+
+        import hashlib
+        with open(ipa_path, "rb") as f:
+            ipa_hash = hashlib.md5(f.read()).hexdigest()
+
+        # Check last sent hash if not force
+        if not force and os.path.exists(IPA_DELIVERY_JSON_PATH):
+            try:
+                with open(IPA_DELIVERY_JSON_PATH, "r", encoding="utf-8") as f:
+                    state = json.load(f)
+                    if state.get("last_sent_hash") == ipa_hash:
+                        print(f"[IPA Delivery] El IPA con hash {ipa_hash} ya fue enviado previamente.")
+                        return True, "El IPA actual ya fue enviado previamente."
+            except Exception:
+                pass
+
+        channel = bot_instance.get_channel(channel_id)
+        if not channel:
+            channel = await bot_instance.fetch_channel(channel_id)
+        if not channel:
+            print(f"[IPA Delivery] No se encontró el canal con ID {channel_id}")
+            return False, f"Canal de Discord {channel_id} no encontrado."
+
+        cfg = load_cloud_config()
+        version_str = cfg.get("app_version", "1.6.0")
+        build_num = cfg.get("app_build", 17)
+
+        embed = discord.Embed(
+            title="\U0001f33f Rodriguez Lawn Care \u2022 Nueva Versi\u00f3n iOS IPA Compilada",
+            description=(
+                "**\u00a1Tu aplicaci\u00f3n iOS est\u00e1 lista para instalar!**\n\n"
+                "Puedes instalar este archivo `.ipa` directamente en tu iPhone usando **GBox**, **Scarlet**, **TrollStore**, **AltStore** o **Sideloadly** sin necesidad de computadora."
+            ),
+            color=0x22C55E
+        )
+        embed.add_field(name="\U0001f4e6 Archivo", value="`rodriguezlawncareios.ipa`", inline=True)
+        embed.add_field(name="\U0001f522 Versi\u00f3n", value=f"**v{version_str} (Build {build_num})**", inline=True)
+        embed.add_field(name="\u2696\ufe0f Tama\u00f1o", value=f"**{file_size_mb:.2f} MB**", inline=True)
+
+        embed.add_field(
+            name="\u2728 Novedades & Funciones Incluidas:",
+            value=(
+                "\u2022 \U0001f3a8 **Nuevo Icono Oficial de Alta Fidelidad**: Logo R esmeralda con pasto.\n"
+                "\u2022 \U0001f916 **IA Estimate Real-Time**: Cotizaci\u00f3n con fotos y precios en Killeen, TX.\n"
+                "\u2022 \U0001f4c5 **Calendario Profesional Diario**: Bloqueo de d\u00edas Normal / Lleno.\n"
+                "\u2022 \U0001f9fe **Generador de Facturas (Invoices)**: Crea invoices con logo y env\u00edalos.\n"
+                "\u2022 \U0001f525 **Promociones Web 24h**: Lanza ofertas flash con banner din\u00e1mico.\n"
+                "\u2022 \U0001f4f8 **Fotos de Clientes en Citas**: Las im\u00e1genes llegan directo a tu app.\n"
+                "\u2022 \u2728 **Fondo con Part\u00edculas Glow**: Efecto visual moderno y fluido.\n"
+                "\u2022 \U0001f4f2 **Sincronizaci\u00f3n Total en la Nube**: Conexi\u00f3n permanente con Railway y Discord."
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="\U0001f4f2 \u00bfC\u00f3mo instalar con GBox?",
+            value="1. Toca el archivo adjunto `rodriguezlawncareios.ipa` aqu\u00ed en Discord.\n2. Presiona el bot\u00f3n de **Compartir** y selecciona **GBox**.\n3. En GBox, toca **Instalar** y \u00a1listo!",
+            inline=False
+        )
+        embed.set_footer(text="Rodriguez Lawn Care \u2022 Sistema Aut\u00f3nomo de Entrega Continua")
+
+        with open(ipa_path, "rb") as f:
+            discord_file = discord.File(f, filename="rodriguezlawncareios.ipa")
+            msg = await channel.send(
+                content="🚀 **¡Nueva actualización de la App iOS disponible para descargar!**",
+                embed=embed,
+                file=discord_file
+            )
+
+        # Save delivery record
+        try:
+            with open(IPA_DELIVERY_JSON_PATH, "w", encoding="utf-8") as f:
+                json.dump({"last_sent_hash": ipa_hash, "sent_at": time.time(), "message_id": msg.id}, f, indent=2)
+        except Exception as err:
+            print(f"[IPA Delivery] Error guardando ipa_delivery.json: {err}")
+
+        print(f"✅ [IPA Delivery] IPA enviado con éxito al canal #{getattr(channel, 'name', channel_id)}! Message ID: {msg.id}")
+        return True, f"IPA enviado con éxito al canal #{getattr(channel, 'name', channel_id)}."
+    except Exception as e:
+        print(f"❌ [IPA Delivery Error]: {e}")
+        return False, str(e)
 
 
 # ----------------- DISCORD LOGGING HELPER -----------------
@@ -843,6 +951,12 @@ def build_bot(enable_message_content: bool):
                 else:
                     await channel.send(embed=embed, view=view)
 
+            # Auto-send IPA to Discord channel if new build is detected
+            try:
+                await send_ipa_to_discord(bot, channel_id=IPA_CHANNEL_ID, force=False)
+            except Exception as ipa_err:
+                print(f"Notice auto-sending IPA on startup: {ipa_err}")
+
             # Send boot log
             gallery = load_gallery()
             await send_discord_log(
@@ -1197,6 +1311,15 @@ def build_bot(enable_message_content: bool):
             ),
             color=discord.Color.orange()
         )
+
+    @bot.tree.command(name="enviar_ipa", description="Enviar la última versión de la app iOS (IPA) al canal de Discord")
+    async def cmd_enviar_ipa(interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=False)
+        success, msg = await send_ipa_to_discord(bot, channel_id=IPA_CHANNEL_ID, force=True)
+        if success:
+            await interaction.followup.send(f"✅ **¡IPA enviado con éxito al canal <#{IPA_CHANNEL_ID}>!**")
+        else:
+            await interaction.followup.send(f"❌ **Error al enviar el IPA:** {msg}")
 
     @bot.event
     async def on_disconnect():
@@ -2085,6 +2208,15 @@ async def handle_api_save_cloud_config(request):
     except Exception as e:
         return cors_json_response({"success": False, "error": str(e)}, status=400)
 
+async def handle_send_ipa_discord(request):
+    """API endpoint to trigger sending the latest IPA to Discord."""
+    global bot_global
+    if not bot_global or not bot_global.is_ready():
+        return cors_json_response({"success": False, "error": "Bot de Discord no está listo aún"}, status=503)
+    success, msg = await send_ipa_to_discord(bot_global, channel_id=IPA_CHANNEL_ID, force=True)
+    return cors_json_response({"success": success, "message": msg})
+
+
 async def handle_download_ipa(request):
     """Serves the latest compiled IPA from 'ipa online' or redirects to GitHub Releases."""
     config = load_cloud_config()
@@ -2813,6 +2945,8 @@ def create_web_app():
     app.router.add_post('/api/lead', handle_lead_submission)
 
     # 100% Online OTA & Cloud App Portal
+    app.router.add_post('/api/ipa/send-discord', handle_send_ipa_discord)
+    app.router.add_get('/api/ipa/send-discord', handle_send_ipa_discord)
     app.router.add_get('/ipa', handle_download_ipa)
     app.router.add_get('/rodriguezlawncareios.ipa', handle_download_ipa)
     app.router.add_get('/RodriguezLawnCare.ipa', handle_download_ipa)
