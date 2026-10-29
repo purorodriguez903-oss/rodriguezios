@@ -1690,6 +1690,39 @@ struct ContentView: View {
         }
     }
 
+    private func handleDropdownAction(_ action: String) {
+        switch action {
+        case "home":
+            selectedTab = 0
+        case "citas":
+            selectedTab = 0
+        case "clientes":
+            showRecurringSheet = true
+        case "trabajos":
+            showCommercialProposalSheet = true
+        case "calendario":
+            selectedTab = 1
+        case "enruta":
+            showRadarSheet = true
+        case "tracker":
+            showTrackerSheet = true
+        case "lluvia":
+            showRainAlertSheet = true
+        case "checklist":
+            showChecklistSheet = true
+        case "calculadora":
+            showTruckCalcSheet = true
+        case "reportes":
+            showVipLoyaltySheet = true
+        case "promos":
+            selectedTab = 3
+        case "ajustes":
+            selectedTab = 4
+        default:
+            handleDrawerAction(action)
+        }
+    }
+
     private func handleDrawerAction(_ action: String) {
         switch action {
         case "tracker": showTrackerSheet = true
@@ -9376,6 +9409,34 @@ struct TacticalTerritoryRadarView: View {
         }
     }
 }
+
+struct TacticalMetricBadge: View {
+    let icon: String
+    let title: String
+    let value: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(color)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.gray)
+                Text(value)
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+            }
+            Spacer()
+        }
+        .padding(8)
+        .background(Brand.cardLight)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
 
 // MARK: - 3. ESCÁNER IA DE SALUD DEL PASTO (HUD CIBERNÉTICO)
 struct AIYardHealthScannerHUDView: View {
