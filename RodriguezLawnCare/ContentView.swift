@@ -170,7 +170,7 @@ class LawnCareStore: ObservableObject {
             req.timeoutInterval = 6
             let (data, resp) = try await URLSession.shared.data(for: req)
             if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
-                let decoded = try JSONDecoder().decode(StatsResponse.self, data: data)
+                let decoded = try JSONDecoder().decode(StatsResponse.self, from: data)
                 self.stats = decoded.stats
                 self.isOnline = true
                 self.errorMessage = nil
@@ -190,7 +190,7 @@ class LawnCareStore: ObservableObject {
             req.timeoutInterval = 8
             let (data, resp) = try await URLSession.shared.data(for: req)
             if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
-                let decoded = try JSONDecoder().decode(LeadListResponse.self, data: data)
+                let decoded = try JSONDecoder().decode(LeadListResponse.self, from: data)
                 if !decoded.leads.isEmpty {
                     self.leads = decoded.leads
                 }
@@ -208,7 +208,7 @@ class LawnCareStore: ObservableObject {
             req.timeoutInterval = 8
             let (data, resp) = try await URLSession.shared.data(for: req)
             if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
-                let decoded = try JSONDecoder().decode(GalleryResponse.self, data: data)
+                let decoded = try JSONDecoder().decode(GalleryResponse.self, from: data)
                 if !decoded.gallery.isEmpty {
                     self.gallery = decoded.gallery
                 }
