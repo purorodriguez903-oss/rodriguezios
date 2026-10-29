@@ -1,63 +1,90 @@
-// MARK: - GLOWING PARTICLES AMBIENT BACKGROUND
-struct ParticleDot: Identifiable {
+// MARK: - LIVING ANIMATED PARTICLES BACKGROUND (EMERALD & GOLD)
+struct FloatingSporeDot: Identifiable {
     let id = UUID()
     var x: CGFloat
     var y: CGFloat
     var size: CGFloat
     var opacity: Double
+    var speed: Double
+    var color: Color
+    var xOffset: CGFloat
 }
 
-struct GlowingParticlesBackgroundView: View {
-    @State private var particles: [ParticleDot] = (0..<20).map { _ in
-        ParticleDot(
-            x: CGFloat.random(in: 0.05...0.95),
-            y: CGFloat.random(in: 0.05...0.95),
-            size: CGFloat.random(in: 5...14),
-            opacity: Double.random(in: 0.15...0.45)
+struct LivingParticlesBackgroundView: View {
+    @State private var animateParticles: Bool = false
+    
+    // 34 ambient particles with shades of emerald green, neon mint, and gold
+    let spores: [FloatingSporeDot] = (0..<34).map { i in
+        let colors: [Color] = [
+            Brand.primary,
+            Color(red: 0.1, green: 0.9, blue: 0.5),
+            Color(red: 0.95, green: 0.8, blue: 0.25),
+            Color.mint,
+            Color.green
+        ]
+        return FloatingSporeDot(
+            x: CGFloat.random(in: 0.02...0.98),
+            y: CGFloat.random(in: 0.03...0.97),
+            size: CGFloat.random(in: 3.5...10),
+            opacity: Double.random(in: 0.2...0.65),
+            speed: Double.random(in: 3.5...7.5),
+            color: colors[i % colors.count],
+            xOffset: CGFloat.random(in: -18...18)
         )
     }
-    @State private var pulse: Bool = false
-
+    
     var body: some View {
         GeometryReader { geo in
             ZStack {
                 Brand.background.ignoresSafeArea()
-
-                // Ambient Radial Glow
+                
+                // Deep Ambient Atmospheric Glows
                 RadialGradient(
-                    gradient: Gradient(colors: [Brand.primary.opacity(pulse ? 0.14 : 0.06), Color.clear]),
+                    gradient: Gradient(colors: [Brand.primary.opacity(animateParticles ? 0.16 : 0.07), Color.clear]),
                     center: .topTrailing,
                     startRadius: 20,
+                    endRadius: geo.size.width * 0.9
+                )
+                .ignoresSafeArea()
+                
+                RadialGradient(
+                    gradient: Gradient(colors: [Color.green.opacity(animateParticles ? 0.13 : 0.05), Color.clear]),
+                    center: .bottomLeading,
+                    startRadius: 30,
                     endRadius: geo.size.width * 0.85
                 )
                 .ignoresSafeArea()
-
-                RadialGradient(
-                    gradient: Gradient(colors: [Color.green.opacity(pulse ? 0.12 : 0.05), Color.clear]),
-                    center: .bottomLeading,
-                    startRadius: 40,
-                    endRadius: geo.size.width * 0.8
-                )
-                .ignoresSafeArea()
-
-                // Soft Floating Particles
-                ForEach(particles) { p in
+                
+                // Animated Floating Spores & Dust Particles
+                ForEach(spores) { spore in
                     Circle()
-                        .fill(Brand.primary)
-                        .frame(width: p.size, height: p.size)
-                        .blur(radius: p.size > 9 ? 3 : 1)
-                        .opacity(p.opacity)
-                        .position(x: p.x * geo.size.width, y: p.y * geo.size.height + (pulse ? -15 : 15))
+                        .fill(spore.color)
+                        .frame(width: spore.size, height: spore.size)
+                        .shadow(color: spore.color.opacity(0.8), radius: spore.size > 7 ? 6 : 3)
+                        .opacity(animateParticles ? spore.opacity : spore.opacity * 0.4)
+                        .offset(
+                            x: animateParticles ? spore.xOffset : -spore.xOffset,
+                            y: animateParticles ? -22 : 22
+                        )
+                        .position(
+                            x: spore.x * geo.size.width,
+                            y: spore.y * geo.size.height
+                        )
+                        .animation(
+                            Animation.easeInOut(duration: spore.speed)
+                                .repeatForever(autoreverses: true),
+                            value: animateParticles
+                        )
                 }
             }
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) {
-                pulse.toggle()
-            }
+            animateParticles = true
         }
     }
 }
+
+typealias GlowingParticlesBackgroundView = LivingParticlesBackgroundView
 
 import SwiftUI
 import UserNotifications
@@ -409,8 +436,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "2.0.0"
-    let currentAppBuild: Int = 25
+    let currentAppVersion: String = "2.1.0"
+    let currentAppBuild: Int = 26
 
     @Published var calendarData: CalendarData = CalendarData(day_status: [:], appointments: [])
     @Published var activePromo: FlashPromotion? = nil
@@ -1290,6 +1317,23 @@ class LawnCareStore: ObservableObject {
         if soundEffectsEnabled { SoundManager.playSuccessTone() }
     }
 
+    func updateRecurringClient(_ client: RecurringClient) async {
+        DispatchQueue.main.async {
+            if let idx = self.recurringClients.firstIndex(where: { $0.id == client.id }) {
+                self.recurringClients[idx] = client
+            }
+        }
+        guard let url = URL(string: "\(cleanURL)/api/recurring") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let body = try? JSONEncoder().encode(client) {
+            req.httpBody = body
+            _ = try? await URLSession.shared.data(for: req)
+        }
+        if soundEffectsEnabled { SoundManager.playSuccessTone() }
+    }
+
     func deleteRecurringClient(id: Int) async {
         guard let url = URL(string: "\(cleanURL)/api/recurring/delete") else { return }
         var req = URLRequest(url: url)
@@ -1342,46 +1386,152 @@ class LawnCareStore: ObservableObject {
 struct ContentView: View {
     @StateObject private var store = LawnCareStore()
     @State private var selectedTab = 0
+    @State private var showPatronDrawerMenu: Bool = false
     @Environment(\.scenePhase) private var scenePhase
+    
+    // Sheets triggered directly from Master Dropdown Menu
+    @State private var showTrackerSheet: Bool = false
+    @State private var showRadarSheet: Bool = false
+    @State private var showChecklistSheet: Bool = false
+    @State private var showRainAlertSheet: Bool = false
+    @State private var showFleetMaintenanceSheet: Bool = false
+    
+    @State private var showTruckCalcSheet: Bool = false
+    @State private var showTreeEstimatorSheet: Bool = false
+    @State private var showCommercialProposalSheet: Bool = false
+    @State private var showLawnAreaSheet: Bool = false
+    
+    @State private var showRecurringSheet: Bool = false
+    @State private var showVipLoyaltySheet: Bool = false
+    @State private var showRecurringAutoPaySheet: Bool = false
+    
+    @State private var showVideoMakerSheet: Bool = false
+    @State private var showFlyerMakerSheet: Bool = false
+    @State private var showGoogleReviewSheet: Bool = false
+    @State private var showDigitalCardSheet: Bool = false
+    @State private var showBeforeAfterSheet: Bool = false
 
     var body: some View {
         ZStack(alignment: .top) {
             ZStack {
-                GlowingParticlesBackgroundView()
+                LivingParticlesBackgroundView()
 
-                TabView(selection: $selectedTab) {
-                    AppointmentsView(store: store)
-                        .tabItem {
-                            Label("Citas", systemImage: "calendar.badge.clock")
+                VStack(spacing: 0) {
+                    // BARRA SUPERIOR PERSISTENTE CON BOTÓN DE 3 LÍNEAS (MENÚ HAMBURGUESA)
+                    HStack(spacing: 12) {
+                        Button {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                showPatronDrawerMenu.toggle()
+                            }
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: showPatronDrawerMenu ? "xmark" : "line.3.horizontal")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(.white)
+                                Text("MENÚ")
+                                    .font(.system(size: 11, weight: .black))
+                                    .foregroundStyle(Brand.primary)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(Brand.card)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(Brand.primary.opacity(0.4), lineWidth: 1))
                         }
-                        .tag(0)
 
-                    ProfessionalCalendarView(store: store)
-                        .tabItem {
-                            Label("Calendario", systemImage: "calendar")
-                        }
-                        .tag(1)
+                        Spacer()
 
-                    IAEstimateView(store: store)
-                        .tabItem {
-                            Label("IA Estimate", systemImage: "sparkles")
+                        VStack(spacing: 1) {
+                            Text("RODRIGUEZ LAWN CARE")
+                                .font(.system(size: 12, weight: .black))
+                                .foregroundStyle(Brand.primary)
+                            Text("SUITE DEL PATRÓN PRO")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(.white.opacity(0.8))
                         }
-                        .tag(2)
 
-                    FlashPromotionsView(store: store)
-                        .tabItem {
-                            Label("Promociones", systemImage: "megaphone.fill")
-                        }
-                        .tag(3)
+                        Spacer()
 
-                    WebAdminView(store: store)
-                        .tabItem {
-                            Label("Ajustes & Web", systemImage: "gearshape.2.fill")
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(store.isOnline ? Color.green : Color.red)
+                                .frame(width: 7, height: 7)
+                            Text(store.isOnline ? "ONLINE" : "OFF")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(store.isOnline ? .green : .red)
                         }
-                        .tag(4)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(Brand.card)
+                        .clipShape(Capsule())
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.black.opacity(0.85))
+
+                    TabView(selection: $selectedTab) {
+                        AppointmentsView(store: store)
+                            .tabItem {
+                                Label("Citas", systemImage: "calendar.badge.clock")
+                            }
+                            .tag(0)
+
+                        ProfessionalCalendarView(store: store)
+                            .tabItem {
+                                Label("Calendario", systemImage: "calendar")
+                            }
+                            .tag(1)
+
+                        IAEstimateView(store: store)
+                            .tabItem {
+                                Label("IA Estimate", systemImage: "sparkles")
+                            }
+                            .tag(2)
+
+                        FlashPromotionsView(store: store)
+                            .tabItem {
+                                Label("Promociones", systemImage: "megaphone.fill")
+                            }
+                            .tag(3)
+
+                        WebAdminView(store: store)
+                            .tabItem {
+                                Label("Ajustes & Web", systemImage: "gearshape.2.fill")
+                            }
+                            .tag(4)
+                    }
                 }
             }
             .accentColor(Brand.primary)
+
+            // DROPDOWN MASTER DRAWER MENU (CATEGORIZED CUADRITOS DEL PATRÓN)
+            if showPatronDrawerMenu {
+                Color.black.opacity(0.65)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                            showPatronDrawerMenu = false
+                        }
+                    }
+
+                PatronMasterDrawerMenuView(
+                    store: store,
+                    onClose: {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                            showPatronDrawerMenu = false
+                        }
+                    },
+                    onSelectAction: { action in
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                            showPatronDrawerMenu = false
+                        }
+                        handleDrawerAction(action)
+                    }
+                )
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(100)
+            }
 
             // HEADS-UP NOTIFICATION BANNER
             if store.showAlertBanner, let msg = store.latestAlertMessage {
@@ -1432,9 +1582,24 @@ struct ContentView: View {
                 .zIndex(100)
             }
         }
-        .sheet(isPresented: $store.showUpdateModal) {
-            OTAUpdateSheetView(store: store)
-        }
+        .sheet(isPresented: $showTrackerSheet) { LawnTrackerLiveSheetView(store: store) }
+        .sheet(isPresented: $showRadarSheet) { TacticalTerritoryRadarView(store: store) }
+        .sheet(isPresented: $showChecklistSheet) { MorningTrailerChecklistSheetView(store: store) }
+        .sheet(isPresented: $showRainAlertSheet) { RainAlertRescheduleSheetView(store: store) }
+        .sheet(isPresented: $showFleetMaintenanceSheet) { EquipmentFleetMaintenanceSheetView(store: store) }
+        .sheet(isPresented: $showTruckCalcSheet) { BulkMaterialTruckCalculatorView(store: store) }
+        .sheet(isPresented: $showTreeEstimatorSheet) { TreeTrimmingStumpEstimatorSheetView(store: store) }
+        .sheet(isPresented: $showCommercialProposalSheet) { CommercialProposalSheetView(store: store) }
+        .sheet(isPresented: $showLawnAreaSheet) { LawnAreaCalculatorSheetView(store: store) }
+        .sheet(isPresented: $showRecurringSheet) { RecurringClientsManagerView(store: store) }
+        .sheet(isPresented: $showVipLoyaltySheet) { VipLoyaltyTiersView(store: store) }
+        .sheet(isPresented: $showRecurringAutoPaySheet) { RecurringAutoPaySubscriptionSheetView(store: store) }
+        .sheet(isPresented: $showVideoMakerSheet) { CinematicVideoMakerView(store: store) }
+        .sheet(isPresented: $showFlyerMakerSheet) { SocialMediaFlyerMakerSheetView(store: store) }
+        .sheet(isPresented: $showGoogleReviewSheet) { GoogleReviewBoosterSheetView(store: store) }
+        .sheet(isPresented: $showDigitalCardSheet) { NeighborDigitalCardQRView(store: store) }
+        .sheet(isPresented: $showBeforeAfterSheet) { BeforeAfterCameraSheetView(store: store) }
+        .sheet(isPresented: $store.showUpdateModal) { OTAUpdateSheetView(store: store) }
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .active {
                 Task {
@@ -1442,6 +1607,32 @@ struct ContentView: View {
                     await store.checkOTAUpdate(manual: false)
                 }
             }
+        }
+    }
+
+    private func handleDrawerAction(_ action: String) {
+        switch action {
+        case "tracker": showTrackerSheet = true
+        case "radar": showRadarSheet = true
+        case "checklist": showChecklistSheet = true
+        case "rain": showRainAlertSheet = true
+        case "fleet": showFleetMaintenanceSheet = true
+        case "estimate": selectedTab = 2
+        case "truck": showTruckCalcSheet = true
+        case "tree": showTreeEstimatorSheet = true
+        case "proposal": showCommercialProposalSheet = true
+        case "lawnarea": showLawnAreaSheet = true
+        case "recurring": showRecurringSheet = true
+        case "vip": showVipLoyaltySheet = true
+        case "autopay": showRecurringAutoPaySheet = true
+        case "video": showVideoMakerSheet = true
+        case "flyer": showFlyerMakerSheet = true
+        case "reviews": showGoogleReviewSheet = true
+        case "digitalcard": showDigitalCardSheet = true
+        case "beforeafter": showBeforeAfterSheet = true
+        case "promos": selectedTab = 3
+        case "settings": selectedTab = 4
+        default: break
         }
     }
 }
@@ -7470,6 +7661,7 @@ struct RecurringClientsManagerView: View {
     @Environment(\.dismiss) var dismiss
     @State private var selectedDayFilter: String = "Todos"
     @State private var showAddSheet: Bool = false
+    @State private var clientToEdit: RecurringClient? = nil
     
     let dayFilters = ["Todos", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Pendientes"]
     
@@ -7524,7 +7716,9 @@ struct RecurringClientsManagerView: View {
                                 .padding(.top, 50)
                             } else {
                                 ForEach(filteredClients) { client in
-                                    RecurringClientCard(client: client, store: store)
+                                    RecurringClientCard(client: client, store: store, onEdit: {
+                                        clientToEdit = client
+                                    })
                                 }
                             }
                         }
@@ -7551,6 +7745,9 @@ struct RecurringClientsManagerView: View {
             .sheet(isPresented: $showAddSheet) {
                 AddRecurringClientSheet(store: store)
             }
+            .sheet(item: $clientToEdit) { client in
+                EditRecurringClientSheetView(client: client, store: store)
+            }
         }
     }
 }
@@ -7558,13 +7755,21 @@ struct RecurringClientsManagerView: View {
 struct RecurringClientCard: View {
     let client: RecurringClient
     @ObservedObject var store: LawnCareStore
+    var onEdit: () -> Void = {}
     @State private var isToggling: Bool = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(client.name)
+                    HStack(spacing: 6) {
+                        Text(client.name)
+                            .font(.headline.bold())
+                            .foregroundStyle(.white)
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(Brand.primary.opacity(0.8))
+                    }
                         .font(.headline.bold())
                         .foregroundStyle(.white)
                     Text(client.phone)
@@ -7622,6 +7827,21 @@ struct RecurringClientCard: View {
             Divider().background(Color.gray.opacity(0.2))
             
             HStack(spacing: 8) {
+                Button {
+                    onEdit()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "pencil")
+                        Text("Editar Info")
+                    }
+                    .font(.caption.bold())
+                    .foregroundStyle(Brand.primary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(Brand.cardLight)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+
                 Button {
                     sendReminderWhatsApp()
                 } label: {
@@ -11041,6 +11261,545 @@ Te enviamos tu estado de cuenta por el mantenimiento mensual de césped de tu pr
         let clean = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         if let url = URL(string: "https://wa.me/?text=\(clean)") {
             UIApplication.shared.open(url)
+        }
+    }
+}
+
+
+// ==============================================================================
+// MARK: - SUITE DEL PATRÓN v2.1: MENÚ MASTER HAMBURGUESA & EDITOR DE CLIENTES
+// ==============================================================================
+
+// MARK: - EDITOR COMPLETO DE CLIENTES RECURRENTES
+struct EditRecurringClientSheetView: View {
+    let client: RecurringClient
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var name: String = ""
+    @State private var phone: String = ""
+    @State private var address: String = ""
+    @State private var price: Double = 50.0
+    @State private var frequency: String = "biweekly"
+    @State private var serviceDay: String = "Lunes"
+    @State private var status: String = "pending"
+    @State private var notes: String = ""
+    @State private var showDeleteConfirm: Bool = false
+    
+    let days = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+    let frequencies = [
+        ("weekly", "Semanal (4 cortes/mes)"),
+        ("biweekly", "Quincenal (2 cortes/mes)"),
+        ("monthly", "Mensual (1 corte/mes)")
+    ]
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Header Badge
+                        HStack(spacing: 10) {
+                            Image(systemName: "person.crop.circle.badge.checkmark")
+                                .font(.system(size: 32))
+                                .foregroundStyle(Brand.primary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("EDITAR PERFIL DEL CLIENTE")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.primary)
+                                Text(name.isEmpty ? client.name : name)
+                                    .font(.headline.bold())
+                                    .foregroundStyle(.white)
+                            }
+                            Spacer()
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal)
+                        
+                        // Personal & Contact Info
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("INFORMACIÓN DE CONTACTO")
+                                .font(.caption.bold())
+                                .foregroundStyle(.gray)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Nombre Completo:")
+                                    .font(.caption2)
+                                    .foregroundStyle(.gray)
+                                TextField("Nombre", text: $name)
+                                    .padding(10)
+                                    .background(Brand.cardLight)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .foregroundStyle(.white)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Teléfono:")
+                                    .font(.caption2)
+                                    .foregroundStyle(.gray)
+                                TextField("Teléfono", text: $phone)
+                                    .padding(10)
+                                    .background(Brand.cardLight)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .foregroundStyle(.white)
+                                    .keyboardType(.phonePad)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Dirección de la Propiedad:")
+                                    .font(.caption2)
+                                    .foregroundStyle(.gray)
+                                TextField("Dirección", text: $address)
+                                    .padding(10)
+                                    .background(Brand.cardLight)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal)
+                        
+                        // Pricing & Service Schedule
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("TARIFA Y PROGRAMACIÓN DE CORTE")
+                                .font(.caption.bold())
+                                .foregroundStyle(.gray)
+                            
+                            HStack {
+                                Text("Precio por Visita: $\(Int(price)) USD")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(Brand.primary)
+                                Spacer()
+                                Stepper("", value: $price, in: 25...500, step: 5)
+                            }
+                            
+                            Divider().background(Color.gray.opacity(0.3))
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Frecuencia de Corte:")
+                                    .font(.caption2)
+                                    .foregroundStyle(.gray)
+                                Picker("Frecuencia", selection: $frequency) {
+                                    ForEach(frequencies, id: \.0) { freq in
+                                        Text(freq.1).tag(freq.0)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                            }
+                            
+                            Divider().background(Color.gray.opacity(0.3))
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Día Asignado de Corte:")
+                                    .font(.caption2)
+                                    .foregroundStyle(.gray)
+                                Picker("Día de Servicio", selection: $serviceDay) {
+                                    ForEach(days, id: \.self) { d in
+                                        Text(d).tag(d)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Brand.cardLight)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            
+                            Divider().background(Color.gray.opacity(0.3))
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Estado de Pago:")
+                                    .font(.caption2)
+                                    .foregroundStyle(.gray)
+                                Picker("Estado", selection: $status) {
+                                    Text("Pendiente ⏳").tag("pending")
+                                    Text("Pagado ✓").tag("paid")
+                                }
+                                .pickerStyle(.segmented)
+                            }
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal)
+                        
+                        // Special Yard Notes
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("NOTAS ESPECIALES DEL PATIO (PORTÓN / PERROS):")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.gray)
+                            TextField("Ej: Código de portón #4521, no dejar portón abierto por mascotas", text: $notes)
+                                .padding(10)
+                                .background(Brand.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.horizontal)
+                        
+                        // Save Changes Button
+                        Button {
+                            saveChanges()
+                        } label: {
+                            HStack {
+                                Image(systemName: "checkmark.seal.fill")
+                                Text("Guardar Cambios del Cliente")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .padding(.horizontal)
+                        
+                        // Delete Button
+                        Button {
+                            showDeleteConfirm = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "trash.fill")
+                                Text("Eliminar Cliente Recurrente")
+                            }
+                            .font(.caption.bold())
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(12)
+                            .background(Color.red.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.vertical)
+                }
+            }
+            .navigationTitle("Editar Cliente")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancelar") { dismiss() }
+                        .foregroundStyle(.gray)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Guardar") { saveChanges() }
+                        .font(.body.bold())
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+            .onAppear {
+                name = client.name
+                phone = client.phone
+                address = client.address
+                price = client.price
+                frequency = client.frequency
+                serviceDay = client.service_day
+                status = client.status
+                notes = client.notes ?? ""
+            }
+            .alert("¿Eliminar Cliente?", isPresented: $showDeleteConfirm) {
+                Button("Eliminar", role: .destructive) {
+                    Task {
+                        await store.deleteRecurringClient(id: client.id)
+                        dismiss()
+                    }
+                }
+                Button("Cancelar", role: .cancel) {}
+            } message: {
+                Text("¿Estás seguro de que deseas remover a \(client.name) de tu lista de clientes recurrentes?")
+            }
+        }
+    }
+    
+    private func saveChanges() {
+        var updated = client
+        updated.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.phone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.address = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.price = price
+        updated.frequency = frequency
+        updated.service_day = serviceDay
+        updated.status = status
+        updated.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        Task {
+            await store.updateRecurringClient(updated)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            dismiss()
+        }
+    }
+}
+
+// MARK: - MASTER DROPDOWN DRAWER MENU (CATEGORIZED CUADRITOS DEL PATRÓN)
+struct PatronMasterDrawerMenuView: View {
+    @ObservedObject var store: LawnCareStore
+    var onClose: () -> Void
+    var onSelectAction: (String) -> Void
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header Bar
+            HStack(spacing: 12) {
+                Image("AppIcon")
+                    .resizable()
+                    .frame(width: 38, height: 38)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "crown.fill")
+                            .foregroundStyle(Color.yellow)
+                            .font(.caption)
+                        Text("CENTRO DE COMANDO")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(Brand.primary)
+                    }
+                    Text("Todas tus herramientas organizadas en orden")
+                        .font(.caption2)
+                        .foregroundStyle(.gray)
+                }
+                
+                Spacer()
+                
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(Color(red: 0.05, green: 0.12, blue: 0.09))
+            .overlay(
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundStyle(Brand.primary.opacity(0.3)),
+                alignment: .bottom
+            )
+            
+            // Categorized Cuadritos Scroll Area
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 16) {
+                    
+                    // CATEGORÍA 1: OPERACIONES & CUADRILLA
+                    DrawerCategorySection(
+                        icon: "truck.box.fill",
+                        title: "1. OPERACIONES & RUTA",
+                        subtitle: "Control de cuadrilla, GPS y maquinaria en la calle",
+                        color: Color.cyan
+                    ) {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                            DrawerToolItemButton(icon: "location.north.circle.fill", title: "Lawn Tracker GPS", subtitle: "Aviso de llegada ETA", color: Color.cyan) {
+                                onSelectAction("tracker")
+                            }
+                            DrawerToolItemButton(icon: "dot.radiowaves.left.and.right", title: "Radar Táctico", subtitle: "Zonas conquistadas", color: Color.green) {
+                                onSelectAction("radar")
+                            }
+                            DrawerToolItemButton(icon: "checklist", title: "Checklist Remolque", subtitle: "Carga matutina 100%", color: Color.mint) {
+                                onSelectAction("checklist")
+                            }
+                            DrawerToolItemButton(icon: "cloud.rain.fill", title: "Alerta Lluvia", subtitle: "Aviso masivo por clima", color: Color.blue) {
+                                onSelectAction("rain")
+                            }
+                            DrawerToolItemButton(icon: "wrench.and.screwdriver.fill", title: "Flota & Podadoras", subtitle: "Toro/Stihl/Camión", color: Color.orange) {
+                                onSelectAction("fleet")
+                            }
+                        }
+                    }
+                    
+                    // CATEGORÍA 2: COTIZACIONES & VENTAS
+                    DrawerCategorySection(
+                        icon: "dollarsign.circle.fill",
+                        title: "2. COTIZACIONES & VENTAS",
+                        subtitle: "Calculadoras y estimadores rápidos en el patio",
+                        color: Color.green
+                    ) {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                            DrawerToolItemButton(icon: "sparkles", title: "IA Smart Estimator", subtitle: "Corte y pasto alto", color: Color.green) {
+                                onSelectAction("estimate")
+                            }
+                            DrawerToolItemButton(icon: "truck.pickup.side.fill", title: "Camión Mulch 3D", subtitle: "Calculadora de yardas", color: Color.orange) {
+                                onSelectAction("truck")
+                            }
+                            DrawerToolItemButton(icon: "tree.fill", title: "Tala de Árboles", subtitle: "Destoconado y riesgo", color: Color.green) {
+                                onSelectAction("tree")
+                            }
+                            DrawerToolItemButton(icon: "doc.text.fill", title: "Propuesta Comercial", subtitle: "Contrato HOA 2 Pág", color: Color.indigo) {
+                                onSelectAction("proposal")
+                            }
+                            DrawerToolItemButton(icon: "map.fill", title: "Calculadora Lote", subtitle: "Medir acres de terreno", color: Color.yellow) {
+                                onSelectAction("lawnarea")
+                            }
+                        }
+                    }
+                    
+                    // CATEGORÍA 3: CLIENTES & COBROS
+                    DrawerCategorySection(
+                        icon: "person.2.fill",
+                        title: "3. CLIENTES & COBROS",
+                        subtitle: "Clientes fijos, lealtad VIP y pagos Zelle / Cash App",
+                        color: Color.yellow
+                    ) {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                            DrawerToolItemButton(icon: "repeat", title: "Clientes Recurrentes", subtitle: "Editar perfiles y días", color: Color.green) {
+                                onSelectAction("recurring")
+                            }
+                            DrawerToolItemButton(icon: "crown.fill", title: "Niveles VIP", subtitle: "Lealtad & LTV", color: Color.yellow) {
+                                onSelectAction("vip")
+                            }
+                            DrawerToolItemButton(icon: "creditcard.fill", title: "Auto-Pay Recurrente", subtitle: "Zelle Olivia & $rafajrii", color: Color.cyan) {
+                                onSelectAction("autopay")
+                            }
+                            DrawerToolItemButton(icon: "signature", title: "Firma Digital", subtitle: "Firmar en pantalla", color: Color.pink) {
+                                onSelectAction("settings")
+                            }
+                        }
+                    }
+                    
+                    // CATEGORÍA 4: MARKETING & REDES SOCIALES
+                    DrawerCategorySection(
+                        icon: "megaphone.fill",
+                        title: "4. MARKETING & REDES",
+                        subtitle: "Publicidad en Facebook, Google Maps y TikTok",
+                        color: Color.purple
+                    ) {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                            DrawerToolItemButton(icon: "film.stack.fill", title: "Video TikTok / Reels", subtitle: "Antes & Después", color: Color.purple) {
+                                onSelectAction("video")
+                            }
+                            DrawerToolItemButton(icon: "photo.on.rectangle.angled", title: "Creador de Flyers", subtitle: "Publicar en Facebook", color: Color.pink) {
+                                onSelectAction("flyer")
+                            }
+                            DrawerToolItemButton(icon: "star.fill", title: "Reseñas 5★ Google", subtitle: "Boost en Google Maps", color: Color.yellow) {
+                                onSelectAction("reviews")
+                            }
+                            DrawerToolItemButton(icon: "qrcode", title: "Tarjeta QR Vecinos", subtitle: "10% OFF Exclusivo", color: Color.blue) {
+                                onSelectAction("digitalcard")
+                            }
+                            DrawerToolItemButton(icon: "camera.badge.ellipsis", title: "Cámara Antes/Dsp", subtitle: "Comparativa de patio", color: Color.teal) {
+                                onSelectAction("beforeafter")
+                            }
+                            DrawerToolItemButton(icon: "flame.fill", title: "Promociones Flash", subtitle: "Lanzar oferta a la web", color: Color.orange) {
+                                onSelectAction("promos")
+                            }
+                        }
+                    }
+                    
+                    // CATEGORÍA 5: AJUSTES & SISTEMA OTA
+                    DrawerCategorySection(
+                        icon: "gearshape.2.fill",
+                        title: "5. AJUSTES & SISTEMA",
+                        subtitle: "Servidor Railway, música y compilación OTA",
+                        color: Color.gray
+                    ) {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                            DrawerToolItemButton(icon: "server.rack", title: "Servidor Railway", subtitle: "rodriguezlawncare.xyz", color: Color.green) {
+                                onSelectAction("settings")
+                            }
+                            DrawerToolItemButton(icon: "arrow.triangle.2.circlepath.circle.fill", title: "Actualizaciones OTA", subtitle: "Builds en la nube", color: Color.cyan) {
+                                onSelectAction("settings")
+                            }
+                            DrawerToolItemButton(icon: "music.note", title: "Música del Patrón", subtitle: "Corridos de fondo", color: Color.orange) {
+                                onSelectAction("settings")
+                            }
+                        }
+                    }
+                }
+                .padding(14)
+                .padding(.bottom, 24)
+            }
+            .frame(maxHeight: 520)
+            .background(Color(red: 0.04, green: 0.08, blue: 0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(Brand.primary.opacity(0.4), lineWidth: 1.5)
+            )
+            .shadow(color: Color.black.opacity(0.8), radius: 25, y: 15)
+        }
+        .padding(.horizontal, 10)
+        .padding(.top, 4)
+    }
+}
+
+// MARK: - DRAWER HELPERS
+struct DrawerCategorySection<Content: View>: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let color: Color
+    @ViewBuilder let content: Content
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .foregroundStyle(color)
+                    .font(.caption.bold())
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.caption.bold())
+                        .foregroundStyle(color)
+                    Text(subtitle)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.gray)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 4)
+            
+            content
+        }
+        .padding(10)
+        .background(Brand.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(color.opacity(0.25), lineWidth: 1)
+        )
+    }
+}
+
+struct DrawerToolItemButton: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let color: Color
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            action()
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.headline)
+                    .foregroundStyle(color)
+                    .frame(width: 28, height: 28)
+                    .background(color.opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(.system(size: 8))
+                        .foregroundStyle(.gray)
+                        .lineLimit(1)
+                }
+                Spacer()
+            }
+            .padding(8)
+            .background(Brand.cardLight)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
 }
