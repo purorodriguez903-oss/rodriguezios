@@ -283,7 +283,7 @@ class LawnCareStore: ObservableObject {
         content.title = "🚨 ¡NUEVA CITA / COTIZACIÓN WEB!"
         content.subtitle = "\(lead.name) • \(lead.phone)"
         let svcs = lead.services?.joined(separator: ", ") ?? "Corte de Césped"
-        content.body = "Servicios: \(svcs) | \(lead.extra_details ?? "Cliente solicita cotización")"
+        content.body = "Servicios: \(svcs) | \(lead.description ?? "Cliente solicita cotización")"
         content.sound = .defaultCritical
         content.badge = 1
         if #available(iOS 15.0, *) {
@@ -3536,7 +3536,6 @@ struct IAEstimateView: View {
                 }
                 TextEditor(text: $taskDescription)
                     .frame(minHeight: 80)
-                    .scrollContentBackground(.hidden)
                     .background(Color.clear)
                     .foregroundStyle(.white)
                     .font(.subheadline)
