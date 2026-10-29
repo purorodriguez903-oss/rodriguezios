@@ -5975,7 +5975,7 @@ struct ProfessionalCalendarView: View {
             .sheet(isPresented: $showAddEventSheet) {
                 DirectAddCalendarSheet(store: store, defaultDate: selectedDateString)
             }
-            .sheet(isPresented: ) {
+            .sheet(isPresented: $showRouteOptimizer) {
                 DailyRouteOptimizerSheetView(selectedDate: selectedDate, store: store)
             }
         }
@@ -7050,7 +7050,7 @@ struct DailyRouteOptimizerSheetView: View {
     
     var stops: [CalendarAppointment] {
         store.calendarData.appointments?.filter {
-            $0.date == dateString && !($0.address?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+            $0.date == dateString && !$0.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         } ?? []
     }
     
@@ -7159,13 +7159,13 @@ struct DailyRouteOptimizerSheetView: View {
                                             Text(appt.client_name)
                                                 .font(.headline)
                                                 .foregroundStyle(.white)
-                                            if let addr = appt.address, !addr.isEmpty {
-                                                Text(addr)
+                                            if !appt.address.isEmpty {
+                                                Text(appt.address)
                                                     .font(.caption)
                                                     .foregroundStyle(.gray)
                                             }
-                                            if let tw = appt.time_window, !tw.isEmpty {
-                                                Text("⏰ Horario: \(tw)")
+                                            if !appt.time_window.isEmpty {
+                                                Text("⏰ Horario: \(appt.time_window)")
                                                     .font(.caption2)
                                                     .foregroundStyle(Brand.primary)
                                             }
@@ -7173,9 +7173,9 @@ struct DailyRouteOptimizerSheetView: View {
                                         
                                         Spacer()
                                         
-                                        if let addr = appt.address, !addr.isEmpty {
+                                        if !appt.address.isEmpty {
                                             Button {
-                                                openSingleAddressInMaps(addr)
+                                                openSingleAddressInMaps(appt.address)
                                             } label: {
                                                 Image(systemName: "arrow.triangle.turn.up.right.circle.fill")
                                                     .font(.title2)
@@ -7222,7 +7222,7 @@ struct DailyRouteOptimizerSheetView: View {
     private func openGoogleMapsRoute() {
         guard let dest = stops.last?.address else { return }
         let destClean = dest.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let waypoints = stops.dropLast().compactMap { $0.address?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) }.joined(separator: "|")
+        let waypoints = stops.dropLast().compactMap { $0.address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) }.joined(separator: "|")
         var urlStr = "https://www.google.com/maps/dir/?api=1&destination=\(destClean)"
         if !waypoints.isEmpty {
             urlStr += "&waypoints=\(waypoints)"
@@ -7496,8 +7496,7 @@ struct AddRecurringClientSheet: View {
                     }
                     .listRowBackground(Brand.card)
                 }
-                .scrollContentBackground(.hidden)
-            }
+                            }
             .navigationTitle("Nuevo Cliente Frecuente")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
