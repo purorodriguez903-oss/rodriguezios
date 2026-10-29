@@ -26,7 +26,6 @@ jobs:
       - name: Build unsigned iOS app
         run: |
           set -o pipefail
-          cd RodriguezLawnCareIosAPP
           xcodebuild \
             -project RodriguezLawnCare.xcodeproj \
             -scheme RodriguezLawnCare \
@@ -38,16 +37,16 @@ jobs:
 
       - name: Package unsigned IPA
         run: |
-          cd RodriguezLawnCareIosAPP
           mkdir -p package/Payload
           cp -R build/DerivedData/Build/Products/Release-iphoneos/RodriguezLawnCare.app package/Payload/
           cd package
           /usr/bin/zip -qry ../RodriguezLawnCare-unsigned.ipa Payload
+          cd ..
 
       - name: Copy IPA to 'ipa here' folder
         run: |
           mkdir -p "ipa here"
-          cp RodriguezLawnCareIosAPP/RodriguezLawnCare-unsigned.ipa "ipa here/RodriguezLawnCare.ipa"
+          cp RodriguezLawnCare-unsigned.ipa "ipa here/RodriguezLawnCare.ipa"
           ls -la "ipa here"
 
       - name: Commit and push IPA to repository
@@ -64,7 +63,7 @@ jobs:
           name: RodriguezLawnCare-iOS-IPA
           path: |
             ipa here/RodriguezLawnCare.ipa
-            RodriguezLawnCareIosAPP/build.log
+            build.log
           if-no-files-found: error
           retention-days: 14
 
