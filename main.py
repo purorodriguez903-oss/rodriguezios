@@ -1578,6 +1578,35 @@ async def handle_api_save_hero_settings(request):
     except Exception as e:
         return cors_json_response({"success": False, "error": str(e)}, status=400)
 
+async def handle_api_save_music_settings(request):
+    """Updates Website Background Music configuration from iOS App."""
+    try:
+        data = await request.json()
+        settings = load_settings()
+        if "music" not in settings or not isinstance(settings["music"], dict):
+            settings["music"] = {}
+
+        if "enabled" in data:
+            settings["music"]["enabled"] = bool(data["enabled"])
+        if "title" in data:
+            settings["music"]["title"] = str(data["title"])
+        if "genre" in data:
+            settings["music"]["genre"] = str(data["genre"])
+        if "stream_url" in data and data["stream_url"]:
+            settings["music"]["stream_url"] = str(data["stream_url"])
+        if "volume" in data:
+            try:
+                settings["music"]["volume"] = float(data["volume"])
+            except (ValueError, TypeError):
+                pass
+        if "preset_id" in data:
+            settings["music"]["preset_id"] = str(data["preset_id"])
+
+        save_settings(settings)
+        return cors_json_response({"success": True, "settings": settings, "music": settings["music"]})
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
 async def handle_api_get_analytics(request):
     """Returns website live visitor counts and analytics."""
     analytics = load_analytics()
@@ -2361,9 +2390,10 @@ def create_web_app():
     app.router.add_post('/api/gallery/delete', handle_api_delete_gallery)
     app.router.add_delete('/api/gallery/{id}', handle_api_delete_gallery)
 
-    # Settings & Hero Background API
+    # Settings, Hero Background & Background Music API
     app.router.add_get('/api/settings', handle_api_get_settings)
     app.router.add_post('/api/settings/hero', handle_api_save_hero_settings)
+    app.router.add_post('/api/settings/music', handle_api_save_music_settings)
 
     # Visitors & Analytics API
     app.router.add_get('/api/analytics', handle_api_get_analytics)

@@ -2002,6 +2002,129 @@ button, input, select, textarea {
 }
 
 /* ==========================================================================
+   FLOATING BACKGROUND MUSIC WIDGET
+   ========================================================================== */
+.floating-music-widget {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 1.5rem;
+  z-index: 998;
+  display: flex;
+  align-items: center;
+  transition: all 0.3s ease;
+}
+
+.music-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  border-radius: 9999px;
+  padding: 6px 14px 6px 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 0 15px rgba(34, 197, 94, 0.2);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.25s ease;
+}
+
+.music-pill:hover {
+  transform: translateY(-2px);
+  border-color: #22c55e;
+  box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.5), 0 0 20px rgba(34, 197, 94, 0.35);
+}
+
+.music-eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 2.5px;
+  height: 16px;
+  width: 14px;
+}
+
+.eq-bar {
+  width: 2.5px;
+  background: #22c55e;
+  border-radius: 2px;
+  height: 4px;
+  transition: height 0.2s ease;
+}
+
+.music-pill.playing .bar-1 {
+  animation: eqBounce 0.8s ease-in-out infinite alternate;
+}
+.music-pill.playing .bar-2 {
+  animation: eqBounce 1.1s ease-in-out 0.2s infinite alternate;
+}
+.music-pill.playing .bar-3 {
+  animation: eqBounce 0.7s ease-in-out 0.4s infinite alternate;
+}
+.music-pill.playing .bar-4 {
+  animation: eqBounce 0.95s ease-in-out 0.1s infinite alternate;
+}
+
+@keyframes eqBounce {
+  0% { height: 3px; }
+  100% { height: 16px; }
+}
+
+.music-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  max-width: 140px;
+}
+
+.music-title {
+  color: #f8fafc;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.music-sub {
+  color: #22c55e;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.music-btn {
+  background: #22c55e;
+  color: #0b131f;
+  border: none;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: 2px;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.music-btn:hover {
+  background: #4ade80;
+  transform: scale(1.08);
+}
+
+@media (max-width: 640px) {
+  .floating-music-widget {
+    bottom: 5.5rem;
+    left: 1rem;
+  }
+  .music-info {
+    max-width: 110px;
+  }
+}
+
+/* ==========================================================================
    FOOTER
    ========================================================================== */
 .site-footer {

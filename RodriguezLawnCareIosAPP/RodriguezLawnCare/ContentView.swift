@@ -73,6 +73,23 @@ struct PhotoPreset: Identifiable, Codable, Equatable {
     var photo_url: String
 }
 
+struct WebMusicConfig: Codable, Equatable {
+    var enabled: Bool?
+    var title: String?
+    var genre: String?
+    var stream_url: String?
+    var volume: Double?
+    var preset_id: String?
+}
+
+struct MusicPreset: Identifiable, Codable, Equatable {
+    var id: String
+    var name: String
+    var genre: String
+    var url: String
+    var desc: String
+}
+
 struct WebSettings: Codable {
     var hero_type: String           // "video" or "image"
     var hero_video_url: String
@@ -82,6 +99,8 @@ struct WebSettings: Codable {
     var hero_subtitle: String?
     var video_presets: [VideoPreset]?
     var photo_presets: [PhotoPreset]?
+    var music: WebMusicConfig?
+    var music_presets: [MusicPreset]?
 }
 
 struct AppVersionInfo: Codable {
@@ -172,8 +191,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "1.3.0"
-    let currentAppBuild: Int = 13
+    let currentAppVersion: String = "1.4.0"
+    let currentAppBuild: Int = 14
 
     @AppStorage("api_server_url") var serverURL: String = "https://web-production-b6891b.up.railway.app"
 
@@ -652,6 +671,66 @@ class LawnCareStore: ObservableObject {
             print("Save hero settings error: \(error)")
         }
     }
+
+    @MainActor
+    func updateWebMusic(enabled: Bool, title: String, genre: String, streamURL: String, volume: Double, presetId: String) async {
+        if settings == nil {
+            settings = WebSettings(
+                hero_type: "video",
+                hero_video_url: "./assets/video/hero.mp4",
+                hero_poster_url: "./assets/images/drone_tundra_intro.jpg",
+                music: WebMusicConfig(enabled: enabled, title: title, genre: genre, stream_url: streamURL, volume: volume, preset_id: presetId)
+            )
+        } else {
+            if settings?.music == nil {
+                settings?.music = WebMusicConfig()
+            }
+            settings?.music?.enabled = enabled
+            settings?.music?.title = title
+            settings?.music?.genre = genre
+            settings?.music?.stream_url = streamURL
+            settings?.music?.volume = volume
+            settings?.music?.preset_id = presetId
+        }
+
+        guard let url = URL(string: "\(cleanURL)/api/settings/music") else { return }
+        let payload: [String: Any] = [
+            "enabled": enabled,
+            "title": title,
+            "genre": genre,
+            "stream_url": streamURL,
+            "volume": volume,
+            "preset_id": presetId
+        ]
+        do {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            _ = try await URLSession.shared.data(for: req)
+        } catch {
+            print("Save music settings error: \(error)")
+        }
+    }
+
+    static let defaultVideoPresets: [VideoPreset] = [
+        VideoPreset(id: "drone_tundra", name: "🚁 Drone Aéreo Tundra & Remolque (Con Créditos)", video_url: "./assets/video/hero.mp4", poster_url: "./assets/images/drone_tundra_intro.jpg", desc: "Vista de dron 4K, camioneta Toyota Tundra negra, remolque rotulado, créditos de Rafael Rodriguez y transición Antes/Después."),
+        VideoPreset(id: "mower_stripes", name: "🚜 Corte Comercial con Líneas y Orillado", video_url: "./assets/video/hero.mp4", poster_url: "./assets/images/mowing.jpg", desc: "Corte de césped con podadora zero-turn comercial y orillado profundo en concreto."),
+        VideoPreset(id: "luxury_estate", name: "🏡 Residencia de Lujo & Mulch Premium", video_url: "./assets/video/hero.mp4", poster_url: "./assets/images/drone_intro.jpg", desc: "Panorámica de propiedad residencial en Central Texas con jardineras de mulch oscuro."),
+        VideoPreset(id: "tree_cutting", name: "🌲 Poda & Corte de Árboles con Motosierra", video_url: "./assets/video/hero.mp4", poster_url: "./assets/images/trimming.jpg", desc: "Poda profesional de árboles altos, motosierras en acción, corte de ramas peligrosas y remoción de troncos."),
+        VideoPreset(id: "razor_edging", name: "📐 Orillado con Navaja en Concreto", video_url: "./assets/video/hero.mp4", poster_url: "./assets/gallery/work_7.jpg", desc: "Líneas de orillado perfectas y definidas al milímetro en banquetas, orillas y entradas de vehículos."),
+        VideoPreset(id: "dark_mulch", name: "🪵 Instalación de Mulch Chocolate & Jardineras", video_url: "./assets/video/hero.mp4", poster_url: "./assets/images/mulch.jpg", desc: "Transformación estética de jardines residenciales con acolchado oscuro de corteza de pino y recorte de arbustos."),
+        VideoPreset(id: "yard_cleanup", name: "🧹 Limpieza Profunda & Soplado Comercial de Hojas", video_url: "./assets/video/hero.mp4", poster_url: "./assets/images/after.jpg", desc: "Retiro intensivo de hojas secas, ramas y escombros con sopladoras comerciales a gasolina y acabado impecable."),
+        VideoPreset(id: "duplex_commercial", name: "🏢 Mantenimiento a Complejos Duplex & Contratistas", video_url: "./assets/video/hero.mp4", poster_url: "./assets/gallery/work_8.jpg", desc: "Servicio de mantenimiento integral para constructoras, duplex y propiedades multifamiliares en Killeen.")
+    ]
+
+    static let defaultMusicPresets: [MusicPreset] = [
+        MusicPreset(id: "texas_guitar", name: "🎸 Texas Acoustic & Guitarra Campestre", genre: "Acoustic Chill", url: "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=acoustic-guitars-ambient-10874.mp3", desc: "Acordes suaves de guitarra acústica y vibra texana para ambientar la página con clase."),
+        MusicPreset(id: "lofi_garden", name: "☕ Lofi Beats & Jardinería Relajante", genre: "Lofi Hip-Hop", url: "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3", desc: "Ritmo lofi relajante con beats modernos y frescos, ideal para navegar cotizaciones."),
+        MusicPreset(id: "upbeat_work", name: "⚡ Ritmo Dinámico & Trabajo Activo", genre: "Modern Upbeat", url: "https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3?filename=energetic-indie-rock-110077.mp3", desc: "Música motivadora y alegre con energía positiva para trabajos de landscaping."),
+        MusicPreset(id: "regional_chill", name: "🎺 Regional Acordeón & Vibra Latina Suave", genre: "Regional Chill", url: "https://cdn.pixabay.com/download/audio/2022/10/14/audio_9939f77cb5.mp3?filename=latin-acoustic-122971.mp3", desc: "Toque acústico latino alegre y limpio que combina con la esencia de Rodriguez LawnCare."),
+        MusicPreset(id: "luxury_piano", name: "🎹 Piano Elegante & Residencia de Lujo", genre: "Ambient Piano", url: "https://cdn.pixabay.com/download/audio/2021/08/04/audio_12b0c7443c.mp3?filename=inspiring-cinematic-ambient-116199.mp3", desc: "Melodía sofisticada y elegante que resalta propiedades residenciales de alta gama.")
+    ]
 }
 
 // MARK: - MAIN ROOT VIEW WITH LIVE NOTIFICATION BANNER & 5 TABS
@@ -681,9 +760,9 @@ struct ContentView: View {
                     }
                     .tag(2)
 
-                CloudLiveAdminView(store: store)
+                WebMusicControlView(store: store)
                     .tabItem {
-                        Label("Panel Cloud", systemImage: "cloud.fill")
+                        Label("Música Web", systemImage: "music.note.list")
                     }
                     .tag(3)
 
@@ -2554,6 +2633,7 @@ struct WebAdminView: View {
     @State private var serverInput = ""
     @State private var showSavedAlert = false
     @State private var showHeroManagerSheet = false
+    @State private var showCloudPanelSheet = false
 
     var body: some View {
         NavigationView {
@@ -2565,6 +2645,7 @@ struct WebAdminView: View {
                         otaUpdatesCard
                         analyticsCard
                         heroManagerCard
+                        panelCloudCard
                         serverHealthCard
                         serverUrlSettingsCard
 
@@ -2588,11 +2669,50 @@ struct WebAdminView: View {
             .sheet(isPresented: $showHeroManagerSheet) {
                 HeroBackgroundManagerSheet(store: store)
             }
+            .sheet(isPresented: $showCloudPanelSheet) {
+                CloudLiveAdminView(store: store)
+            }
             .alert("Configuración Guardada", isPresented: $showSavedAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text("Se ha actualizado la dirección del servidor.")
             }
+        }
+    }
+
+    // PANEL CLOUD CARD
+    private var panelCloudCard: some View {
+        Button {
+            showCloudPanelSheet = true
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(red: 0.1, green: 0.45, blue: 0.9).opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "cloud.fill")
+                        .font(.title3)
+                        .foregroundStyle(Color(red: 0.2, green: 0.6, blue: 1.0))
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Panel Cloud 24/7 (Navegador en Vivo)")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text("Supervisa Railway, servidor y métricas en vivo")
+                        .font(.caption)
+                        .foregroundStyle(.gray)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundStyle(.gray)
+            }
+            .padding(14)
+            .background(Brand.card)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
         }
     }
 
@@ -3054,6 +3174,322 @@ struct OTAUpdateSheetView: View {
     }
 }
 
+// MARK: - TAB 4: WEB MUSIC CONTROL VIEW (MÚSICA WEB)
+struct WebMusicControlView: View {
+    @ObservedObject var store: LawnCareStore
+
+    @State private var musicEnabled: Bool = true
+    @State private var volume: Double = 0.35
+    @State private var selectedPresetId: String = "texas_guitar"
+    @State private var customTitle: String = ""
+    @State private var customGenre: String = ""
+    @State private var customStreamURL: String = ""
+    @State private var isCustomMode: Bool = false
+    @State private var showSuccessBanner: Bool = false
+    @State private var isSaving: Bool = false
+
+    private var currentMusicPresets: [MusicPreset] {
+        if let presets = store.settings?.music_presets, !presets.isEmpty {
+            return presets
+        }
+        return LawnCareStore.defaultMusicPresets
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        // Success Banner
+                        if showSuccessBanner {
+                            HStack(spacing: 10) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(.black)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("¡MÚSICA WEB ACTUALIZADA!")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.black)
+                                    Text("Los cambios ya están sonando en la página web oficial.")
+                                        .font(.caption2)
+                                        .foregroundStyle(.black.opacity(0.85))
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+
+                        // Status banner
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(musicEnabled ? Brand.primary.opacity(0.15) : Color.gray.opacity(0.15))
+                                    .frame(width: 44, height: 44)
+                                Image(systemName: musicEnabled ? "speaker.wave.3.fill" : "speaker.slash.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(musicEnabled ? Brand.primary : .gray)
+                            }
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(musicEnabled ? "MÚSICA EN VIVO ACTIVA" : "MÚSICA EN LA WEB SILENCIADA")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(musicEnabled ? Brand.primary : .gray)
+                                Text(musicEnabled ? "Pistas relajantes de fondo para ambientar a los clientes" : "Activa el interruptor para reproducir audio en la web")
+                                    .font(.caption2)
+                                    .foregroundStyle(.gray)
+                            }
+                            Spacer()
+                        }
+                        .padding()
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                        // Master Toggle
+                        VStack(spacing: 0) {
+                            Toggle(isOn: $musicEnabled) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "music.note")
+                                        .font(.title3)
+                                        .foregroundStyle(Brand.accent)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Activar Música de Fondo")
+                                            .font(.headline)
+                                            .foregroundStyle(.white)
+                                        Text("Reproduce música sutil cuando los clientes navegan")
+                                            .font(.caption2)
+                                            .foregroundStyle(.gray)
+                                    }
+                                }
+                            }
+                            .tint(Brand.primary)
+                            .padding()
+
+                            if musicEnabled {
+                                Divider().background(Color.white.opacity(0.1))
+
+                                // Volume Slider
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        Text("Volumen de Reproducción:")
+                                            .font(.caption.bold())
+                                            .foregroundStyle(.gray)
+                                        Spacer()
+                                        Text("\(Int(volume * 100))%")
+                                            .font(.caption.bold())
+                                            .foregroundStyle(Brand.primary)
+                                    }
+
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "speaker.fill")
+                                            .font(.caption)
+                                            .foregroundStyle(.gray)
+                                        Slider(value: $volume, in: 0.05...1.0, step: 0.05)
+                                            .tint(Brand.primary)
+                                        Image(systemName: "speaker.wave.3.fill")
+                                            .font(.caption)
+                                            .foregroundStyle(Brand.primary)
+                                    }
+                                }
+                                .padding()
+                            }
+                        }
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                        // Curated Presets
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("ESTILOS MUSICALES RECOMENDADOS")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+
+                            ForEach(currentMusicPresets) { preset in
+                                Button {
+                                    selectedPresetId = preset.id
+                                    customTitle = preset.name
+                                    customGenre = preset.genre
+                                    customStreamURL = preset.url
+                                    isCustomMode = false
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        ZStack {
+                                            Circle()
+                                                .fill((!isCustomMode && selectedPresetId == preset.id) ? Brand.primary.opacity(0.2) : Brand.cardLight)
+                                                .frame(width: 40, height: 40)
+                                            Image(systemName: "music.quarternote.3")
+                                                .foregroundStyle((!isCustomMode && selectedPresetId == preset.id) ? Brand.primary : .gray)
+                                        }
+
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            HStack {
+                                                Text(preset.name)
+                                                    .font(.subheadline.bold())
+                                                    .foregroundStyle(.white)
+                                                Spacer()
+                                                Text(preset.genre)
+                                                    .font(.caption2)
+                                                    .foregroundStyle(Brand.primary)
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(Brand.primaryDark.opacity(0.3))
+                                                    .clipShape(Capsule())
+                                            }
+
+                                            Text(preset.desc)
+                                                .font(.caption2)
+                                                .foregroundStyle(.gray)
+                                                .lineLimit(2)
+                                        }
+
+                                        Image(systemName: (!isCustomMode && selectedPresetId == preset.id) ? "checkmark.circle.fill" : "circle")
+                                            .font(.title3)
+                                            .foregroundStyle((!isCustomMode && selectedPresetId == preset.id) ? Brand.primary : .gray)
+                                    }
+                                    .padding(12)
+                                    .background(Brand.card)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke((!isCustomMode && selectedPresetId == preset.id) ? Brand.primary : Color.clear, lineWidth: 1.5)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Custom Music Section
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("PERSONALIZAR CON MÚSICA DIFERENTE")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.accent)
+                                Spacer()
+                                if isCustomMode {
+                                    Text("Activo")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(Brand.accent)
+                                }
+                            }
+
+                            VStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Título o Canción")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.gray)
+                                    TextField("Ej: Regional Mexicano / Balada", text: $customTitle)
+                                        .padding(10)
+                                        .background(Brand.cardLight)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .foregroundStyle(.white)
+                                        .font(.subheadline)
+                                        .onChange(of: customTitle) { _ in isCustomMode = true }
+                                }
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Género")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.gray)
+                                    TextField("Ej: Ranchera / Acústico / Corridos", text: $customGenre)
+                                        .padding(10)
+                                        .background(Brand.cardLight)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .foregroundStyle(.white)
+                                        .font(.subheadline)
+                                        .onChange(of: customGenre) { _ in isCustomMode = true }
+                                }
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Enlace Directo de Audio (MP3 / Stream)")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.gray)
+                                    TextField("https://.../cancion.mp3", text: $customStreamURL)
+                                        .padding(10)
+                                        .background(Brand.cardLight)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .foregroundStyle(.white)
+                                        .font(.subheadline)
+                                        .keyboardType(.URL)
+                                        .autocapitalization(.none)
+                                        .onChange(of: customStreamURL) { _ in isCustomMode = true }
+                                }
+                            }
+                            .padding()
+                            .background(Brand.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+
+                        // Apply Button
+                        Button {
+                            Task {
+                                isSaving = true
+                                let finalPreset = isCustomMode ? "custom" : selectedPresetId
+                                let finalTitle = customTitle.isEmpty ? "Texas Acoustic" : customTitle
+                                let finalGenre = customGenre.isEmpty ? "Acoustic Chill" : customGenre
+                                let finalStream = customStreamURL.isEmpty ? "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=acoustic-guitars-ambient-10874.mp3" : customStreamURL
+
+                                await store.updateWebMusic(
+                                    enabled: musicEnabled,
+                                    title: finalTitle,
+                                    genre: finalGenre,
+                                    streamURL: finalStream,
+                                    volume: volume,
+                                    presetId: finalPreset
+                                )
+                                isSaving = false
+                                showSuccessBanner = true
+                                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                                    showSuccessBanner = false
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                if isSaving {
+                                    ProgressView().tint(.black)
+                                } else {
+                                    Image(systemName: "sparkles")
+                                    Text("🚀 Guardar y Aplicar Música a la Página Web")
+                                }
+                            }
+                            .font(.headline)
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+                        .disabled(isSaving)
+                        .padding(.top, 6)
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Música Web 🎵")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                if let m = store.settings?.music {
+                    musicEnabled = m.enabled ?? true
+                    volume = m.volume ?? 0.35
+                    selectedPresetId = m.preset_id ?? "texas_guitar"
+                    customTitle = m.title ?? ""
+                    customGenre = m.genre ?? ""
+                    customStreamURL = m.stream_url ?? ""
+                    if m.preset_id == "custom" {
+                        isCustomMode = true
+                    }
+                } else if let firstPreset = currentMusicPresets.first {
+                    selectedPresetId = firstPreset.id
+                    customTitle = firstPreset.name
+                    customGenre = firstPreset.genre
+                    customStreamURL = firstPreset.url
+                }
+            }
+        }
+    }
+}
+
 // MARK: - HERO BACKGROUND MANAGER SHEET (MATCHING IMAGE 2)
 struct HeroBackgroundManagerSheet: View {
     @Environment(\.dismiss) var dismiss
@@ -3064,6 +3500,13 @@ struct HeroBackgroundManagerSheet: View {
     @State private var customVideoURL: String = ""
     @State private var customPosterURL: String = ""
     @State private var showSuccessBanner: Bool = false
+
+    private var currentVideoPresets: [VideoPreset] {
+        if let presets = store.settings?.video_presets, !presets.isEmpty {
+            return presets
+        }
+        return LawnCareStore.defaultVideoPresets
+    }
 
     var body: some View {
         NavigationView {
@@ -3121,17 +3564,15 @@ struct HeroBackgroundManagerSheet: View {
                                     .font(.caption.bold())
                                     .foregroundStyle(.gray)
 
-                                if let presets = store.settings?.video_presets {
-                                    ForEach(presets) { preset in
-                                        PresetVideoCard(
-                                            preset: preset,
-                                            isSelected: selectedPresetId == preset.id,
-                                            store: store
-                                        ) {
-                                            selectedPresetId = preset.id
-                                            customVideoURL = preset.video_url
-                                            customPosterURL = preset.poster_url
-                                        }
+                                ForEach(currentVideoPresets) { preset in
+                                    PresetVideoCard(
+                                        preset: preset,
+                                        isSelected: selectedPresetId == preset.id,
+                                        store: store
+                                    ) {
+                                        selectedPresetId = preset.id
+                                        customVideoURL = preset.video_url
+                                        customPosterURL = preset.poster_url
                                     }
                                 }
                             }

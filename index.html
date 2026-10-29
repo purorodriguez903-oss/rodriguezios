@@ -1061,6 +1061,27 @@
     </div>
   </div>
 
+  <!-- ==================== FLOATING BACKGROUND MUSIC PLAYER ==================== -->
+  <div id="webMusicPlayerWidget" class="floating-music-widget" style="display: none;">
+    <audio id="webBackgroundAudio" loop preload="none"></audio>
+    <div class="music-pill" id="musicPillToggle" title="Click para pausar o reproducir música">
+      <div class="music-eq" id="musicEqualizer">
+        <span class="eq-bar bar-1"></span>
+        <span class="eq-bar bar-2"></span>
+        <span class="eq-bar bar-3"></span>
+        <span class="eq-bar bar-4"></span>
+      </div>
+      <div class="music-info">
+        <span class="music-title" id="musicTrackTitle">Texas Acoustic</span>
+        <span class="music-sub" id="musicTrackGenre">Ambiente</span>
+      </div>
+      <button class="music-btn" id="musicPlayPauseBtn" type="button" aria-label="Play or Pause Music">
+        <svg id="musicIconPlay" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        <svg id="musicIconPause" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+      </button>
+    </div>
+  </div>
+
   <!-- ==================== FLOATING QUICK ACTIONS BAR ==================== -->
   <aside class="floating-actions-bar">
     <a href="https://wa.me/12546121399" class="floating-btn floating-whatsapp" target="_blank" rel="noopener" aria-label="Chat on WhatsApp">

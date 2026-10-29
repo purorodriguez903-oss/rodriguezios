@@ -26,6 +26,41 @@
       "video_url": "./assets/video/hero.mp4",
       "poster_url": "./assets/images/drone_intro.jpg",
       "desc": "Panorámica de propiedad residencial en Central Texas con jardineras de mulch oscuro."
+    },
+    {
+      "id": "tree_cutting",
+      "name": "🌲 Poda & Corte de Árboles con Motosierra",
+      "video_url": "./assets/video/hero.mp4",
+      "poster_url": "./assets/images/trimming.jpg",
+      "desc": "Poda profesional de árboles altos, motosierras en acción, corte de ramas peligrosas y remoción de troncos."
+    },
+    {
+      "id": "razor_edging",
+      "name": "📐 Orillado con Navaja en Concreto",
+      "video_url": "./assets/video/hero.mp4",
+      "poster_url": "./assets/gallery/work_7.jpg",
+      "desc": "Líneas de orillado perfectas y definidas al milímetro en banquetas, orillas y entradas de vehículos."
+    },
+    {
+      "id": "dark_mulch",
+      "name": "🪵 Instalación de Mulch Chocolate & Jardineras",
+      "video_url": "./assets/video/hero.mp4",
+      "poster_url": "./assets/images/mulch.jpg",
+      "desc": "Transformación estética de jardines residenciales con acolchado oscuro de corteza de pino y recorte de arbustos."
+    },
+    {
+      "id": "yard_cleanup",
+      "name": "🧹 Limpieza Profunda & Soplado Comercial de Hojas",
+      "video_url": "./assets/video/hero.mp4",
+      "poster_url": "./assets/images/after.jpg",
+      "desc": "Retiro intensivo de hojas secas, ramas y escombros con sopladoras comerciales a gasolina y acabado impecable."
+    },
+    {
+      "id": "duplex_commercial",
+      "name": "🏢 Mantenimiento a Complejos Duplex & Contratistas",
+      "video_url": "./assets/video/hero.mp4",
+      "poster_url": "./assets/gallery/work_8.jpg",
+      "desc": "Servicio de mantenimiento integral para constructoras, duplex y propiedades multifamiliares en Killeen."
     }
   ],
   "photo_presets": [
@@ -45,10 +80,59 @@
       "photo_url": "./assets/images/mulch.jpg"
     },
     {
+      "id": "photo_tree",
+      "name": "📸 Foto Poda y Árboles",
+      "photo_url": "./assets/images/trimming.jpg"
+    },
+    {
       "id": "photo_hero",
       "name": "📸 Foto Jardín Principal Clásico",
       "photo_url": "./assets/images/hero.jpg"
     }
+  ],
+  "music": {
+    "enabled": true,
+    "title": "Texas Acoustic & Guitarra Campestre",
+    "genre": "Acoustic Chill",
+    "stream_url": "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=acoustic-guitars-ambient-10874.mp3",
+    "volume": 0.35,
+    "preset_id": "texas_guitar"
+  },
+  "music_presets": [
+    {
+      "id": "texas_guitar",
+      "name": "🎸 Texas Acoustic & Guitarra Campestre",
+      "genre": "Acoustic Chill",
+      "url": "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=acoustic-guitars-ambient-10874.mp3",
+      "desc": "Acordes suaves de guitarra acústica y vibra texana para ambientar la página con clase."
+    },
+    {
+      "id": "lofi_garden",
+      "name": "☕ Lofi Beats & Jardinería Relajante",
+      "genre": "Lofi Hip-Hop",
+      "url": "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3",
+      "desc": "Ritmo lofi relajante con beats modernos y frescos, ideal para navegar cotizaciones."
+    },
+    {
+      "id": "upbeat_work",
+      "name": "⚡ Ritmo Dinámico & Trabajo Activo",
+      "genre": "Modern Upbeat",
+      "url": "https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3?filename=energetic-indie-rock-110077.mp3",
+      "desc": "Música motivadora y alegre con energía positiva para trabajos de landscaping."
+    },
+    {
+      "id": "regional_chill",
+      "name": "🎺 Regional Acordeón & Vibra Latina Suave",
+      "genre": "Regional Chill",
+      "url": "https://cdn.pixabay.com/download/audio/2022/10/14/audio_9939f77cb5.mp3?filename=latin-acoustic-122971.mp3",
+      "desc": "Toque acústico latino alegre y limpio que combina con la esencia de Rodriguez LawnCare."
+    },
+    {
+      "id": "luxury_piano",
+      "name": "🎹 Piano Elegante & Residencia de Lujo",
+      "genre": "Ambient Piano",
+      "url": "https://cdn.pixabay.com/download/audio/2021/08/04/audio_12b0c7443c.mp3?filename=inspiring-cinematic-ambient-116199.mp3",
+      "desc": "Melodía sofisticada y elegante que resalta propiedades residenciales de alta gama."
+    }
   ]
 }
-

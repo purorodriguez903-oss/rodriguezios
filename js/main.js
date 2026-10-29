@@ -264,7 +264,98 @@ async function initLiveHeroSettings() {
         }
       }
     }
+
+    // Sync Background Music dynamically from iOS / settings
+    handleLiveWebMusic(s.music);
   } catch (e) {}
+}
+
+// --- BACKGROUND MUSIC WIDGET CONTROLLER ---
+let activeMusicUrl = '';
+let hasUserInteracted = false;
+
+function setupMusicUserInteraction() {
+  const unlockAudio = () => {
+    hasUserInteracted = true;
+    const audio = document.getElementById('webBackgroundAudio');
+    if (audio && audio.src && audio.paused && audio.dataset.shouldPlay === 'true') {
+      audio.play().catch(() => {});
+    }
+    window.removeEventListener('click', unlockAudio);
+    window.removeEventListener('touchstart', unlockAudio);
+    window.removeEventListener('scroll', unlockAudio);
+  };
+  window.addEventListener('click', unlockAudio, { passive: true });
+  window.addEventListener('touchstart', unlockAudio, { passive: true });
+  window.addEventListener('scroll', unlockAudio, { passive: true });
+
+  const toggleBtn = document.getElementById('musicPillToggle');
+  const audio = document.getElementById('webBackgroundAudio');
+  const playIcon = document.getElementById('musicIconPlay');
+  const pauseIcon = document.getElementById('musicIconPause');
+
+  if (audio && toggleBtn) {
+    audio.addEventListener('play', () => {
+      toggleBtn.classList.add('playing');
+      if (playIcon) playIcon.style.display = 'none';
+      if (pauseIcon) pauseIcon.style.display = 'inline-block';
+    });
+    audio.addEventListener('pause', () => {
+      toggleBtn.classList.remove('playing');
+      if (playIcon) playIcon.style.display = 'inline-block';
+      if (pauseIcon) pauseIcon.style.display = 'none';
+    });
+
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hasUserInteracted = true;
+      if (audio.paused) {
+        audio.dataset.shouldPlay = 'true';
+        audio.play().catch(() => {});
+      } else {
+        audio.dataset.shouldPlay = 'false';
+        audio.pause();
+      }
+    });
+  }
+}
+
+// Initialize audio interaction listeners
+setupMusicUserInteraction();
+
+function handleLiveWebMusic(music) {
+  const widget = document.getElementById('webMusicPlayerWidget');
+  const audio = document.getElementById('webBackgroundAudio');
+  const titleEl = document.getElementById('musicTrackTitle');
+  const genreEl = document.getElementById('musicTrackGenre');
+
+  if (!widget || !audio) return;
+
+  if (!music || !music.enabled) {
+    widget.style.display = 'none';
+    if (!audio.paused) audio.pause();
+    audio.dataset.shouldPlay = 'false';
+    return;
+  }
+
+  // Show widget
+  widget.style.display = 'flex';
+  if (titleEl && music.title) titleEl.textContent = music.title;
+  if (genreEl && music.genre) genreEl.textContent = music.genre;
+
+  // Set volume
+  const targetVol = typeof music.volume === 'number' ? Math.max(0.05, Math.min(1.0, music.volume)) : 0.35;
+  audio.volume = targetVol;
+
+  // Set audio source if changed
+  if (music.stream_url && music.stream_url !== activeMusicUrl) {
+    activeMusicUrl = music.stream_url;
+    audio.src = music.stream_url;
+    audio.dataset.shouldPlay = 'true';
+    if (hasUserInteracted) {
+      audio.play().catch(() => {});
+    }
+  }
 }
 
 // --- 1. LANGUAGE INITIALIZATION (100% ENGLISH) ---
