@@ -1519,11 +1519,9 @@ struct ContentView: View {
                             Text("LAWN CARE")
                                 .font(.system(size: 10, weight: .black))
                                 .foregroundStyle(Brand.primary)
-                                .kerning(3)
                             Text("QUALITY LAWNS • HAPPY HOMES")
                                 .font(.system(size: 7, weight: .bold))
                                 .foregroundStyle(.white.opacity(0.75))
-                                .kerning(1.2)
                         }
 
                         Spacer()

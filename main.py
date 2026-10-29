@@ -2302,27 +2302,28 @@ async def handle_send_ipa_discord(request):
 
 
 async def handle_download_ipa(request):
-    """Serves the latest compiled IPA from 'ipa online' or redirects to GitHub Releases."""
+    """Serves the latest compiled IPA (v2.2.0 Build 27) with no-cache headers or redirects to latest GitHub Release."""
     config = load_cloud_config()
-    version = config.get("app_version", "1.7.2")
-    build = config.get("app_build", 20)
+    version = config.get("app_version", "2.2.0")
+    build = config.get("app_build", 27)
     target_name = f"RodriguezLawnCare_v{version}_Build{build}.ipa"
     candidate_paths = [
         os.path.join(BASE_DIR, "ipa here", target_name),
-        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare_v1.7.2_Build20.ipa"),
-        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare_Actualizado.ipa"),
-        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare.ipa"),
+        os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa here", target_name),
+        os.path.join(BASE_DIR, "ipa online", target_name),
         os.path.join(BASE_DIR, "ipa online", "rodriguezlawncareios.ipa"),
-        os.path.join(BASE_DIR, "ipa here", "rodriguezlawncareios.ipa")
+        os.path.join(BASE_DIR, "ipa here", "rodriguezlawncareios.ipa"),
+        os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa here", "rodriguezlawncareios.ipa"),
+        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare_v2.1.0_Build26.ipa")
     ]
     for p in candidate_paths:
-        if os.path.exists(p) and os.path.getsize(p) > 10000:
-            out_filename = os.path.basename(p)
-            if out_filename in ["rodriguezlawncareios.ipa", "RodriguezLawnCare.ipa"]:
-                out_filename = target_name
+        if os.path.exists(p) and os.path.getsize(p) > 100000:
             return web.FileResponse(p, headers={
                 "Content-Type": "application/octet-stream",
-                "Content-Disposition": f'attachment; filename="{out_filename}"'
+                "Content-Disposition": f'attachment; filename="{target_name}"',
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
             })
     ipa_url = config.get("ipa_url", "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa")
     raise web.HTTPFound(ipa_url)
@@ -2543,9 +2544,12 @@ async def handle_ota_page(request):
     </a>
 
     <!-- Botón 4: Descarga Directa -->
-    <a href="/download/ipa" class="btn btn-download">
-      <span>📥</span>
-      <span>Descargar archivo directo rodriguezlawncareios.ipa</span>
+    <a href="/download/ipa" class="btn btn-direct-ipa" style="background: linear-gradient(135deg, #22c55e 0%, #15803d 100%); color: #ffffff; font-size: 1.08rem; font-weight: 800; padding: 18px 20px; border-radius: 16px; box-shadow: 0 10px 28px rgba(34, 197, 94, 0.45); border: 2px solid #4ade80; display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 16px; text-decoration: none;">
+      <span style="font-size: 1.3rem;">📥</span>
+      <span>Descargar Archivo Directo .IPA (v{version} Build {build})</span>
+    </a>
+    <a href="/download/ipa" class="btn btn-download" style="color: #64748b; font-size: 0.82rem; margin-bottom: 12px; text-decoration: none;">
+      <span>🔗 Link alternativo directo: rodriguezlawncareios.ipa</span>
     </a>
 
     <!-- QR Code para escanear desde PC con iPhone -->
