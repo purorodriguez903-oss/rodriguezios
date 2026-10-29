@@ -55,12 +55,12 @@ jobs:
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare_Actualizado.ipa"
-          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare_v1.8.0_Build21.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare_v1.8.1_Build22.ipa"
           mkdir -p "RodriguezLawnCareIosAPP/ipa here"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_Actualizado.ipa"
-          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_v1.8.0_Build21.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_v1.8.1_Build22.ipa"
           ls -la "ipa online"
 
       - name: Commit and push IPA to repository
@@ -93,7 +93,7 @@ jobs:
             ipa online/rodriguezlawncareios.ipa
             ipa here/rodriguezlawncareios.ipa
             ipa here/RodriguezLawnCare.ipa
-            ipa here/RodriguezLawnCare_v1.8.0_Build21.ipa
+            ipa here/RodriguezLawnCare_v1.8.1_Build22.ipa
             ipa here/RodriguezLawnCare_Actualizado.ipa
 
       - name: Send IPA directly to Discord Channel (#ipalwan)
@@ -104,4 +104,4 @@ jobs:
         run: |
           python3 -m pip install discord.py python-dotenv aiohttp || true
           python3 send_ipa_discord.py || true
-          curl -s -X POST https://web-production-b6891b.up.railway.app/api/ipa/send-discord || true
+          curl -s -X POST https://rodriguezlawncare.xyz/api/ipa/send-discord || true

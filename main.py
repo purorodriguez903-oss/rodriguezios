@@ -43,7 +43,7 @@ def get_env_var(key, default=""):
 
 APP_ID = int(get_env_var("APP_ID", "1557276640650723393"))
 BOT_TOKEN = get_env_var("BOT_TOKEN", "")
-SERVER_ID = int(get_env_var("SERVER_ID", "1538269421020258304"))
+SERVER_ID = int(get_env_var("SERVER_ID", "1538269422020258304"))
 CHANNEL_ID = int(get_env_var("CHANNEL_ID", "1557277046491578379"))
 LEADS_CHANNEL_ID = int(get_env_var("LEADS_CHANNEL_ID", "1557306528078237706"))
 IPA_CHANNEL_ID = int(get_env_var("IPA_CHANNEL_ID", "1565299006932914176"))
@@ -222,7 +222,7 @@ def load_cloud_config():
         "app_version": "1.3.0",
         "app_build": 13,
         "min_version": "1.0.0",
-        "release_notes": "Conexión 100% online con Railway (https://web-production-b6891b.up.railway.app), cotizaciones en tiempo real, selector de fotos desde el iPhone y sincronización instantánea de trabajos y fondo Hero.",
+        "release_notes": "Conexión 100% online con Railway (https://rodriguezlawncare.xyz), cotizaciones en tiempo real, selector de fotos desde el iPhone y sincronización instantánea de trabajos y fondo Hero.",
         "ipa_url": "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa",
         "ipa_fallback_url": "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/RodriguezLawnCare.ipa",
         "trollstore_url": "apple-magnifier://install?url=https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa",
@@ -2084,7 +2084,7 @@ async def handle_api_ai_estimate(request):
             "qty": "1 paquete",
             "unit_price": 17.98,
             "subtotal": 17.98,
-            "sku": "HD-202188612"
+            "sku": "HD-202288612"
         })
 
         total_materials = round(sum(m["subtotal"] for m in materials), 2)

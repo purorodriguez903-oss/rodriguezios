@@ -406,8 +406,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "1.8.0"
-    let currentAppBuild: Int = 21
+    let currentAppVersion: String = "1.8.1"
+    let currentAppBuild: Int = 22
 
     @Published var calendarData: CalendarData = CalendarData(day_status: [:], appointments: [])
     @Published var activePromo: FlashPromotion? = nil
@@ -417,16 +417,16 @@ class LawnCareStore: ObservableObject {
     @Published var weatherInfo: WeatherInfo? = nil
     @AppStorage("sound_effects_enabled") var soundEffectsEnabled: Bool = true
 
-    @AppStorage("api_server_url") var serverURL: String = "https://web-production-b6891b.up.railway.app"
+    @AppStorage("api_server_url") var serverURL: String = "https://rodriguezlawncare.xyz"
 
     private var knownLeadIds: Set<Int> = []
     private var isFirstLoad: Bool = true
     private var cancellables = Set<AnyCancellable>()
 
     init() {
-        if serverURL.contains("rodriguezlawncarenuevaa") || serverURL.isEmpty || !serverURL.contains("web-production-b6891b.up.railway.app") {
-            serverURL = "https://web-production-b6891b.up.railway.app"
-            UserDefaults.standard.set("https://web-production-b6891b.up.railway.app", forKey: "api_server_url")
+        if serverURL.contains("rodriguezlawncarenuevaa") || serverURL.isEmpty || serverURL.contains("rodriguezlawncare.xyz") || !serverURL.contains("rodriguezlawncare.xyz") {
+            serverURL = "https://rodriguezlawncare.xyz"
+            UserDefaults.standard.set("https://rodriguezlawncare.xyz", forKey: "api_server_url")
         }
         loadDemoData()
         requestNotificationPermissions()
@@ -531,7 +531,7 @@ class LawnCareStore: ObservableObject {
     var cleanURL: String {
         var base = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if base.isEmpty || base.contains("rodriguezlawncarenuevaa") {
-            base = "https://web-production-b6891b.up.railway.app"
+            base = "https://rodriguezlawncare.xyz"
         }
         if base.hasSuffix("/") {
             base.removeLast()
@@ -3164,7 +3164,7 @@ struct CloudLiveAdminView: View {
     @State private var reloadTrigger = false
 
     var adminURL: URL {
-        URL(string: "\(store.cleanURL)/admin") ?? URL(string: "https://web-production-b6891b.up.railway.app/admin")!
+        URL(string: "\(store.cleanURL)/admin") ?? URL(string: "https://rodriguezlawncare.xyz/admin")!
     }
 
     var body: some View {
@@ -3903,12 +3903,12 @@ struct WebAdminView: View {
     private var serverUrlSettingsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("URL DEL SERVIDOR WEB").font(.caption.bold()).foregroundStyle(.gray)
-            TextField("https://web-production-b6891b.up.railway.app", text: $serverInput)
+            TextField("https://rodriguezlawncare.xyz", text: $serverInput)
                 .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
 
             HStack(spacing: 8) {
                 Button {
-                    serverInput = "https://web-production-b6891b.up.railway.app"
+                    serverInput = "https://rodriguezlawncare.xyz"
                     store.serverURL = serverInput
                     Task {
                         await store.refreshAll()
