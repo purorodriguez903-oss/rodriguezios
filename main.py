@@ -2308,6 +2308,10 @@ async def handle_download_ipa(request):
     build = config.get("app_build", 27)
     target_name = f"RodriguezLawnCare_v{version}_Build{build}.ipa"
     candidate_paths = [
+        os.path.join(BASE_DIR, "ipa nuevo", target_name),
+        os.path.join(BASE_DIR, "ipa nuevo", "rodriguezlawncareios.ipa"),
+        os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa nuevo", target_name),
+        os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa nuevo", "rodriguezlawncareios.ipa"),
         os.path.join(BASE_DIR, "ipa here", target_name),
         os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa here", target_name),
         os.path.join(BASE_DIR, "ipa online", target_name),

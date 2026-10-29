@@ -62,13 +62,19 @@ jobs:
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_Actualizado.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_v2.2.0_Build27.ipa"
+          mkdir -p "ipa nuevo"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa nuevo/rodriguezlawncareios.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa nuevo/RodriguezLawnCare_v2.2.0_Build27.ipa"
+          mkdir -p "RodriguezLawnCareIosAPP/ipa nuevo"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa nuevo/rodriguezlawncareios.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa nuevo/RodriguezLawnCare_v2.2.0_Build27.ipa"
           ls -la "ipa online"
 
       - name: Commit and push IPA to repository
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add "ipa online/" "RodriguezLawnCareIosAPP/ipa online/" "ipa here/" "RodriguezLawnCareIosAPP/ipa here/"
+          git add "ipa online/" "RodriguezLawnCareIosAPP/ipa online/" "ipa here/" "RodriguezLawnCareIosAPP/ipa here/" "ipa nuevo/" "RodriguezLawnCareIosAPP/ipa nuevo/"
           git commit -m "Automated build: Update rodriguezlawncareios.ipa in 'ipa online' [skip ci]" || echo "No changes to commit"
           git push origin main
 
