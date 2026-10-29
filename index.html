@@ -23,7 +23,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
 
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="./css/styles.css?v=3.2">
+  <link rel="stylesheet" href="./css/styles.css?v=4.2">
   <link rel="stylesheet" href="./security/security.css">
 </head>
 <body>
@@ -1063,7 +1063,7 @@
 
   <!-- ==================== FLOATING BACKGROUND MUSIC PLAYER ==================== -->
   <div id="webMusicPlayerWidget" class="floating-music-widget" style="display: none;">
-    <audio id="webBackgroundAudio" loop preload="none"></audio>
+    <audio id="webBackgroundAudio" loop preload="auto" playsinline webkit-playsinline></audio>
     <div class="music-pill" id="musicPillToggle" title="Click para pausar o reproducir música">
       <div class="music-eq" id="musicEqualizer">
         <span class="eq-bar bar-1"></span>
@@ -1073,7 +1073,7 @@
       </div>
       <div class="music-info">
         <span class="music-title" id="musicTrackTitle">Texas Acoustic</span>
-        <span class="music-sub" id="musicTrackGenre">Ambiente</span>
+        <span class="music-sub" id="musicTrackGenre">Toca para escuchar 🎵</span>
       </div>
       <button class="music-btn" id="musicPlayPauseBtn" type="button" aria-label="Play or Pause Music">
         <svg id="musicIconPlay" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -1167,7 +1167,7 @@
   </footer>
 
   <!-- Scripts & Military-Grade Security Shield -->
-  <script src="./js/main.js?v=3.4"></script>
+  <script src="./js/main.js?v=4.2"></script>
   <script src="./js/gallery.js?v=3.2"></script>
   <script src="./security/anti-bot.js" data-security-allow="true"></script>
   <script src="./security/web-shield.js" data-security-allow="true"></script>

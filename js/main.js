@@ -272,56 +272,71 @@ async function initLiveHeroSettings() {
 
 // --- BACKGROUND MUSIC WIDGET CONTROLLER ---
 let activeMusicUrl = '';
-let hasUserInteracted = false;
+let isAudioPlaying = false;
+let globalMusicConfig = null;
 
-function setupMusicUserInteraction() {
-  const unlockAudio = () => {
-    hasUserInteracted = true;
-    const audio = document.getElementById('webBackgroundAudio');
-    if (audio && audio.src && audio.paused && audio.dataset.shouldPlay === 'true') {
-      audio.play().catch(() => {});
-    }
-    window.removeEventListener('click', unlockAudio);
-    window.removeEventListener('touchstart', unlockAudio);
-    window.removeEventListener('scroll', unlockAudio);
-  };
-  window.addEventListener('click', unlockAudio, { passive: true });
-  window.addEventListener('touchstart', unlockAudio, { passive: true });
-  window.addEventListener('scroll', unlockAudio, { passive: true });
-
-  const toggleBtn = document.getElementById('musicPillToggle');
+function setupMusicEngine() {
   const audio = document.getElementById('webBackgroundAudio');
+  const toggleBtn = document.getElementById('musicPillToggle');
   const playIcon = document.getElementById('musicIconPlay');
   const pauseIcon = document.getElementById('musicIconPause');
+  const widget = document.getElementById('webMusicPlayerWidget');
+  const genreEl = document.getElementById('musicTrackGenre');
 
-  if (audio && toggleBtn) {
-    audio.addEventListener('play', () => {
-      toggleBtn.classList.add('playing');
-      if (playIcon) playIcon.style.display = 'none';
-      if (pauseIcon) pauseIcon.style.display = 'inline-block';
-    });
-    audio.addEventListener('pause', () => {
-      toggleBtn.classList.remove('playing');
-      if (playIcon) playIcon.style.display = 'inline-block';
-      if (pauseIcon) pauseIcon.style.display = 'none';
-    });
+  if (!audio || !toggleBtn) return;
 
-    toggleBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      hasUserInteracted = true;
-      if (audio.paused) {
-        audio.dataset.shouldPlay = 'true';
-        audio.play().catch(() => {});
-      } else {
-        audio.dataset.shouldPlay = 'false';
-        audio.pause();
-      }
-    });
-  }
+  // Sync visual UI on play/pause events
+  audio.addEventListener('play', () => {
+    isAudioPlaying = true;
+    toggleBtn.classList.add('playing');
+    if (playIcon) playIcon.style.display = 'none';
+    if (pauseIcon) pauseIcon.style.display = 'inline-block';
+    if (genreEl && globalMusicConfig) {
+      genreEl.textContent = Sonando • %;
+    }
+  });
+
+  audio.addEventListener('pause', () => {
+    isAudioPlaying = false;
+    toggleBtn.classList.remove('playing');
+    if (playIcon) playIcon.style.display = 'inline-block';
+    if (pauseIcon) pauseIcon.style.display = 'none';
+    if (genreEl && globalMusicConfig) {
+      genreEl.textContent = globalMusicConfig.genre || 'Toca para reanudar 🎵';
+    }
+  });
+
+  audio.addEventListener('error', (e) => {
+    console.warn('Audio playback notice:', e);
+  });
+
+  // Direct click on toggle button / pill
+  toggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (audio.paused) {
+      audio.dataset.shouldPlay = 'true';
+      audio.play().catch(err => {
+        console.log('Play on click error:', err);
+      });
+    } else {
+      audio.dataset.shouldPlay = 'false';
+      audio.pause();
+    }
+  });
+
+  // Global document touch/click listener to unlock audio seamlessly on first interaction
+  const triggerAutoplayOnGesture = () => {
+    if (audio && audio.src && audio.paused && audio.dataset.shouldPlay === 'true') {
+      audio.play().then(() => {
+        console.log('✅ Background music started on user gesture');
+      }).catch(() => {});
+    }
+  };
+
+  ['click', 'touchstart', 'touchend'].forEach(evt => {
+    document.addEventListener(evt, triggerAutoplayOnGesture, { passive: true });
+  });
 }
-
-// Initialize audio interaction listeners
-setupMusicUserInteraction();
 
 function handleLiveWebMusic(music) {
   const widget = document.getElementById('webMusicPlayerWidget');
@@ -330,6 +345,7 @@ function handleLiveWebMusic(music) {
   const genreEl = document.getElementById('musicTrackGenre');
 
   if (!widget || !audio) return;
+  globalMusicConfig = music;
 
   if (!music || !music.enabled) {
     widget.style.display = 'none';
@@ -338,27 +354,46 @@ function handleLiveWebMusic(music) {
     return;
   }
 
-  // Show widget
+  // Display floating pill
   widget.style.display = 'flex';
   if (titleEl && music.title) titleEl.textContent = music.title;
-  if (genreEl && music.genre) genreEl.textContent = music.genre;
+  if (genreEl && !isAudioPlaying) {
+    genreEl.textContent = music.genre ? ${music.genre} • Toca para escuchar 🎵 : 'Toca para escuchar 🎵';
+  }
 
-  // Set volume
-  const targetVol = typeof music.volume === 'number' ? Math.max(0.05, Math.min(1.0, music.volume)) : 0.35;
+  // Apply volume
+  const targetVol = typeof music.volume === 'number' ? Math.max(0.05, Math.min(1.0, music.volume)) : 0.40;
   audio.volume = targetVol;
 
-  // Set audio source if changed
-  if (music.stream_url && music.stream_url !== activeMusicUrl) {
-    activeMusicUrl = music.stream_url;
-    audio.src = music.stream_url;
+  // Resolve stream URL (supports relative or absolute)
+  let rawUrl = music.stream_url || './assets/audio/texas_acoustic.mp3';
+  let resolvedUrl = rawUrl;
+  if (rawUrl.startsWith('./')) {
+    resolvedUrl = window.location.origin + '/' + rawUrl.substring(2);
+  } else if (rawUrl.startsWith('/') && !rawUrl.startsWith('//')) {
+    resolvedUrl = window.location.origin + rawUrl;
+  }
+
+  if (resolvedUrl !== activeMusicUrl) {
+    activeMusicUrl = resolvedUrl;
+    audio.src = resolvedUrl;
     audio.dataset.shouldPlay = 'true';
-    if (hasUserInteracted) {
-      audio.play().catch(() => {});
-    }
+    audio.load();
+
+    // Attempt playback immediately
+    audio.play().catch(() => {
+      // If browser blocked initial autoplay, it will start immediately on first user touch/click!
+    });
   }
 }
 
-// --- 1. LANGUAGE INITIALIZATION (100% ENGLISH) ---
+// Ensure engine starts when DOM is loaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupMusicEngine);
+} else {
+  setupMusicEngine();
+}
+
 function initLanguage() {
   localStorage.removeItem('rodriguez_lawn_lang');
   setLanguage('en');

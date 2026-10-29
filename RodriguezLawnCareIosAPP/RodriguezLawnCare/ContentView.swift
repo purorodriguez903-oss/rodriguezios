@@ -725,11 +725,11 @@ class LawnCareStore: ObservableObject {
     ]
 
     static let defaultMusicPresets: [MusicPreset] = [
-        MusicPreset(id: "texas_guitar", name: "🎸 Texas Acoustic & Guitarra Campestre", genre: "Acoustic Chill", url: "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=acoustic-guitars-ambient-10874.mp3", desc: "Acordes suaves de guitarra acústica y vibra texana para ambientar la página con clase."),
-        MusicPreset(id: "lofi_garden", name: "☕ Lofi Beats & Jardinería Relajante", genre: "Lofi Hip-Hop", url: "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3", desc: "Ritmo lofi relajante con beats modernos y frescos, ideal para navegar cotizaciones."),
-        MusicPreset(id: "upbeat_work", name: "⚡ Ritmo Dinámico & Trabajo Activo", genre: "Modern Upbeat", url: "https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3?filename=energetic-indie-rock-110077.mp3", desc: "Música motivadora y alegre con energía positiva para trabajos de landscaping."),
-        MusicPreset(id: "regional_chill", name: "🎺 Regional Acordeón & Vibra Latina Suave", genre: "Regional Chill", url: "https://cdn.pixabay.com/download/audio/2022/10/14/audio_9939f77cb5.mp3?filename=latin-acoustic-122971.mp3", desc: "Toque acústico latino alegre y limpio que combina con la esencia de Rodriguez LawnCare."),
-        MusicPreset(id: "luxury_piano", name: "🎹 Piano Elegante & Residencia de Lujo", genre: "Ambient Piano", url: "https://cdn.pixabay.com/download/audio/2021/08/04/audio_12b0c7443c.mp3?filename=inspiring-cinematic-ambient-116199.mp3", desc: "Melodía sofisticada y elegante que resalta propiedades residenciales de alta gama.")
+        MusicPreset(id: "texas_guitar", name: "🎸 Texas Acoustic & Guitarra Campestre", genre: "Acoustic Chill", url: "./assets/audio/texas_acoustic.mp3", desc: "Acordes suaves de guitarra acústica y vibra texana para ambientar la página con clase."),
+        MusicPreset(id: "lofi_garden", name: "☕ Lofi Beats & Jardinería Relajante", genre: "Lofi Hip-Hop", url: "./assets/audio/lofi_garden.mp3", desc: "Ritmo lofi relajante con beats modernos y frescos, ideal para navegar cotizaciones."),
+        MusicPreset(id: "upbeat_work", name: "⚡ Ritmo Dinámico & Trabajo Activo", genre: "Modern Upbeat", url: "./assets/audio/upbeat_work.mp3", desc: "Música motivadora y alegre con energía positiva para trabajos de landscaping."),
+        MusicPreset(id: "regional_chill", name: "🎺 Regional Acordeón & Vibra Latina Suave", genre: "Regional Chill", url: "./assets/audio/regional_chill.mp3", desc: "Toque acústico latino alegre y limpio que combina con la esencia de Rodriguez LawnCare."),
+        MusicPreset(id: "luxury_piano", name: "🎹 Piano Elegante & Residencia de Lujo", genre: "Ambient Piano", url: "./assets/audio/luxury_piano.mp3", desc: "Melodía sofisticada y elegante que resalta propiedades residenciales de alta gama.")
     ]
 }
 
@@ -3427,7 +3427,7 @@ struct WebMusicControlView: View {
                                 let finalPreset = isCustomMode ? "custom" : selectedPresetId
                                 let finalTitle = customTitle.isEmpty ? "Texas Acoustic" : customTitle
                                 let finalGenre = customGenre.isEmpty ? "Acoustic Chill" : customGenre
-                                let finalStream = customStreamURL.isEmpty ? "https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=acoustic-guitars-ambient-10874.mp3" : customStreamURL
+                                let finalStream = customStreamURL.isEmpty ? "./assets/audio/texas_acoustic.mp3" : customStreamURL
 
                                 await store.updateWebMusic(
                                     enabled: musicEnabled,
