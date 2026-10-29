@@ -222,7 +222,7 @@ def load_cloud_config():
         "app_version": "1.3.0",
         "app_build": 13,
         "min_version": "1.0.0",
-        "release_notes": "Conexión 100% online con Railway (https://rodriguezlawncare.xyz), cotizaciones en tiempo real, selector de fotos desde el iPhone y sincronización instantánea de trabajos y fondo Hero.",
+        "release_notes": "Conexión 100% online con Railway (https://web-production-b6891b.up.railway.app), cotizaciones en tiempo real, selector de fotos desde el iPhone y sincronización instantánea de trabajos y fondo Hero.",
         "ipa_url": "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa",
         "ipa_fallback_url": "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/RodriguezLawnCare.ipa",
         "trollstore_url": "apple-magnifier://install?url=https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa",

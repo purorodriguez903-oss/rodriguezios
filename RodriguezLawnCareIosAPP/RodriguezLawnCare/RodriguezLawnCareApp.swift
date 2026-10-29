@@ -25,7 +25,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
     // Background fetch: executes when iOS wakes the app in background to check for new leads
     func application(_ application: UIApplication, performFetchWithCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
-        guard let url = URL(string: "https://rodriguezlawncare.xyz/api/leads") else {
+        guard let url = URL(string: "https://web-production-b6891b.up.railway.app/api/leads") else {
             completionHandler(.noData)
             return
         }

@@ -406,8 +406,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "1.8.1"
-    let currentAppBuild: Int = 22
+    let currentAppVersion: String = "1.8.2"
+    let currentAppBuild: Int = 23
 
     @Published var calendarData: CalendarData = CalendarData(day_status: [:], appointments: [])
     @Published var activePromo: FlashPromotion? = nil
@@ -417,8 +417,8 @@ class LawnCareStore: ObservableObject {
     @Published var weatherInfo: WeatherInfo? = nil
     @AppStorage("sound_effects_enabled") var soundEffectsEnabled: Bool = true
 
-    @AppStorage("api_server_url") var serverURL: String = "https://rodriguezlawncare.xyz"
-    @Published var activeEffectiveURL: String = "https://rodriguezlawncare.xyz"
+    @AppStorage("api_server_url") var serverURL: String = "https://web-production-b6891b.up.railway.app"
+    @Published var activeEffectiveURL: String = "https://web-production-b6891b.up.railway.app"
     let fallbackServerURL: String = "https://web-production-b6891b.up.railway.app"
 
     private var knownLeadIds: Set<Int> = []
@@ -426,10 +426,11 @@ class LawnCareStore: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     init() {
-        if serverURL.contains("rodriguezlawncarenuevaa") || serverURL.isEmpty || serverURL.contains("rodriguezlawncare.xyz") || !serverURL.contains("rodriguezlawncare.xyz") {
-            serverURL = "https://rodriguezlawncare.xyz"
-            UserDefaults.standard.set("https://rodriguezlawncare.xyz", forKey: "api_server_url")
+        if serverURL.contains("web-production-b6891b.up.railway.app") || serverURL.isEmpty || serverURL.contains("rodriguezlawncarenuevaa") || !serverURL.contains("railway.app") {
+            serverURL = "https://web-production-b6891b.up.railway.app"
+            UserDefaults.standard.set("https://web-production-b6891b.up.railway.app", forKey: "api_server_url")
         }
+        activeEffectiveURL = serverURL
         loadDemoData()
         requestNotificationPermissions()
         startRealtimePolling()
@@ -534,7 +535,7 @@ class LawnCareStore: ObservableObject {
     var cleanURL: String {
         var base = activeEffectiveURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if base.isEmpty || base.contains("rodriguezlawncarenuevaa") {
-            base = "https://rodriguezlawncare.xyz"
+            base = "https://web-production-b6891b.up.railway.app"
         }
         if base.hasSuffix("/") {
             base.removeLast()
@@ -627,7 +628,7 @@ class LawnCareStore: ObservableObject {
 
     @MainActor
     func testAndSelectActiveServer() async {
-        let primary = "https://rodriguezlawncare.xyz"
+        let primary = "https://web-production-b6891b.up.railway.app"
         if let url = URL(string: "\(primary)/api/stats") {
             var req = URLRequest(url: url)
             req.timeoutInterval = 3
@@ -654,7 +655,7 @@ class LawnCareStore: ObservableObject {
                 return
             }
         } catch {
-            if activeEffectiveURL.contains("rodriguezlawncare.xyz") {
+            if activeEffectiveURL.contains("web-production-b6891b.up.railway.app") {
                 if let fbUrl = URL(string: "\(fallbackServerURL)/api/stats") {
                     var fbReq = URLRequest(url: fbUrl)
                     fbReq.timeoutInterval = 4
@@ -3195,7 +3196,7 @@ struct CloudLiveAdminView: View {
     @State private var reloadTrigger = false
 
     var adminURL: URL {
-        URL(string: "\(store.cleanURL)/admin") ?? URL(string: "https://rodriguezlawncare.xyz/admin")!
+        URL(string: "\(store.cleanURL)/admin") ?? URL(string: "https://web-production-b6891b.up.railway.app/admin")!
     }
 
     var body: some View {
@@ -3934,12 +3935,12 @@ struct WebAdminView: View {
     private var serverUrlSettingsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("URL DEL SERVIDOR WEB").font(.caption.bold()).foregroundStyle(.gray)
-            TextField("https://rodriguezlawncare.xyz", text: $serverInput)
+            TextField("https://web-production-b6891b.up.railway.app", text: $serverInput)
                 .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
 
             HStack(spacing: 8) {
                 Button {
-                    serverInput = "https://rodriguezlawncare.xyz"
+                    serverInput = "https://web-production-b6891b.up.railway.app"
                     store.serverURL = serverInput
                     Task {
                         await store.refreshAll()
