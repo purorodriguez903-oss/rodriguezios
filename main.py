@@ -54,6 +54,7 @@ GALLERY_FOLDER = os.path.join(BASE_DIR, "assets", "gallery")
 LEADS_JSON_PATH = os.path.join(BASE_DIR, "leads.json")
 SETTINGS_JSON_PATH = os.path.join(BASE_DIR, "settings.json")
 ANALYTICS_JSON_PATH = os.path.join(BASE_DIR, "analytics.json")
+CLOUD_CONFIG_JSON_PATH = os.path.join(BASE_DIR, "cloud_config.json")
 
 THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000
 
@@ -159,6 +160,59 @@ def increment_visit():
     analytics["last_updated"] = int(time.time())
     save_analytics(analytics)
     return analytics
+
+def load_cloud_config():
+    default_config = {
+        "app_name": "rodriguezlawncareios",
+        "app_version": "1.2.0",
+        "app_build": 12,
+        "min_version": "1.0.0",
+        "release_notes": "Conexión 100% online con Railway, ícono oficial y actualización inalámbrica OTA sin cables.",
+        "ipa_url": "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa",
+        "ipa_fallback_url": "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/RodriguezLawnCare.ipa",
+        "trollstore_url": "apple-magnifier://install?url=https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa",
+        "esign_url": "esign://import?url=https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa",
+        "contact_phone": "(254) 852-8163",
+        "whatsapp_number": "12548528163",
+        "rates": {
+            "small": 45.0,
+            "medium": 60.0,
+            "large": 85.0,
+            "acre": 140.0,
+            "overgrown_mult": 1.3,
+            "weekly_discount": 0.10,
+            "biweekly_discount": 0.05
+        },
+        "addons": {
+            "bushes": 30.0,
+            "mulch": 65.0,
+            "trees": 75.0,
+            "cleanups": 50.0,
+            "edging": 15.0
+        },
+        "announcement": {
+            "enabled": False,
+            "title": "Aviso Online",
+            "message": "Sistema 100% en línea sincronizado."
+        }
+    }
+    if not os.path.exists(CLOUD_CONFIG_JSON_PATH):
+        return default_config
+    try:
+        with open(CLOUD_CONFIG_JSON_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"[Error] Cargando cloud_config.json: {e}")
+        return default_config
+
+def save_cloud_config(data):
+    try:
+        with open(CLOUD_CONFIG_JSON_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"[Error] Guardando cloud_config.json: {e}")
+        return False
 
 def get_next_id(gallery):
     if not gallery:
@@ -1555,6 +1609,669 @@ async def handle_health(request):
         "server_time": time.time()
     })
 
+# ----------------- 100% ONLINE OTA & CLOUD UPDATE HANDLERS -----------------
+async def handle_ota_manifest(request):
+    """Returns Apple OTA installation manifest plist."""
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    host = request.headers.get("X-Forwarded-Host", request.host)
+    base_url = f"{scheme}://{host}"
+    config = load_cloud_config()
+    ipa_url = config.get("ipa_url", "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa")
+    logo_url = f"{base_url}/assets/bot_logo.jpg"
+    version = config.get("app_version", "1.2.0")
+    title = config.get("app_name", "rodriguezlawncareios")
+
+    plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>items</key>
+    <array>
+        <dict>
+            <key>assets</key>
+            <array>
+                <dict>
+                    <key>kind</key>
+                    <string>software-package</string>
+                    <key>url</key>
+                    <string>{ipa_url}</string>
+                </dict>
+                <dict>
+                    <key>kind</key>
+                    <string>display-image</string>
+                    <key>needs-shine</key>
+                    <true/>
+                    <key>url</key>
+                    <string>{logo_url}</string>
+                </dict>
+                <dict>
+                    <key>kind</key>
+                    <string>full-size-image</string>
+                    <key>needs-shine</key>
+                    <true/>
+                    <key>url</key>
+                    <string>{logo_url}</string>
+                </dict>
+            </array>
+            <key>metadata</key>
+            <dict>
+                <key>bundle-identifier</key>
+                <string>com.rodriguezlawncareios.app</string>
+                <key>bundle-version</key>
+                <string>{version}</string>
+                <key>kind</key>
+                <string>software</string>
+                <key>title</key>
+                <string>{title}</string>
+            </dict>
+        </dict>
+    </array>
+</dict>
+</plist>"""
+    return web.Response(text=plist_content, content_type="text/xml", headers={"Access-Control-Allow-Origin": "*"})
+
+async def handle_api_app_version(request):
+    """Returns version info, release notes, and OTA installation URLs for in-app updater."""
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    host = request.headers.get("X-Forwarded-Host", request.host)
+    base_url = f"{scheme}://{host}"
+    config = load_cloud_config()
+
+    version = config.get("app_version", "1.2.0")
+    build = config.get("app_build", 12)
+    ipa_url = config.get("ipa_url", "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa")
+    manifest_url = f"{base_url}/api/ota/manifest.plist"
+    ota_install_url = f"itms-services://?action=download-manifest&url={manifest_url}"
+    trollstore_url = f"apple-magnifier://install?url={ipa_url}"
+    esign_url = f"esign://import?url={ipa_url}"
+
+    return cors_json_response({
+        "success": True,
+        "app_name": config.get("app_name", "rodriguezlawncareios"),
+        "version": version,
+        "build": build,
+        "min_version": config.get("min_version", "1.0.0"),
+        "release_notes": config.get("release_notes", "Conexión 100% online con Railway, ícono oficial y actualización inalámbrica OTA."),
+        "ipa_url": ipa_url,
+        "ota_install_url": ota_install_url,
+        "trollstore_url": trollstore_url,
+        "esign_url": esign_url,
+        "web_install_url": f"{base_url}/instalar",
+        "has_update": True,
+        "server_time": time.time()
+    })
+
+async def handle_api_get_cloud_config(request):
+    """Returns dynamic remote configuration for iOS App."""
+    config = load_cloud_config()
+    return cors_json_response({"success": True, "config": config})
+
+async def handle_api_save_cloud_config(request):
+    """Updates dynamic remote configuration from PC or Web Admin."""
+    try:
+        data = await request.json()
+        config = load_cloud_config()
+        for k, v in data.items():
+            config[k] = v
+        save_cloud_config(config)
+        return cors_json_response({"success": True, "config": config})
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+async def handle_download_ipa(request):
+    """Serves the latest compiled IPA or redirects to GitHub Releases."""
+    config = load_cloud_config()
+    candidate_paths = [
+        os.path.join(BASE_DIR, "ipa here", "rodriguezlawncareios.ipa"),
+        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare.ipa")
+    ]
+    for p in candidate_paths:
+        if os.path.exists(p) and os.path.getsize(p) > 10000:
+            return web.FileResponse(p, headers={
+                "Content-Type": "application/octet-stream",
+                "Content-Disposition": 'attachment; filename="rodriguezlawncareios.ipa"'
+            })
+    ipa_url = config.get("ipa_url", "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa")
+    raise web.HTTPFound(ipa_url)
+
+async def handle_ota_page(request):
+    """Serves sleek mobile installation landing page with 1-tap OTA buttons and QR code."""
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    host = request.headers.get("X-Forwarded-Host", request.host)
+    base_url = f"{scheme}://{host}"
+    config = load_cloud_config()
+    version = config.get("app_version", "1.2.0")
+    build = config.get("app_build", 12)
+    ipa_url = config.get("ipa_url", "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa")
+    manifest_url = f"{base_url}/api/ota/manifest.plist"
+    ota_install_url = f"itms-services://?action=download-manifest&url={manifest_url}"
+    trollstore_url = f"apple-magnifier://install?url={ipa_url}"
+    esign_url = f"esign://import?url={ipa_url}"
+    current_page_url = f"{base_url}/instalar"
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=220x220&data={current_page_url}&color=16a34a&bgcolor=0b131f"
+
+    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Instalar rodriguezlawncareios • App Oficial</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: radial-gradient(circle at top, #0d2818 0%, #060b11 60%);
+      color: #f1f5f9;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 40px;
+    }}
+    .container {{
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }}
+    .badge {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      color: #4ade80;
+      font-size: 0.85rem;
+      font-weight: 700;
+      border-radius: 9999px;
+      margin-bottom: 20px;
+    }}
+    .badge-dot {{
+      width: 8px;
+      height: 8px;
+      background: #22c55e;
+      border-radius: 50%;
+      box-shadow: 0 0 10px #22c55e;
+    }}
+    .app-icon {{
+      width: 110px;
+      height: 110px;
+      border-radius: 24px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 0 3px rgba(34, 197, 94, 0.4);
+      object-fit: cover;
+      margin-bottom: 18px;
+    }}
+    h1 {{
+      font-size: 1.85rem;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }}
+    .subtitle {{
+      color: #94a3b8;
+      font-size: 0.95rem;
+      margin-bottom: 28px;
+    }}
+    .btn {{
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      padding: 16px 20px;
+      border-radius: 16px;
+      text-decoration: none;
+      font-size: 1.05rem;
+      font-weight: 700;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      margin-bottom: 12px;
+      border: none;
+    }}
+    .btn:active {{
+      transform: scale(0.98);
+    }}
+    .btn-ota {{
+      background: linear-gradient(135deg, #22c55e 0%, #15803d 100%);
+      color: #ffffff;
+      box-shadow: 0 8px 24px rgba(34, 197, 94, 0.35);
+    }}
+    .btn-troll {{
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: #ffffff;
+      box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3);
+    }}
+    .btn-esign {{
+      background: rgba(30, 41, 59, 0.85);
+      color: #cbd5e1;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }}
+    .btn-download {{
+      background: transparent;
+      color: #94a3b8;
+      font-size: 0.9rem;
+      padding: 10px;
+    }}
+    .card {{
+      background: rgba(17, 24, 39, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 20px;
+      width: 100%;
+      margin-top: 18px;
+      text-align: left;
+    }}
+    .card h3 {{
+      font-size: 1rem;
+      color: #e2e8f0;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }}
+    .card p, .card li {{
+      color: #94a3b8;
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }}
+    .card ol {{
+      margin-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }}
+    .qr-box {{
+      margin: 18px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }}
+    .qr-box img {{
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      border: 2px solid rgba(34, 197, 94, 0.4);
+    }}
+    .qr-text {{
+      font-size: 0.8rem;
+      color: #64748b;
+    }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="badge">
+      <span class="badge-dot"></span>
+      <span>100% ONLINE • ACTUALIZACIÓN EN VIVO</span>
+    </div>
+
+    <img src="/assets/bot_logo.jpg" alt="Icono rodriguezlawncareios" class="app-icon">
+    <h1>rodriguezlawncareios</h1>
+    <p class="subtitle">Administrador Móvil en Tiempo Real • Versión {version} (Build {build})</p>
+
+    <!-- Botón 1: OTA Safari -->
+    <a href="{ota_install_url}" class="btn btn-ota">
+      <span>📲</span>
+      <span>Instalar por Aire (Safari OTA)</span>
+    </a>
+
+    <!-- Botón 2: TrollStore 1-Toque -->
+    <a href="{trollstore_url}" class="btn btn-troll">
+      <span>⚡</span>
+      <span>Instalar con TrollStore (1 Toque)</span>
+    </a>
+
+    <!-- Botón 3: ESign -->
+    <a href="{esign_url}" class="btn btn-esign">
+      <span>✍️</span>
+      <span>Abrir directo en ESign / Scarlet</span>
+    </a>
+
+    <!-- Botón 4: Descarga Directa -->
+    <a href="/download/ipa" class="btn btn-download">
+      <span>📥</span>
+      <span>Descargar archivo directo rodriguezlawncareios.ipa</span>
+    </a>
+
+    <!-- QR Code para escanear desde PC con iPhone -->
+    <div class="card qr-box">
+      <h3 style="margin-bottom: 4px;">📷 ¿Estás en tu Computadora?</h3>
+      <p class="qr-text">Apunta la cámara de tu iPhone a la pantalla para abrir esta página y actualizar en 1 toque:</p>
+      <img src="{qr_url}" alt="QR Instalación" width="180" height="180">
+      <span style="font-size: 0.75rem; color: #4ade80;">{current_page_url}</span>
+    </div>
+
+    <!-- Guía rápida de uso -->
+    <div class="card">
+      <h3>🚀 Actualizaciones 100% Online</h3>
+      <ol>
+        <li><strong>Sin cables ni PC:</strong> Cada vez que actualices el proyecto en GitHub o Railway, el sistema compila y publica aquí automáticamente.</li>
+        <li><strong>En la App:</strong> Al abrir la app en tu iPhone, te saldrá un aviso si hay nueva versión para actualizar por el aire en 1 segundo.</li>
+        <li><strong>Panel Web Live:</strong> Dentro de la app tienes el botón de <em>Panel Cloud 24/7</em> que carga las funciones nuevas de tu web al instante sin reinstalar el IPA.</li>
+      </ol>
+    </div>
+  </div>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html", headers={"Access-Control-Allow-Origin": "*"})
+
+async def handle_cloud_admin_page(request):
+    """Serves responsive Cloud Admin Dashboard embedded inside the iOS app and accessible on PC."""
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    host = request.headers.get("X-Forwarded-Host", request.host)
+    base_url = f"{scheme}://{host}"
+    config = load_cloud_config()
+    version = config.get("app_version", "1.2.0")
+    build = config.get("app_build", 12)
+    leads = load_leads()
+    gallery = load_gallery()
+    analytics = load_analytics()
+    settings = load_settings()
+
+    pending_leads = [l for l in leads if l.get("status") == "pending"]
+
+    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Panel Cloud 24/7 • rodriguezlawncareios</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      background: #0b131f;
+      color: #f8fafc;
+      padding: 16px;
+      padding-bottom: 60px;
+    }}
+    .header {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      background: #111c2d;
+      padding: 16px 20px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }}
+    .brand-title {{
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }}
+    .brand-title span {{ color: #22c55e; }}
+    .status-pill {{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #4ade80;
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      padding: 4px 10px;
+      border-radius: 9999px;
+    }}
+    .status-dot {{
+      width: 7px;
+      height: 7px;
+      background: #22c55e;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #22c55e;
+    }}
+    .stats-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }}
+    .stat-card {{
+      background: #152238;
+      border: 1px solid rgba(255,255,255,0.06);
+      padding: 16px;
+      border-radius: 16px;
+      text-align: center;
+    }}
+    .stat-num {{
+      font-size: 1.7rem;
+      font-weight: 800;
+      color: #22c55e;
+      margin-bottom: 4px;
+    }}
+    .stat-label {{
+      font-size: 0.78rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }}
+    .section-card {{
+      background: #111c2d;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 18px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }}
+    .section-title {{
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }}
+    .lead-row {{
+      background: #182740;
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }}
+    .lead-info strong {{ font-size: 0.95rem; color: #fff; }}
+    .lead-info p {{ font-size: 0.8rem; color: #94a3b8; margin-top: 2px; }}
+    .btn-wa {{
+      background: #22c55e;
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }}
+    .config-grid {{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }}
+    .config-item {{
+      background: #182740;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.05);
+    }}
+    .config-item label {{
+      display: block;
+      font-size: 0.72rem;
+      color: #94a3b8;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }}
+    .config-item input {{
+      width: 100%;
+      background: #0b131f;
+      border: 1px solid #334155;
+      color: #22c55e;
+      font-weight: 700;
+      padding: 6px 8px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }}
+    .save-btn {{
+      background: #22c55e;
+      color: #0b131f;
+      font-weight: 800;
+      border: none;
+      padding: 12px;
+      width: 100%;
+      border-radius: 12px;
+      margin-top: 14px;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }}
+    .alert-box {{
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 14px;
+      display: none;
+    }}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand-title">🌿 RODRIGUEZ <span>LAWNCARE</span></div>
+    <div class="status-pill">
+      <span class="status-dot"></span>
+      <span>RAILWAY 24/7 ONLINE</span>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-num">{len(pending_leads)}</div>
+      <div class="stat-label">Citas Pendientes</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">{len(leads)}</div>
+      <div class="stat-label">Total Clientes</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">{analytics.get("visits_today", 42)}</div>
+      <div class="stat-label">Visitas Hoy</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">{len(gallery)}</div>
+      <div class="stat-label">Fotos Web</div>
+    </div>
+  </div>
+
+  <!-- Citas en vivo -->
+  <div class="section-card">
+    <div class="section-title">
+      <span>🚨 Citas & Cotizaciones Recientes</span>
+      <span style="font-size: 0.8rem; color: #4ade80;">{len(leads)} registradas</span>
+    </div>
+    {"".join([f'''
+    <div class="lead-row">
+      <div class="lead-info">
+        <strong>{l.get("name", "Cliente")}</strong>
+        <p>📞 {l.get("phone", "")} • {", ".join(l.get("services", ["Corte"]))}</p>
+      </div>
+      <a href="https://wa.me/{l.get('phone','').replace('(','').replace(')','').replace('-','').replace(' ','')}?text=Hola%20{l.get('name','')}!%20Te%20contacto%20de%20Rodriguez%20LawnCare." class="btn-wa">WhatsApp</a>
+    </div>''' for l in leads[:4]]) if leads else '<p style="color:#64748b; font-size:0.85rem;">No hay citas pendientes por el momento.</p>'}
+  </div>
+
+  <!-- Configuración de Precios en Vivo para la App iOS -->
+  <div class="section-card">
+    <div class="section-title">
+      <span>⚙️ Precios en Vivo para la App iOS (Sin compilar IPA)</span>
+    </div>
+    <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 12px;">Cualquier cambio aquí se refleja inmediatamente en el cotizador de tu iPhone:</p>
+    <div id="saveAlert" class="alert-box" style="background: rgba(34,197,94,0.2); color: #4ade80; border: 1px solid #22c55e;">
+      ✅ ¡Precios actualizados en la nube con éxito!
+    </div>
+    <form id="pricingForm" onsubmit="savePricing(event)">
+      <div class="config-grid">
+        <div class="config-item">
+          <label>Césped Chico (&lt; 5k sq ft)</label>
+          <input type="number" step="0.5" id="rate_small" value="{config.get('rates', {}).get('small', 45.0)}">
+        </div>
+        <div class="config-item">
+          <label>Césped Mediano (5k - 10k)</label>
+          <input type="number" step="0.5" id="rate_medium" value="{config.get('rates', {}).get('medium', 60.0)}">
+        </div>
+        <div class="config-item">
+          <label>Césped Grande (10k - 15k)</label>
+          <input type="number" step="0.5" id="rate_large" value="{config.get('rates', {}).get('large', 85.0)}">
+        </div>
+        <div class="config-item">
+          <label>Acre Completo</label>
+          <input type="number" step="0.5" id="rate_acre" value="{config.get('rates', {}).get('acre', 140.0)}">
+        </div>
+        <div class="config-item">
+          <label>Extra: Arbustos ($)</label>
+          <input type="number" step="0.5" id="addon_bushes" value="{config.get('addons', {}).get('bushes', 30.0)}">
+        </div>
+        <div class="config-item">
+          <label>Extra: Mulch ($)</label>
+          <input type="number" step="0.5" id="addon_mulch" value="{config.get('addons', {}).get('mulch', 65.0)}">
+        </div>
+      </div>
+      <button type="submit" class="save-btn">💾 Guardar y Aplicar a la App iOS</button>
+    </form>
+  </div>
+
+  <!-- Centro OTA -->
+  <div class="section-card" style="text-align: center;">
+    <div class="section-title" style="justify-content: center;">
+      <span>📲 Centro de Actualizaciones Inalámbricas OTA</span>
+    </div>
+    <p style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 14px;">Versión compilada: <strong>{version} (Build {build})</strong></p>
+    <a href="/instalar" style="display: inline-block; background: #3b82f6; color: #fff; font-weight: 700; padding: 10px 20px; border-radius: 12px; text-decoration: none;">Abrir Página de Instalación OTA</a>
+  </div>
+
+  <script>
+    async function savePricing(e) {{
+      e.preventDefault();
+      const payload = {{
+        rates: {{
+          small: parseFloat(document.getElementById('rate_small').value),
+          medium: parseFloat(document.getElementById('rate_medium').value),
+          large: parseFloat(document.getElementById('rate_large').value),
+          acre: parseFloat(document.getElementById('rate_acre').value)
+        }},
+        addons: {{
+          bushes: parseFloat(document.getElementById('addon_bushes').value),
+          mulch: parseFloat(document.getElementById('addon_mulch').value)
+        }}
+      }};
+      try {{
+        const resp = await fetch('/api/cloud/config', {{
+          method: 'POST',
+          headers: {{ 'Content-Type': 'application/json' }},
+          body: JSON.stringify(payload)
+        }});
+        if (resp.ok) {{
+          document.getElementById('saveAlert').style.display = 'block';
+          setTimeout(() => {{ document.getElementById('saveAlert').style.display = 'none'; }}, 4000);
+        }}
+      }} catch(err) {{
+        alert('Error al guardar: ' + err);
+      }}
+    }}
+  </script>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html", headers={"Access-Control-Allow-Origin": "*"})
+
+
 def create_web_app():
     app = web.Application()
     # Website static & pages
@@ -1566,6 +2283,17 @@ def create_web_app():
 
     # Lead Submission (Web form)
     app.router.add_post('/api/lead', handle_lead_submission)
+
+    # 100% Online OTA & Cloud App Portal
+    app.router.add_get('/app', handle_ota_page)
+    app.router.add_get('/instalar', handle_ota_page)
+    app.router.add_get('/admin', handle_cloud_admin_page)
+    app.router.add_get('/admin/ota', handle_ota_page)
+    app.router.add_get('/download/ipa', handle_download_ipa)
+    app.router.add_get('/api/ota/manifest.plist', handle_ota_manifest)
+    app.router.add_get('/api/app/version', handle_api_app_version)
+    app.router.add_get('/api/cloud/config', handle_api_get_cloud_config)
+    app.router.add_post('/api/cloud/config', handle_api_save_cloud_config)
 
     # REST API for iOS App & Admin
     app.router.add_route('OPTIONS', '/api/{tail:.*}', handle_cors_options)

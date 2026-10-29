@@ -1,0 +1,35 @@
+{
+  "app_name": "rodriguezlawncareios",
+  "app_version": "1.2.0",
+  "app_build": 12,
+  "min_version": "1.0.0",
+  "release_notes": "Conexión 100% online con Railway, ícono oficial y actualización inalámbrica OTA sin cables.",
+  "ipa_url": "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa",
+  "ipa_fallback_url": "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/RodriguezLawnCare.ipa",
+  "trollstore_url": "apple-magnifier://install?url=https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa",
+  "esign_url": "esign://import?url=https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa",
+  "contact_phone": "(254) 852-8163",
+  "whatsapp_number": "12548528163",
+  "whatsapp_default_message": "¡Hola! Te contacto de Rodriguez LawnCare sobre tu solicitud de cotización en nuestra página web.",
+  "rates": {
+    "small": 45.0,
+    "medium": 60.0,
+    "large": 85.0,
+    "acre": 140.0,
+    "overgrown_mult": 1.3,
+    "weekly_discount": 0.10,
+    "biweekly_discount": 0.05
+  },
+  "addons": {
+    "bushes": 30.0,
+    "mulch": 65.0,
+    "trees": 75.0,
+    "cleanups": 50.0,
+    "edging": 15.0
+  },
+  "announcement": {
+    "enabled": false,
+    "title": "Aviso Online",
+    "message": "Sistema 100% en línea sincronizado."
+  }
+}

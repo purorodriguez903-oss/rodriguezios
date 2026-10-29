@@ -2,6 +2,7 @@ import SwiftUI
 import UserNotifications
 import AVKit
 import Combine
+import WebKit
 
 // MARK: - THEME & BRANDING
 enum Brand {
@@ -58,14 +59,6 @@ struct WebStats: Codable {
     var uptime_seconds: Int?
 }
 
-struct WebAnalytics: Codable {
-    var total_visits: Int
-    var unique_visitors: Int
-    var visits_today: Int
-    var quotes_submitted: Int
-    var conversion_rate: String
-}
-
 struct VideoPreset: Identifiable, Codable, Equatable {
     var id: String
     var name: String
@@ -91,6 +84,52 @@ struct WebSettings: Codable {
     var photo_presets: [PhotoPreset]?
 }
 
+struct AppVersionInfo: Codable {
+    var success: Bool?
+    var app_name: String?
+    var version: String?
+    var build: Int?
+    var min_version: String?
+    var release_notes: String?
+    var ipa_url: String?
+    var ota_install_url: String?
+    var trollstore_url: String?
+    var esign_url: String?
+    var web_install_url: String?
+    var has_update: Bool?
+}
+
+struct CloudRates: Codable {
+    var small: Double?
+    var medium: Double?
+    var large: Double?
+    var acre: Double?
+    var overgrown_mult: Double?
+    var weekly_discount: Double?
+    var biweekly_discount: Double?
+}
+
+struct CloudAddons: Codable {
+    var bushes: Double?
+    var mulch: Double?
+    var trees: Double?
+    var cleanups: Double?
+    var edging: Double?
+}
+
+struct CloudConfig: Codable {
+    var app_name: String?
+    var app_version: String?
+    var app_build: Int?
+    var rates: CloudRates?
+    var addons: CloudAddons?
+}
+
+struct CloudConfigResponse: Codable {
+    var success: Bool
+    var config: CloudConfig
+}
+
 struct LeadListResponse: Codable {
     var success: Bool
     var leads: [Lead]
@@ -111,7 +150,7 @@ struct SettingsResponse: Codable {
     var settings: WebSettings
 }
 
-// MARK: - APP STORE (STATE MANAGEMENT & REAL-TIME API)
+// MARK: - APP STORE (STATE MANAGEMENT & REAL-TIME CLOUD SYNC)
 class LawnCareStore: ObservableObject {
     @Published var leads: [Lead] = []
     @Published var gallery: [GalleryPhoto] = []
@@ -125,6 +164,16 @@ class LawnCareStore: ObservableObject {
     @Published var latestAlertMessage: String? = nil
     @Published var showAlertBanner: Bool = false
 
+    // OTA In-App Updater & Cloud Config
+    @Published var availableUpdate: AppVersionInfo? = nil
+    @Published var showUpdateModal: Bool = false
+    @Published var isCheckingUpdate: Bool = false
+    @Published var updateCheckStatus: String = "Al día"
+    @Published var cloudConfig: CloudConfig? = nil
+
+    let currentAppVersion: String = "1.2.0"
+    let currentAppBuild: Int = 12
+
     @AppStorage("api_server_url") var serverURL: String = "https://rodriguezlawncarenuevaa-production.up.railway.app"
 
     private var knownLeadIds: Set<Int> = []
@@ -135,6 +184,10 @@ class LawnCareStore: ObservableObject {
         loadDemoData()
         requestNotificationPermissions()
         startRealtimePolling()
+        Task { @MainActor in
+            await checkOTAUpdate(manual: false)
+            await fetchCloudConfig()
+        }
     }
 
     func requestNotificationPermissions() {
@@ -160,18 +213,15 @@ class LawnCareStore: ObservableObject {
     }
 
     func triggerNotification(lead: Lead) {
-        // 1. In-app heads-up banner
         let bannerText = "🚨 ¡Nueva Cotización! \(lead.name) • \(lead.phone)"
         self.latestAlertMessage = bannerText
         self.showAlertBanner = true
         UINotificationFeedbackGenerator().notificationOccurred(.success)
 
-        // Auto hide banner after 6 seconds
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
             self.showAlertBanner = false
         }
 
-        // 2. iOS System Notification (works in background / lockscreen)
         let content = UNMutableNotificationContent()
         content.title = "🚨 ¡NUEVA COTIZACIÓN EN LA WEB!"
         content.subtitle = "\(lead.name) • \(lead.phone)"
@@ -247,7 +297,7 @@ class LawnCareStore: ObservableObject {
         )
     }
 
-    private var cleanURL: String {
+    var cleanURL: String {
         var base = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if base.hasSuffix("/") {
             base.removeLast()
@@ -278,10 +328,59 @@ class LawnCareStore: ObservableObject {
         await fetchLeads()
         await fetchGallery()
         await fetchSettings()
+        await fetchCloudConfig()
 
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm:ss a"
         lastSyncTime = formatter.string(from: Date())
+    }
+
+    @MainActor
+    func checkOTAUpdate(manual: Bool = false) async {
+        if manual { isCheckingUpdate = true }
+        defer { if manual { isCheckingUpdate = false } }
+
+        guard let url = URL(string: "\(cleanURL)/api/app/version") else { return }
+        do {
+            var req = URLRequest(url: url)
+            req.timeoutInterval = 6
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
+                let info = try JSONDecoder().decode(AppVersionInfo.self, from: data)
+                self.availableUpdate = info
+                let serverBuild = info.build ?? 0
+                if serverBuild > self.currentAppBuild {
+                    self.showUpdateModal = true
+                    self.updateCheckStatus = "¡Nueva versión \(info.version ?? "") disponible!"
+                    UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                } else {
+                    self.updateCheckStatus = "Estás en la última versión (\(currentAppVersion))"
+                    if manual {
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    }
+                }
+            }
+        } catch {
+            if manual {
+                self.updateCheckStatus = "No se pudo conectar con el servidor OTA"
+            }
+        }
+    }
+
+    @MainActor
+    func fetchCloudConfig() async {
+        guard let url = URL(string: "\(cleanURL)/api/cloud/config") else { return }
+        do {
+            var req = URLRequest(url: url)
+            req.timeoutInterval = 6
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
+                let decoded = try JSONDecoder().decode(CloudConfigResponse.self, from: data)
+                self.cloudConfig = decoded.config
+            }
+        } catch {
+            // Keep existing
+        }
     }
 
     @MainActor
@@ -313,7 +412,6 @@ class LawnCareStore: ObservableObject {
             if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
                 let decoded = try JSONDecoder().decode(LeadListResponse.self, from: data)
 
-                // Check for new incoming leads
                 if !isFirstLoad {
                     for lead in decoded.leads {
                         if !knownLeadIds.contains(lead.id) {
@@ -326,7 +424,7 @@ class LawnCareStore: ObservableObject {
                 self.leads = decoded.leads
             }
         } catch {
-            // Keep existing leads cache
+            // Keep cache
         }
     }
 
@@ -344,7 +442,7 @@ class LawnCareStore: ObservableObject {
                 }
             }
         } catch {
-            // Keep existing cache
+            // Keep cache
         }
     }
 
@@ -360,7 +458,7 @@ class LawnCareStore: ObservableObject {
                 self.settings = decoded.settings
             }
         } catch {
-            // Keep existing settings cache
+            // Keep cache
         }
     }
 
@@ -400,7 +498,7 @@ class LawnCareStore: ObservableObject {
             time: time,
             frequency: frequency,
             description: description,
-            source: "App Rodriguez LawnCare",
+            source: "App rodriguezlawncareios",
             status: "pending",
             estimated_amount: amount,
             notes: notes
@@ -417,7 +515,7 @@ class LawnCareStore: ObservableObject {
             "time": time,
             "frequency": frequency,
             "description": description,
-            "source": "App Rodriguez LawnCare",
+            "source": "App rodriguezlawncareios",
             "estimated_amount": amount,
             "notes": notes
         ]
@@ -429,7 +527,7 @@ class LawnCareStore: ObservableObject {
             req.httpBody = try JSONSerialization.data(withJSONObject: payload)
             _ = try await URLSession.shared.data(for: req)
         } catch {
-            print("Create lead error: \(error)")
+            print("Create lead server error: \(error)")
         }
     }
 
@@ -444,24 +542,31 @@ class LawnCareStore: ObservableObject {
             req.httpBody = try JSONSerialization.data(withJSONObject: ["id": id])
             _ = try await URLSession.shared.data(for: req)
         } catch {
-            print("Delete lead error: \(error)")
+            print("Delete lead server error: \(error)")
         }
     }
 
-    // GALLERY CRUD ACTIONS
     @MainActor
     func addGalleryPhoto(title: String, category: String, urlString: String, location: String = "Killeen & Central TX") async {
         let newId = (gallery.map { $0.id }.max() ?? 0) + 1
-        let item = GalleryPhoto(id: newId, filename: "work_\(newId).jpg", url: urlString, title: title, category: category, location: location, verified: true)
-        gallery.insert(item, at: 0)
+        let newPhoto = GalleryPhoto(
+            id: newId,
+            filename: "work_\(newId).jpg",
+            url: urlString,
+            title: title,
+            category: category,
+            location: location,
+            verified: true,
+            uploaded_at: Int(Date().timeIntervalSince1970 * 1000)
+        )
+        gallery.insert(newPhoto, at: 0)
 
         guard let url = URL(string: "\(cleanURL)/api/gallery") else { return }
         let payload: [String: Any] = [
             "title": title,
             "category": category,
             "url": urlString,
-            "location": location,
-            "verified": true
+            "location": location
         ]
         do {
             var req = URLRequest(url: url)
@@ -470,12 +575,12 @@ class LawnCareStore: ObservableObject {
             req.httpBody = try JSONSerialization.data(withJSONObject: payload)
             _ = try await URLSession.shared.data(for: req)
         } catch {
-            print("Add photo error: \(error)")
+            print("Add photo server error: \(error)")
         }
     }
 
     @MainActor
-    func updateGalleryPhoto(id: Int, title: String, category: String, urlString: String?, location: String?) async {
+    func updateGalleryPhoto(id: Int, title: String, category: String, urlString: String? = nil, location: String? = nil) async {
         if let idx = gallery.firstIndex(where: { $0.id == id }) {
             gallery[idx].title = title
             gallery[idx].category = category
@@ -533,7 +638,6 @@ class LawnCareStore: ObservableObject {
         }
     }
 
-    // HERO BACKGROUND MANAGEMENT
     @MainActor
     func updateHeroBackground(type: String, videoURL: String, posterURL: String, presetId: String) async {
         if settings == nil {
@@ -564,7 +668,7 @@ class LawnCareStore: ObservableObject {
     }
 }
 
-// MARK: - MAIN ROOT VIEW WITH LIVE NOTIFICATION BANNER
+// MARK: - MAIN ROOT VIEW WITH LIVE NOTIFICATION BANNER & 5 TABS
 struct ContentView: View {
     @StateObject private var store = LawnCareStore()
     @State private var selectedTab = 0
@@ -590,92 +694,88 @@ struct ContentView: View {
                     }
                     .tag(2)
 
-                WebAdminView(store: store)
+                CloudLiveAdminView(store: store)
                     .tabItem {
-                        Label("Web & Servidor", systemImage: "globe.americas.fill")
+                        Label("Panel Cloud", systemImage: "cloud.fill")
                     }
                     .tag(3)
+
+                WebAdminView(store: store)
+                    .tabItem {
+                        Label("OTA & Ajustes", systemImage: "gearshape.fill")
+                    }
+                    .tag(4)
             }
             .accentColor(Brand.primary)
 
-            // Real-Time Floating Notification Banner
+            // HEADS-UP NOTIFICATION BANNER
             if store.showAlertBanner, let msg = store.latestAlertMessage {
                 VStack {
                     HStack(spacing: 12) {
                         Image(systemName: "bell.badge.fill")
                             .font(.title3)
                             .foregroundStyle(Brand.accent)
+
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(msg)
+                            Text("¡NUEVA COTIZACIÓN EN VIVO!")
                                 .font(.caption.bold())
-                                .foregroundStyle(.white)
-                                .lineLimit(2)
-                            Text("Toca para ver la cita en Citas")
-                                .font(.caption2)
                                 .foregroundStyle(Brand.primary)
+                            Text(msg)
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
                         }
+
                         Spacer()
+
                         Button {
-                            withAnimation { store.showAlertBanner = false }
+                            store.showAlertBanner = false
+                            selectedTab = 0
                         } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.gray)
+                            Text("Ver")
+                                .font(.caption.bold())
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Brand.primary)
+                                .foregroundStyle(.black)
+                                .clipShape(Capsule())
                         }
                     }
-                    .padding(14)
-                    .background(Brand.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Brand.primary.opacity(0.6), lineWidth: 1.5)
-                    )
-                    .shadow(color: .black.opacity(0.5), radius: 10, y: 5)
                     .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(Brand.cardLight)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Brand.primary, lineWidth: 1.5)
+                    )
+                    .shadow(color: Brand.primary.opacity(0.3), radius: 10, y: 4)
+                    .padding(.horizontal, 12)
                     .padding(.top, 48)
-                    .onTapGesture {
-                        selectedTab = 0
-                        store.showAlertBanner = false
-                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .animation(.spring(), value: store.showAlertBanner)
+                .zIndex(100)
             }
+        }
+        .sheet(isPresented: $store.showUpdateModal) {
+            OTAUpdateSheetView(store: store)
         }
     }
 }
 
-// MARK: - TAB 1: CITAS & LEADS (REAL TIME)
+// MARK: - TAB 1: APPOINTMENTS & REAL-TIME LEADS VIEW
 struct AppointmentsView: View {
     @ObservedObject var store: LawnCareStore
-    @State private var selectedFilter = "all"
-    @State private var searchText = ""
+    @State private var filterStatus = "all"
     @State private var showNewLeadSheet = false
-    @State private var activeLeadDetail: Lead? = nil
+    @State private var selectedLead: Lead? = nil
 
     var filteredLeads: [Lead] {
-        store.leads.filter { lead in
-            let matchesFilter: Bool
-            if selectedFilter == "all" {
-                matchesFilter = true
-            } else {
-                matchesFilter = (lead.status?.lowercased() == selectedFilter)
-            }
-
-            if searchText.isEmpty {
-                return matchesFilter
-            } else {
-                let term = searchText.lowercased()
-                let nameMatch = lead.name.lowercased().contains(term)
-                let phoneMatch = lead.phone.contains(term)
-                let addrMatch = (lead.address ?? "").lowercased().contains(term)
-                return matchesFilter && (nameMatch || phoneMatch || addrMatch)
-            }
+        if filterStatus == "all" {
+            return store.leads
         }
+        return store.leads.filter { $0.status == filterStatus }
     }
-
-    var pendingCount: Int { store.leads.filter { ($0.status ?? "") == "pending" }.count }
-    var confirmedCount: Int { store.leads.filter { ($0.status ?? "") == "confirmed" }.count }
-    var completedCount: Int { store.leads.filter { ($0.status ?? "") == "completed" }.count }
 
     var body: some View {
         NavigationView {
@@ -683,119 +783,82 @@ struct AppointmentsView: View {
                 Brand.background.ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    // Header Live Visitor & Quote Ribbon
-                    HStack(spacing: 10) {
-                        // Live Visitors
-                        HStack(spacing: 6) {
-                            Circle().fill(Color.green).frame(width: 8, height: 8)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text("Visitas Web")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.gray)
-                                Text("\(store.stats?.total_visits ?? 1420)")
+                    // Header Ribbon with Live Stats
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("RODRIGUEZ LAWNCARE")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                            Text("Citas & Cotizaciones")
+                                .font(.title3.bold())
+                                .foregroundStyle(.white)
+                        }
+
+                        Spacer()
+
+                        HStack(spacing: 8) {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(store.isOnline ? Color.green : Color.red)
+                                    .frame(width: 8, height: 8)
+                                Text(store.isOnline ? "Online" : "Offline")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(store.isOnline ? .green : .red)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Brand.card)
+                            .clipShape(Capsule())
+
+                            Button {
+                                Task { await store.refreshAll() }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
                                     .font(.caption.bold())
                                     .foregroundStyle(.white)
+                                    .padding(8)
+                                    .background(Brand.card)
+                                    .clipShape(Circle())
                             }
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Brand.card)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                        // Visits Today
-                        HStack(spacing: 6) {
-                            Image(systemName: "chart.line.uptrend.xyaxis")
-                                .font(.caption2)
-                                .foregroundStyle(Brand.primary)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text("Hoy")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.gray)
-                                Text("+\(store.stats?.visits_today ?? 42)")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(Brand.primary)
-                            }
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Brand.card)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                        Spacer()
-
-                        // Status counts
-                        HStack(spacing: 6) {
-                            StatusTag(title: "Pend.", count: pendingCount, color: Brand.accent)
-                            StatusTag(title: "Conf.", count: confirmedCount, color: Brand.primary)
                         }
                     }
                     .padding(.horizontal)
-                    .padding(.top, 8)
-                    .padding(.bottom, 10)
+                    .padding(.vertical, 10)
 
-                    // Filter Pills
+                    // Filter Segmented Chips
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            FilterChip(title: "Todas (\(store.leads.count))", isSelected: selectedFilter == "all") { selectedFilter = "all" }
-                            FilterChip(title: "Pendientes (\(pendingCount))", isSelected: selectedFilter == "pending") { selectedFilter = "pending" }
-                            FilterChip(title: "Confirmadas (\(confirmedCount))", isSelected: selectedFilter == "confirmed") { selectedFilter = "confirmed" }
-                            FilterChip(title: "Cotizadas", isSelected: selectedFilter == "estimated") { selectedFilter = "estimated" }
-                            FilterChip(title: "Completadas", isSelected: selectedFilter == "completed") { selectedFilter = "completed" }
+                            FilterChip(title: "Todos (\(store.leads.count))", isSelected: filterStatus == "all") { filterStatus = "all" }
+                            FilterChip(title: "Pendientes (\(store.leads.filter { $0.status == "pending" }.count))", isSelected: filterStatus == "pending", highlight: true) { filterStatus = "pending" }
+                            FilterChip(title: "Contactados", isSelected: filterStatus == "contacted") { filterStatus = "contacted" }
+                            FilterChip(title: "Confirmados", isSelected: filterStatus == "confirmed") { filterStatus = "confirmed" }
+                            FilterChip(title: "Completados", isSelected: filterStatus == "completed") { filterStatus = "completed" }
                         }
                         .padding(.horizontal)
+                        .padding(.bottom, 8)
                     }
-                    .padding(.bottom, 10)
 
-                    // Search Field
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.gray)
-                        TextField("Buscar cliente, teléfono o dirección...", text: $searchText)
-                            .foregroundStyle(.white)
-                        if !searchText.isEmpty {
-                            Button { searchText = "" } label: {
-                                Image(systemName: "xmark.circle.fill").foregroundStyle(.gray)
-                            }
-                        }
-                    }
-                    .padding(10)
-                    .background(Brand.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .padding(.horizontal)
-                    .padding(.bottom, 10)
-
-                    // Appointments List
+                    // Leads List
                     if filteredLeads.isEmpty {
-                        Spacer()
                         VStack(spacing: 12) {
-                            Image(systemName: "calendar.badge.exclamationmark")
+                            Spacer()
+                            Image(systemName: "tray.fill")
                                 .font(.system(size: 48))
-                                .foregroundStyle(.gray)
-                            Text("No hay citas registradas")
-                                .font(.headline)
-                                .foregroundStyle(.white)
-                            Text("Cuando un cliente pida cotización en la web, sonará una notificación en vivo.")
+                                .foregroundStyle(.gray.opacity(0.5))
+                            Text("No hay citas registradas en este estado.")
                                 .font(.subheadline)
                                 .foregroundStyle(.gray)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 32)
+                            Spacer()
                         }
-                        Spacer()
                     } else {
                         List {
                             ForEach(filteredLeads) { lead in
-                                LeadCardView(lead: lead) {
-                                    activeLeadDetail = lead
-                                }
-                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
-                            }
-                            .onDelete { indexSet in
-                                for idx in indexSet {
-                                    let item = filteredLeads[idx]
-                                    Task { await store.deleteLead(id: item.id) }
-                                }
+                                LeadCardView(lead: lead)
+                                    .listRowBackground(Color.clear)
+                                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                    .onTapGesture {
+                                        selectedLead = lead
+                                    }
                             }
                         }
                         .listStyle(.plain)
@@ -805,99 +868,112 @@ struct AppointmentsView: View {
                     }
                 }
             }
-            .navigationTitle("Citas en Tiempo Real 🌿")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(store.isOnline ? Brand.primary : .orange)
-                            .frame(width: 8, height: 8)
-                        Text(store.isOnline ? "En Línea 24/7" : "Offline")
-                            .font(.caption2)
-                            .foregroundStyle(.gray)
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showNewLeadSheet = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "plus.circle.fill")
-                            Text("Nueva Cita")
-                        }
-                        .font(.caption.bold())
-                        .foregroundStyle(Brand.primary)
-                    }
-                }
+            .navigationBarHidden(true)
+            .sheet(item: $selectedLead) { lead in
+                LeadDetailSheet(lead: lead, store: store)
             }
             .sheet(isPresented: $showNewLeadSheet) {
                 NewLeadSheet(store: store)
             }
-            .sheet(item: $activeLeadDetail) { lead in
-                LeadDetailSheet(lead: lead, store: store)
-            }
+            .overlay(
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button {
+                            showNewLeadSheet = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "plus")
+                                Text("Nueva Cita")
+                            }
+                            .font(.headline)
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 14)
+                            .background(Brand.primary)
+                            .clipShape(Capsule())
+                            .shadow(color: Brand.primary.opacity(0.4), radius: 8, y: 4)
+                        }
+                        .padding()
+                    }
+                }
+            )
         }
     }
 }
 
-struct StatusTag: View {
+// MARK: - FILTER CHIP
+struct FilterChip: View {
     let title: String
-    let count: Int
-    let color: Color
+    let isSelected: Bool
+    var highlight: Bool = false
+    let action: () -> Void
+
     var body: some View {
-        HStack(spacing: 4) {
-            Text(title).font(.system(size: 10)).foregroundStyle(.gray)
-            Text("\(count)").font(.caption.bold()).foregroundStyle(color)
+        Button(action: action) {
+            Text(title)
+                .font(.caption.bold())
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(isSelected ? (highlight ? Brand.accent : Brand.primary) : Brand.card)
+                .foregroundStyle(isSelected ? .black : .white)
+                .clipShape(Capsule())
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(Brand.card)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 
-// MARK: - LEAD CARD COMPONENT
+// MARK: - LEAD CARD VIEW (WITH WHATSAPP PRE-FILL & STATUS)
 struct LeadCardView: View {
     let lead: Lead
-    let onDetails: () -> Void
 
     var statusColor: Color {
-        switch (lead.status ?? "").lowercased() {
+        switch lead.status {
         case "pending": return Brand.accent
+        case "contacted": return .blue
         case "confirmed": return Brand.primary
-        case "estimated": return .blue
-        case "completed": return .purple
+        case "completed": return .gray
         case "cancelled": return .red
-        default: return .gray
+        default: return Brand.accent
         }
     }
 
     var statusLabel: String {
-        switch (lead.status ?? "").lowercased() {
-        case "pending": return "Pendiente"
-        case "confirmed": return "Confirmado"
-        case "estimated": return "Cotizado"
-        case "completed": return "Completado"
-        case "cancelled": return "Cancelado"
-        default: return lead.status ?? "Nuevo"
+        switch lead.status {
+        case "pending": return "PENDIENTE"
+        case "contacted": return "CONTACTADO"
+        case "confirmed": return "CONFIRMADO"
+        case "completed": return "COMPLETADO"
+        case "cancelled": return "CANCELADO"
+        default: return "PENDIENTE"
         }
     }
 
-    var cleanPhoneDigits: String {
-        lead.phone.filter { $0.isNumber }
+    var cleanPhoneForWhatsApp: String {
+        let digits = lead.phone.filter { "0123456789".contains($0) }
+        if digits.count == 10 {
+            return "1" + digits
+        }
+        return digits
+    }
+
+    var prefilledWhatsAppMessage: String {
+        let name = lead.name.components(separatedBy: " ").first ?? lead.name
+        let svcs = lead.services?.joined(separator: ", ") ?? "Corte de Césped"
+        let text = "¡Hola \(name)! Te saludo de Rodriguez LawnCare sobre tu solicitud para \(svcs). ¿Sigues disponible para confirmar la visita?"
+        return text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // Header Row: Name & Status Pill
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(lead.name)
-                        .font(.system(size: 17, weight: .bold))
+                        .font(.headline)
                         .foregroundStyle(.white)
-
-                    if let source = lead.source {
-                        Text(source)
+                    if let src = lead.source {
+                        Text(src)
                             .font(.caption2)
                             .foregroundStyle(.gray)
                     }
@@ -905,95 +981,83 @@ struct LeadCardView: View {
 
                 Spacer()
 
-                if let amt = lead.estimated_amount, amt > 0 {
-                    Text("$\(Int(amt))")
-                        .font(.system(size: 16, weight: .black))
-                        .foregroundStyle(Brand.primary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Brand.primary.opacity(0.15))
-                        .clipShape(Capsule())
-                }
-
                 Text(statusLabel)
                     .font(.caption2.bold())
-                    .foregroundStyle(statusColor)
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 3)
                     .background(statusColor.opacity(0.18))
+                    .foregroundStyle(statusColor)
                     .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(statusColor.opacity(0.4), lineWidth: 1)
+                    )
             }
 
-            if let svcs = lead.services, !svcs.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(svcs.prefix(2), id: \.self) { svc in
-                        Text(svc)
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.85))
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(Color.white.opacity(0.08))
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-                    if svcs.count > 2 {
-                        Text("+\(svcs.count - 2)")
-                            .font(.caption2)
-                            .foregroundStyle(.gray)
-                    }
-                }
-            }
-
+            // Address & Date
             VStack(alignment: .leading, spacing: 4) {
-                if let d = lead.date, !d.isEmpty {
+                if let addr = lead.address, !addr.isEmpty {
                     HStack(spacing: 6) {
-                        Image(systemName: "calendar")
+                        Image(systemName: "mappin.and.ellipse")
                             .font(.caption)
                             .foregroundStyle(Brand.primary)
-                        Text("\(d) • \(lead.time ?? "Horario regular")")
+                        Text(addr)
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.9))
-                        if let f = lead.frequency, !f.isEmpty {
-                            Text("(\(f))")
+                    }
+                }
+
+                HStack(spacing: 12) {
+                    if let d = lead.date {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
                                 .font(.caption2)
+                                .foregroundStyle(.gray)
+                            Text("\(d) \(lead.time ?? "")")
+                                .font(.caption)
                                 .foregroundStyle(.gray)
                         }
                     }
-                }
 
-                if let addr = lead.address, !addr.isEmpty, addr != "Por coordinar por llamada/mensaje" {
-                    Button {
-                        if let encoded = addr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                           let url = URL(string: "http://maps.apple.com/?q=\(encoded)") {
-                            UIApplication.shared.open(url)
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "mappin.and.ellipse")
+                    if let freq = lead.frequency {
+                        HStack(spacing: 4) {
+                            Image(systemName: "repeat")
+                                .font(.caption2)
+                                .foregroundStyle(Brand.accent)
+                            Text(freq)
                                 .font(.caption)
-                                .foregroundStyle(.red.opacity(0.9))
-                            Text(addr)
-                                .font(.caption)
-                                .foregroundStyle(.blue.opacity(0.9))
-                                .lineLimit(1)
-                            Image(systemName: "arrow.up.right.square")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.blue.opacity(0.7))
+                                .foregroundStyle(Brand.accent)
                         }
                     }
                 }
             }
 
-            // Quick actions
+            // Services chips
+            if let services = lead.services, !services.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(services, id: \.self) { svc in
+                            Text(svc)
+                                .font(.system(size: 11, weight: .semibold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Brand.cardLight)
+                                .foregroundStyle(.white.opacity(0.9))
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                    }
+                }
+            }
+
+            // Action Buttons: WhatsApp & Phone Call
             HStack(spacing: 10) {
+                // WhatsApp Button
                 Button {
-                    let greeting = "Hola \(lead.name), te saludamos de Rodriguez LawnCare sobre tu solicitud de cita/servicio."
-                    let phoneDial = cleanPhoneDigits.starts(with: "1") ? cleanPhoneDigits : "1\(cleanPhoneDigits)"
-                    if let enc = greeting.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                       let url = URL(string: "https://wa.me/\(phoneDial)?text=\(enc)") {
+                    let waURLString = "https://wa.me/\(cleanPhoneForWhatsApp)?text=\(prefilledWhatsAppMessage)"
+                    if let url = URL(string: waURLString) {
                         UIApplication.shared.open(url)
                     }
                 } label: {
-                    HStack(spacing: 5) {
+                    HStack(spacing: 6) {
                         Image(systemName: "message.fill")
                         Text("WhatsApp")
                     }
@@ -1005,12 +1069,14 @@ struct LeadCardView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
+                // Call Phone Button
                 Button {
-                    if let url = URL(string: "tel://\(cleanPhoneDigits)") {
+                    let clean = lead.phone.filter { "0123456789".contains($0) }
+                    if let url = URL(string: "tel://\(clean)") {
                         UIApplication.shared.open(url)
                     }
                 } label: {
-                    HStack(spacing: 5) {
+                    HStack(spacing: 6) {
                         Image(systemName: "phone.fill")
                         Text("Llamar")
                     }
@@ -1018,20 +1084,26 @@ struct LeadCardView: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
-                    .background(Color.blue)
+                    .background(Brand.cardLight)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
-                Button {
-                    onDetails()
-                } label: {
-                    Image(systemName: "square.and.pencil")
-                        .font(.caption.bold())
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Brand.cardLight)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                // Apple Maps Button
+                if let addr = lead.address, !addr.isEmpty {
+                    Button {
+                        let query = addr.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                        if let url = URL(string: "http://maps.apple.com/?q=\(query)") {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        Image(systemName: "map.fill")
+                            .font(.caption.bold())
+                            .foregroundStyle(Brand.primary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Brand.cardLight)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
                 }
             }
             .padding(.top, 4)
@@ -1041,46 +1113,27 @@ struct LeadCardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                .stroke(lead.status == "pending" ? Brand.accent.opacity(0.4) : Color.white.opacity(0.06), lineWidth: 1)
         )
     }
 }
 
-// MARK: - FILTER CHIP
-struct FilterChip: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.caption.bold())
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(isSelected ? Brand.primary : Brand.card)
-                .foregroundStyle(isSelected ? .black : .white.opacity(0.8))
-                .clipShape(Capsule())
-        }
-    }
-}
-
-// MARK: - DETAIL & STATUS UPDATE SHEET
+// MARK: - LEAD DETAIL SHEET
 struct LeadDetailSheet: View {
     @Environment(\.dismiss) var dismiss
-    @State var lead: Lead
+    let lead: Lead
     @ObservedObject var store: LawnCareStore
-    @State private var notesText: String = ""
-    @State private var amountText: String = ""
+
     @State private var selectedStatus: String = "pending"
+    @State private var amountText: String = ""
+    @State private var notesText: String = ""
 
     let statuses = [
-        ("pending", "🟡 Pendiente"),
-        ("contacted", "🔵 Contactado"),
-        ("estimated", "💵 Cotizado"),
-        ("confirmed", "🟢 Confirmado"),
-        ("completed", "🟣 Completado"),
-        ("cancelled", "🔴 Cancelado")
+        ("pending", "Pendiente"),
+        ("contacted", "Contactado"),
+        ("confirmed", "Confirmado"),
+        ("completed", "Completado"),
+        ("cancelled", "Cancelado")
     ]
 
     var body: some View {
@@ -1090,7 +1143,7 @@ struct LeadDetailSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 4) {
                             Text(lead.name)
                                 .font(.title2.bold())
                                 .foregroundStyle(.white)
@@ -1250,31 +1303,12 @@ struct NewLeadSheet: View {
                                 .keyboardType(.phonePad)
                                 .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
 
-                            TextField("Dirección completa", text: $address)
+                            TextField("Dirección (ej. 4201 Trimmier Rd)", text: $address)
                                 .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
                         }
 
                         Group {
-                            Text("HORARIO Y FRECUENCIA").font(.caption.bold()).foregroundStyle(.gray)
-                            HStack {
-                                TextField("Fecha (ej. Mañana, Sábado)", text: $date)
-                                    .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
-                                TextField("Hora (ej. 10:00 AM)", text: $time)
-                                    .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
-                            }
-
-                            Picker("Frecuencia", selection: $frequency) {
-                                Text("Una sola vez").tag("Una vez")
-                                Text("Quincenal (Recomendado)").tag("Quincenal")
-                                Text("Semanal").tag("Semanal")
-                                Text("Mensual").tag("Mensual")
-                            }
-                            .pickerStyle(.menu)
-                            .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10))
-                        }
-
-                        Group {
-                            Text("SERVICIOS A REALIZAR").font(.caption.bold()).foregroundStyle(.gray)
+                            Text("SERVICIOS SOLICITADOS").font(.caption.bold()).foregroundStyle(.gray)
                             ForEach(availableServices, id: \.self) { svc in
                                 Button {
                                     if selectedServices.contains(svc) {
@@ -1286,8 +1320,7 @@ struct NewLeadSheet: View {
                                     HStack {
                                         Image(systemName: selectedServices.contains(svc) ? "checkmark.square.fill" : "square")
                                             .foregroundStyle(selectedServices.contains(svc) ? Brand.primary : .gray)
-                                        Text(svc)
-                                            .foregroundStyle(.white)
+                                        Text(svc).foregroundStyle(.white)
                                         Spacer()
                                     }
                                     .padding(10)
@@ -1298,17 +1331,17 @@ struct NewLeadSheet: View {
                         }
 
                         Group {
-                            Text("PRECIO ESTIMADO ($) & NOTAS").font(.caption.bold()).foregroundStyle(.gray)
-                            TextField("Precio acordado (ej. 65)", text: $amount)
-                                .keyboardType(.decimalPad)
-                                .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
-
-                            TextField("Notas adicionales o instrucciones del portón", text: $notes)
-                                .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+                            Text("FECHA Y HORA").font(.caption.bold()).foregroundStyle(.gray)
+                            HStack(spacing: 10) {
+                                TextField("Fecha (ej. Mañana)", text: $date)
+                                    .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+                                TextField("Hora (ej. 9:00 AM)", text: $time)
+                                    .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+                            }
                         }
 
                         Button {
-                            guard !name.isEmpty else { return }
+                            guard !name.isEmpty, !phone.isEmpty else { return }
                             let amt = Double(amount) ?? 0.0
                             Task {
                                 await store.createLead(
@@ -1326,7 +1359,7 @@ struct NewLeadSheet: View {
                                 dismiss()
                             }
                         } label: {
-                            Text("Guardar y Agendar Cita")
+                            Text("Crear y Guardar Cita")
                                 .font(.headline)
                                 .foregroundStyle(.black)
                                 .frame(maxWidth: .infinity)
@@ -1338,7 +1371,7 @@ struct NewLeadSheet: View {
                     .padding()
                 }
             }
-            .navigationTitle("Nueva Cita / Cliente")
+            .navigationTitle("Nueva Cita")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -1349,7 +1382,7 @@ struct NewLeadSheet: View {
     }
 }
 
-// MARK: - TAB 2: ESTIMATOR CALCULATOR
+// MARK: - TAB 2: ESTIMATOR CALCULATOR (POWERED BY REAL-TIME CLOUD RATES)
 struct EstimatorView: View {
     @ObservedObject var store: LawnCareStore
 
@@ -1369,6 +1402,15 @@ struct EstimatorView: View {
     @State private var showCopiedAlert = false
 
     var basePrice: Double {
+        if let rates = store.cloudConfig?.rates {
+            switch lawnSize {
+            case "small": return rates.small ?? 45.0
+            case "medium": return rates.medium ?? 65.0
+            case "large": return rates.large ?? 95.0
+            case "acreage": return rates.acre ?? 160.0
+            default: return rates.medium ?? 65.0
+            }
+        }
         switch lawnSize {
         case "small": return 45.0
         case "medium": return 65.0
@@ -1388,18 +1430,24 @@ struct EstimatorView: View {
 
     var addonsTotal: Double {
         var total = 0.0
-        if includeBushes { total += Double(bushCount) * 10.0 }
-        if includeMulch { total += Double(mulchYards) * 85.0 }
-        if includeTrees { total += 90.0 }
-        if includeCleanup { total += 75.0 }
-        if includeEdgingDethatch { total += 35.0 }
+        let bushUnit = store.cloudConfig?.addons?.bushes ?? 10.0
+        let mulchUnit = store.cloudConfig?.addons?.mulch ?? 85.0
+        let treeUnit = store.cloudConfig?.addons?.trees ?? 90.0
+        let cleanUnit = store.cloudConfig?.addons?.cleanups ?? 75.0
+        let edgeUnit = store.cloudConfig?.addons?.edging ?? 35.0
+
+        if includeBushes { total += Double(bushCount) * bushUnit }
+        if includeMulch { total += Double(mulchYards) * mulchUnit }
+        if includeTrees { total += treeUnit }
+        if includeCleanup { total += cleanUnit }
+        if includeEdgingDethatch { total += edgeUnit }
         return total
     }
 
     var frequencyDiscountPercent: Double {
         switch frequency {
-        case "weekly": return 0.10
-        case "biweekly": return 0.05
+        case "weekly": return store.cloudConfig?.rates?.weekly_discount ?? 0.10
+        case "biweekly": return store.cloudConfig?.rates?.biweekly_discount ?? 0.05
         default: return 0.0
         }
     }
@@ -1467,6 +1515,7 @@ struct EstimatorView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
+                        // Total Estimate Card
                         VStack(spacing: 6) {
                             Text("TOTAL ESTIMADO")
                                 .font(.caption.bold())
@@ -1499,40 +1548,43 @@ struct EstimatorView: View {
                                 .stroke(Brand.primary.opacity(0.3), lineWidth: 1)
                         )
 
+                        // Client quick info
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("CLIENTE (OPCIONAL)").font(.caption.bold()).foregroundStyle(.gray)
-                            HStack {
+                            Text("CLIENTE").font(.caption.bold()).foregroundStyle(.gray)
+                            HStack(spacing: 10) {
                                 TextField("Nombre del cliente", text: $clientName)
                                     .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 8)).foregroundStyle(.white)
                                 TextField("Teléfono", text: $clientPhone)
-                                    .keyboardType(.phonePad)
                                     .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 8)).foregroundStyle(.white)
                             }
                         }
 
+                        // Lawn Size
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("TAMAÑO DE LA PROPIEDAD").font(.caption.bold()).foregroundStyle(.gray)
+                            Text("TAMAÑO DEL JARDÍN").font(.caption.bold()).foregroundStyle(.gray)
                             Picker("Tamaño", selection: $lawnSize) {
-                                Text("Pequeño ($45)").tag("small")
-                                Text("Mediano ($65)").tag("medium")
-                                Text("Grande ($95)").tag("large")
-                                Text("Acre+ ($160)").tag("acreage")
+                                Text("< 5,000 sq ft").tag("small")
+                                Text("5k - 10k sq ft").tag("medium")
+                                Text("10k - 15k sq ft").tag("large")
+                                Text("Acre+").tag("acreage")
                             }
                             .pickerStyle(.segmented)
                         }
 
+                        // Grass Height
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("CONDICIÓN DEL CÉSPED").font(.caption.bold()).foregroundStyle(.gray)
-                            Picker("Condición", selection: $grassHeight) {
-                                Text("Normal").tag("normal")
+                            Text("ALTURA DEL CÉSPED").font(.caption.bold()).foregroundStyle(.gray)
+                            Picker("Altura", selection: $grassHeight) {
+                                Text("Normal (0)").tag("normal")
                                 Text("Alto (+ $25)").tag("tall")
                                 Text("Muy Crecido (+ $55)").tag("overgrown")
                             }
                             .pickerStyle(.segmented)
                         }
 
+                        // Frequency
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("FRECUENCIA").font(.caption.bold()).foregroundStyle(.gray)
+                            Text("FRECUENCIA DE SERVICIO").font(.caption.bold()).foregroundStyle(.gray)
                             Picker("Frecuencia", selection: $frequency) {
                                 Text("Puntual").tag("onetime")
                                 Text("Quincenal (-5%)").tag("biweekly")
@@ -1541,38 +1593,50 @@ struct EstimatorView: View {
                             .pickerStyle(.segmented)
                         }
 
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("SERVICIOS EXTRA AÑADIDOS").font(.caption.bold()).foregroundStyle(.gray)
+                        // Add-ons
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("SERVICIOS ADICIONALES").font(.caption.bold()).foregroundStyle(.gray)
 
-                            ToggleRow(icon: "scissors", title: "Poda de Arbustos / Setos", price: "$\(bushCount * 10)", isOn: $includeBushes)
+                            Toggle("Poda de Arbustos & Setos (+$10 c/u)", isOn: $includeBushes)
+                                .tint(Brand.primary)
+                                .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 8))
+
                             if includeBushes {
                                 Stepper("Cantidad de arbustos: \(bushCount)", value: $bushCount, in: 1...30)
-                                    .font(.caption).foregroundStyle(.white).padding(.horizontal)
+                                    .padding(10).background(Brand.cardLight).clipShape(RoundedRectangle(cornerRadius: 8))
                             }
 
-                            ToggleRow(icon: "shippingbox.fill", title: "Instalación de Mulch", price: "$\(mulchYards * 85)", isOn: $includeMulch)
-                            if includeMulch {
-                                Stepper("Yardas / Áreas: \(mulchYards)", value: $mulchYards, in: 1...10)
-                                    .font(.caption).foregroundStyle(.white).padding(.horizontal)
-                            }
+                            Toggle("Instalación de Mulch (+$85 por yarda)", isOn: $includeMulch)
+                                .tint(Brand.primary)
+                                .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 8))
 
-                            ToggleRow(icon: "leaf.fill", title: "Poda de Ramas de Árboles", price: "$90", isOn: $includeTrees)
-                            ToggleRow(icon: "trash.fill", title: "Limpieza General & Escombros", price: "$75", isOn: $includeCleanup)
-                            ToggleRow(icon: "square.dashed", title: "Bordeado Profundo de Aceras", price: "$35", isOn: $includeEdgingDethatch)
+                            Toggle("Poda y Descope de Árboles (+$90)", isOn: $includeTrees)
+                                .tint(Brand.primary)
+                                .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 8))
+
+                            Toggle("Limpieza y Retiro de Hojas/Escombros (+$75)", isOn: $includeCleanup)
+                                .tint(Brand.primary)
+                                .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 8))
+
+                            Toggle("Desorillado con Navaja / Banquetas (+$35)", isOn: $includeEdgingDethatch)
+                                .tint(Brand.primary)
+                                .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 8))
                         }
 
-                        VStack(spacing: 12) {
+                        // Share Buttons
+                        VStack(spacing: 10) {
                             Button {
-                                let phoneDigits = clientPhone.filter { $0.isNumber }
-                                let phoneDial = phoneDigits.starts(with: "1") ? phoneDigits : "1\(phoneDigits)"
-                                if let enc = quoteSummaryText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-                                    let urlStr = phoneDigits.isEmpty ? "https://wa.me/?text=\(enc)" : "https://wa.me/\(phoneDial)?text=\(enc)"
-                                    if let url = URL(string: urlStr) { UIApplication.shared.open(url) }
+                                let clean = clientPhone.filter { "0123456789".contains($0) }
+                                let waPhone = clean.count == 10 ? "1" + clean : clean
+                                let encoded = quoteSummaryText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                                let waURL = waPhone.isEmpty ? "https://wa.me/?text=\(encoded)" : "https://wa.me/\(waPhone)?text=\(encoded)"
+                                if let url = URL(string: waURL) {
+                                    UIApplication.shared.open(url)
                                 }
                             } label: {
                                 HStack {
                                     Image(systemName: "message.fill")
-                                    Text("Enviar Cotización por WhatsApp")
+                                    Text("Enviar Estimado por WhatsApp")
                                 }
                                 .font(.headline)
                                 .foregroundStyle(.white)
@@ -1582,20 +1646,53 @@ struct EstimatorView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
 
-                            Button {
-                                UIPasteboard.general.string = quoteSummaryText
-                                showCopiedAlert = true
-                            } label: {
-                                HStack {
-                                    Image(systemName: "doc.on.doc.fill")
-                                    Text("Copiar Cotización al Portapapeles")
+                            HStack(spacing: 10) {
+                                Button {
+                                    UIPasteboard.general.string = quoteSummaryText
+                                    showCopiedAlert = true
+                                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "doc.on.doc")
+                                        Text("Copiar Cotización")
+                                    }
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(12)
+                                    .background(Brand.card)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
                                 }
-                                .font(.subheadline.bold())
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(14)
-                                .background(Brand.card)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                                Button {
+                                    Task {
+                                        let leadName = clientName.isEmpty ? "Cliente Cotización" : clientName
+                                        await store.createLead(
+                                            name: leadName,
+                                            phone: clientPhone,
+                                            services: ["Corte de Césped (\(lawnSizeName))"],
+                                            address: "",
+                                            date: "Estimado",
+                                            time: "",
+                                            frequency: frequency,
+                                            description: quoteSummaryText,
+                                            amount: totalEstimate,
+                                            notes: "Generado desde Calculadora"
+                                        )
+                                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                                    }
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "plus.circle.fill")
+                                        Text("Guardar Cita")
+                                    }
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.black)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(12)
+                                    .background(Brand.primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                }
                             }
                         }
                         .padding(.top, 10)
@@ -1605,111 +1702,92 @@ struct EstimatorView: View {
             }
             .navigationTitle("Dar Estimados 💵")
             .navigationBarTitleDisplayMode(.inline)
-            .alert("¡Cotización Lista!", isPresented: $showCopiedAlert) {
+            .alert("Cotización Copiada", isPresented: $showCopiedAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("La cotización ha sido copiada exitosamente.")
+                Text("El resumen formal ha sido copiado al portapapeles listo para pegar.")
             }
         }
     }
 }
 
-struct ToggleRow: View {
-    let icon: String
-    let title: String
-    let price: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        HStack {
-            Image(systemName: icon).foregroundStyle(Brand.primary).frame(width: 24)
-            Text(title).font(.subheadline).foregroundStyle(.white)
-            Spacer()
-            Text(price).font(.caption.bold()).foregroundStyle(Brand.accent)
-            Toggle("", isOn: $isOn).labelsHidden().toggleStyle(SwitchToggleStyle(tint: Brand.primary))
-        }
-        .padding(12)
-        .background(Brand.card)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-    }
-}
-
-// MARK: - TAB 3: TRABAJOS WEB (MATCHING IMAGE 1)
+// MARK: - TAB 3: GALLERY ADMIN VIEW (MATCHING IMAGE 1 PORTFOLIO & POPUP)
 struct GalleryAdminView: View {
     @ObservedObject var store: LawnCareStore
     @State private var selectedFilter = "all"
     @State private var showAddPhotoSheet = false
-    @State private var showPhotoActionDialog = false
-    @State private var activePhotoAction: GalleryPhoto? = nil
-    @State private var photoToEdit: GalleryPhoto? = nil
-    @State private var fullScreenPhoto: GalleryPhoto? = nil
 
-    let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
-    ]
+    // Action dialog state
+    @State private var selectedPhotoForAction: GalleryPhoto? = nil
+    @State private var showPhotoActionDialog = false
+    @State private var showEditPhotoSheet = false
+    @State private var showFullscreenImage = false
 
     var filteredPhotos: [GalleryPhoto] {
         if selectedFilter == "all" {
             return store.gallery
         }
         return store.gallery.filter {
-            let cat = $0.category.lowercased()
-            let filter = selectedFilter.lowercased()
-            return cat.contains(filter) || filter.contains(cat)
+            $0.category.lowercased().contains(selectedFilter.lowercased())
         }
     }
-
-    var countFront: Int { store.gallery.filter { $0.category.contains("Front") }.count }
-    var countBack: Int { store.gallery.filter { $0.category.contains("Back") }.count }
-    var countMulch: Int { store.gallery.filter { $0.category.contains("Mulch") }.count }
-    var countTree: Int { store.gallery.filter { $0.category.contains("Tree") }.count }
-    var countCleanups: Int { store.gallery.filter { $0.category.contains("Clean") || $0.category.contains("Shrub") || $0.category.contains("General") }.count }
 
     var body: some View {
         NavigationView {
             ZStack {
                 Brand.background.ignoresSafeArea()
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        // Section Header matching Web Image 1
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Real Work in Killeen & Central Texas")
-                                .font(.title3.bold())
-                                .foregroundStyle(.white)
-                            Text("Fotos activas en la web. Toca cualquier foto para reemplazar, mover o editar.")
-                                .font(.caption)
-                                .foregroundStyle(.gray)
-                        }
+                VStack(spacing: 0) {
+                    // Header Title & Section
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("PORTAFOLIO OFICIAL")
+                            .font(.caption.bold())
+                            .foregroundStyle(Brand.primary)
+                        Text("Real Work in Killeen & Central Texas")
+                            .font(.title3.bold())
+                            .foregroundStyle(.white)
+                        Text("Toca cualquier foto para reemplazarla, editar detalles, moverla o eliminarla.")
+                            .font(.caption2)
+                            .foregroundStyle(.gray)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
 
-                        // Filter Chips matching Web Image 1
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                FilterChip(title: "★ All Projects (\(store.gallery.count))", isSelected: selectedFilter == "all") { selectedFilter = "all" }
-                                FilterChip(title: "🏡 Front Yard (\(countFront))", isSelected: selectedFilter == "front") { selectedFilter = "front" }
-                                FilterChip(title: "🌿 Back Yard (\(countBack))", isSelected: selectedFilter == "back") { selectedFilter = "back" }
-                                FilterChip(title: "🪵 Mulch (\(countMulch))", isSelected: selectedFilter == "mulch") { selectedFilter = "mulch" }
-                                FilterChip(title: "🌳 Tree Care (\(countTree))", isSelected: selectedFilter == "tree") { selectedFilter = "tree" }
-                                FilterChip(title: "🧹 Cleanups & More (\(countCleanups))", isSelected: selectedFilter == "clean") { selectedFilter = "clean" }
-                            }
+                    // Categories Filter Bar (Matching Image 1)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            GalleryFilterPill(title: "★ All Projects \(store.gallery.count)", isSelected: selectedFilter == "all") { selectedFilter = "all" }
+                            GalleryFilterPill(title: "🏡 Front Yard \(store.gallery.filter { $0.category.lowercased().contains("front") }.count)", isSelected: selectedFilter == "front") { selectedFilter = "front" }
+                            GalleryFilterPill(title: "🌿 Back Yard \(store.gallery.filter { $0.category.lowercased().contains("back") }.count)", isSelected: selectedFilter == "back") { selectedFilter = "back" }
+                            GalleryFilterPill(title: "🪵 Mulch \(store.gallery.filter { $0.category.lowercased().contains("mulch") }.count)", isSelected: selectedFilter == "mulch") { selectedFilter = "mulch" }
+                            GalleryFilterPill(title: "🌳 Tree Care", isSelected: selectedFilter == "tree") { selectedFilter = "tree" }
+                            GalleryFilterPill(title: "✂️ Cleanups & More", isSelected: selectedFilter == "clean") { selectedFilter = "clean" }
                         }
+                        .padding(.horizontal)
+                        .padding(.vertical, 6)
+                    }
 
-                        // Gallery Cards Grid matching Web Image 1
-                        LazyVGrid(columns: columns, spacing: 14) {
+                    // 2-Column Grid matching website layout
+                    ScrollView {
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 14) {
                             ForEach(filteredPhotos) { photo in
                                 GalleryWorkCard(photo: photo, store: store)
                                     .onTapGesture {
-                                        activePhotoAction = photo
+                                        selectedPhotoForAction = photo
                                         showPhotoActionDialog = true
                                     }
                             }
                         }
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+                        .padding(.bottom, 80)
                     }
-                    .padding()
+                    .refreshable {
+                        await store.refreshAll()
+                    }
                 }
             }
-            .navigationTitle("Trabajos en la Web 📸")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -1717,8 +1795,8 @@ struct GalleryAdminView: View {
                         showAddPhotoSheet = true
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "plus")
-                            Text("Subir Trabajo")
+                            Image(systemName: "plus.circle.fill")
+                            Text("Subir")
                         }
                         .font(.caption.bold())
                         .foregroundStyle(.black)
@@ -1729,155 +1807,197 @@ struct GalleryAdminView: View {
                     }
                 }
             }
-            // Action Menu Popup on Tap ("Cuadrito")
-            .confirmationDialog("Administrar Foto", isPresented: $showPhotoActionDialog, titleVisibility: .visible) {
-                if let photo = activePhotoAction {
-                    Button("🔝 Mover al Frente (Posición #1)") {
+            .confirmationDialog(
+                "Opciones del Trabajo",
+                isPresented: $showPhotoActionDialog,
+                titleVisibility: .visible
+            ) {
+                if let photo = selectedPhotoForAction {
+                    Button("🔄 Reemplazar Foto de la Web") {
+                        showEditPhotoSheet = true
+                    }
+                    Button("✏️ Editar Título, Categoría o Ubicación") {
+                        showEditPhotoSheet = true
+                    }
+                    Button("🔝 Mover al Inicio (#1 Destacado)") {
                         Task { await store.moveGalleryPhotoToTop(id: photo.id) }
                     }
-                    Button("✏️ Editar Título / Categoría") {
-                        photoToEdit = photo
+                    Button("🔍 Ver en Pantalla Completa") {
+                        showFullscreenImage = true
                     }
-                    Button("🔄 Reemplazar Foto") {
-                        photoToEdit = photo
-                    }
-                    Button("🔍 Ver Pantalla Completa") {
-                        fullScreenPhoto = photo
-                    }
-                    Button("🗑️ Eliminar de la Web", role: .destructive) {
+                    Button("🗑️ Eliminar Trabajo de la Web", role: .destructive) {
                         Task { await store.deleteGalleryPhoto(id: photo.id) }
                     }
                 }
                 Button("Cancelar", role: .cancel) {}
             } message: {
-                if let photo = activePhotoAction {
-                    Text("Trabajo: #\(String(format: "%02d", photo.id)) - \(photo.title)")
+                if let photo = selectedPhotoForAction {
+                    Text("#\(String(format: "%02d", photo.id)) • \(photo.title) (\(photo.category))")
                 }
             }
             .sheet(isPresented: $showAddPhotoSheet) {
                 AddGalleryPhotoSheet(store: store)
             }
-            .sheet(item: $photoToEdit) { photo in
-                EditGalleryPhotoSheet(photo: photo, store: store)
+            .sheet(isPresented: $showEditPhotoSheet) {
+                if let photo = selectedPhotoForAction {
+                    EditGalleryPhotoSheet(photo: photo, store: store)
+                }
             }
-            .sheet(item: $fullScreenPhoto) { photo in
-                FullScreenPhotoSheet(photo: photo, store: store)
+            .fullScreenCover(isPresented: $showFullscreenImage) {
+                if let photo = selectedPhotoForAction {
+                    FullscreenPhotoView(photo: photo, store: store)
+                }
             }
         }
     }
 }
 
-// MARK: - GALLERY WORK CARD (MATCHING WEB IMAGE 1)
+// MARK: - GALLERY WORK CARD (MATCHING IMAGE 1 DESIGN)
 struct GalleryWorkCard: View {
     let photo: GalleryPhoto
     @ObservedObject var store: LawnCareStore
 
-    var categoryIcon: String {
-        let cat = photo.category.lowercased()
-        if cat.contains("front") { return "🏡" }
-        if cat.contains("back") { return "🌿" }
-        if cat.contains("mulch") { return "🪵" }
-        if cat.contains("tree") { return "🌳" }
-        if cat.contains("shrub") || cat.contains("bush") { return "✂️" }
-        if cat.contains("clean") { return "🧹" }
-        return "🌱"
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Image with Overlaid Badges
+        VStack(alignment: .leading, spacing: 0) {
+            // Photo Container with Overlays
             ZStack(alignment: .top) {
+                // Async / Cached Image
                 AsyncImage(url: URL(string: store.fullMediaURL(photo.url))) { phase in
                     switch phase {
-                    case .empty:
-                        Rectangle().fill(Brand.cardLight)
-                            .frame(height: 130)
-                            .overlay(ProgressView())
                     case .success(let image):
-                        image.resizable().scaledToFill()
-                            .frame(height: 130)
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(height: 125)
                             .clipped()
                     case .failure:
-                        Rectangle().fill(Brand.cardLight)
-                            .frame(height: 130)
-                            .overlay(
-                                VStack(spacing: 4) {
-                                    Image(systemName: "photo.fill").foregroundStyle(.gray)
-                                    Text("Verificado").font(.caption2).foregroundStyle(.gray)
-                                }
-                            )
-                    @unknown default:
-                        EmptyView()
+                        ZStack {
+                            Color(red: 0.15, green: 0.20, blue: 0.28)
+                            VStack(spacing: 4) {
+                                Image(systemName: "photo")
+                                    .font(.title2)
+                                    .foregroundStyle(.gray)
+                                Text("Foto #\(photo.id)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.gray)
+                            }
+                        }
+                        .frame(height: 125)
+                    default:
+                        ZStack {
+                            Brand.cardLight
+                            ProgressView().tint(Brand.primary)
+                        }
+                        .frame(height: 125)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                // Top Badges Row matching Web Image 1 (#08, Category Pill)
+                // Top Ribbon: #08 Badge & Category Pill
                 HStack {
                     Text("#\(String(format: "%02d", photo.id))")
-                        .font(.caption2.bold())
+                        .font(.system(size: 10, weight: .black))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
+                        .padding(.vertical, 2)
                         .background(Color.black.opacity(0.75))
-                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
 
                     Spacer()
 
-                    Text("\(categoryIcon) \(photo.category)")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(Color.black.opacity(0.75))
-                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                    HStack(spacing: 3) {
+                        Image(systemName: "house.fill")
+                            .font(.system(size: 8))
+                        Text(photo.category)
+                            .font(.system(size: 9, weight: .bold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.black.opacity(0.75))
+                    .clipShape(Capsule())
                 }
                 .padding(6)
             }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            // Info Card matching Web Image 1
-            VStack(alignment: .leading, spacing: 4) {
+            // Info Card Bottom
+            VStack(alignment: .leading, spacing: 3) {
                 HStack {
-                    Text("\(categoryIcon) \(photo.category.uppercased())")
-                        .font(.system(size: 9, weight: .bold))
+                    Text(photo.category.uppercased())
+                        .font(.system(size: 9, weight: .extrabold))
                         .foregroundStyle(Brand.primary)
                     Spacer()
                     Text("#\(String(format: "%02d", photo.id))")
-                        .font(.system(size: 9))
+                        .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.gray)
                 }
 
                 Text(photo.title)
-                    .font(.caption.bold())
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .frame(height: 32, alignment: .topLeading)
+                    .lineLimit(1)
 
                 HStack {
-                    Text("📍 \(photo.location ?? "Killeen & Central TX")")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.gray)
+                    HStack(spacing: 2) {
+                        Image(systemName: "mappin")
+                            .font(.system(size: 8))
+                            .foregroundStyle(.red)
+                        Text(photo.location ?? "Killeen & Central TX")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.gray)
+                    }
+
                     Spacer()
-                    Text("✓ Verificado")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(Color(red: 0.15, green: 0.85, blue: 0.45))
+
+                    HStack(spacing: 2) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 8))
+                            .foregroundStyle(Brand.primary)
+                        Text("Verificado")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(Brand.primary)
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Brand.primary.opacity(0.15))
+                    .clipShape(Capsule())
                 }
             }
-            .padding(.horizontal, 6)
-            .padding(.bottom, 6)
+            .padding(8)
         }
-        .padding(6)
         .background(Brand.card)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.white.opacity(0.06), lineWidth: 1)
         )
     }
 }
 
-// MARK: - FULL SCREEN PHOTO SHEET
-struct FullScreenPhotoSheet: View {
+// MARK: - GALLERY FILTER PILL
+struct GalleryFilterPill: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .bold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(isSelected ? Brand.primaryDark : Brand.card)
+                .foregroundStyle(isSelected ? Brand.primary : .gray)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule().stroke(isSelected ? Brand.primary : Color.white.opacity(0.06), lineWidth: 1)
+                )
+        }
+    }
+}
+
+// MARK: - FULLSCREEN PHOTO VIEW
+struct FullscreenPhotoView: View {
     @Environment(\.dismiss) var dismiss
     let photo: GalleryPhoto
     @ObservedObject var store: LawnCareStore
@@ -1885,23 +2005,43 @@ struct FullScreenPhotoSheet: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
+
             VStack {
                 HStack {
-                    Text(photo.title).font(.headline).foregroundStyle(.white)
                     Spacer()
-                    Button("Cerrar") { dismiss() }.foregroundStyle(.white)
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title)
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                    .padding()
                 }
-                .padding()
 
                 Spacer()
+
                 AsyncImage(url: URL(string: store.fullMediaURL(photo.url))) { phase in
                     if let image = phase.image {
-                        image.resizable().scaledToFit()
+                        image
+                            .resizable()
+                            .scaledToFit()
                     } else {
-                        ProgressView()
+                        ProgressView().tint(.white)
                     }
                 }
+
                 Spacer()
+
+                VStack(spacing: 6) {
+                    Text(photo.title)
+                        .font(.headline.bold())
+                        .foregroundStyle(.white)
+                    Text("\(photo.category) • #\(photo.id) • \(photo.location ?? "Killeen & Central TX")")
+                        .font(.caption)
+                        .foregroundStyle(Brand.primary)
+                }
+                .padding(.bottom, 24)
             }
         }
     }
@@ -1914,7 +2054,7 @@ struct EditGalleryPhotoSheet: View {
     @ObservedObject var store: LawnCareStore
 
     @State private var title = ""
-    @State private var category = ""
+    @State private var category = "Front Yard"
     @State private var location = ""
     @State private var imageURL = ""
 
@@ -1938,7 +2078,7 @@ struct EditGalleryPhotoSheet: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Título del Trabajo")
                         .font(.caption.bold()).foregroundStyle(.gray)
-                    TextField("ej. Front Yard Clean & Sharp Mowing", text: $title)
+                    TextField("Título", text: $title)
                         .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
 
                     Text("Categoría")
@@ -1953,12 +2093,12 @@ struct EditGalleryPhotoSheet: View {
 
                     Text("Ubicación")
                         .font(.caption.bold()).foregroundStyle(.gray)
-                    TextField("ej. Killeen & Central TX", text: $location)
+                    TextField("Ubicación", text: $location)
                         .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
 
-                    Text("Reemplazar URL de Imagen")
+                    Text("URL de la Imagen (o Ruta ./assets/gallery/...)")
                         .font(.caption.bold()).foregroundStyle(.gray)
-                    TextField("https://... o ruta de foto", text: $imageURL)
+                    TextField("URL de la Imagen", text: $imageURL)
                         .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
 
                     Spacer()
@@ -1969,7 +2109,7 @@ struct EditGalleryPhotoSheet: View {
                                 id: photo.id,
                                 title: title,
                                 category: category,
-                                urlString: imageURL.isEmpty ? nil : imageURL,
+                                urlString: imageURL,
                                 location: location
                             )
                             dismiss()
@@ -2088,7 +2228,122 @@ struct AddGalleryPhotoSheet: View {
     }
 }
 
-// MARK: - TAB 4: WEB & SERVIDOR (WITH HERO BACKGROUND MANAGER & ANALYTICS)
+// MARK: - TAB 4: CLOUD LIVE ADMIN VIEW (EMBEDDED LIVE DASHBOARD)
+struct CloudLiveAdminView: View {
+    @ObservedObject var store: LawnCareStore
+    @State private var reloadTrigger = false
+
+    var adminURL: URL {
+        URL(string: "\(store.cleanURL)/admin") ?? URL(string: "https://rodriguezlawncarenuevaa-production.up.railway.app/admin")!
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    CloudAdminWebView(url: adminURL, reloadTrigger: $reloadTrigger)
+                        .background(Brand.background)
+                }
+            }
+            .navigationTitle("Panel Cloud 24/7 🌐")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    HStack(spacing: 6) {
+                        Circle().fill(store.isOnline ? Color.green : Color.red).frame(width: 8, height: 8)
+                        Text(store.isOnline ? "Online" : "Offline")
+                            .font(.caption2.bold())
+                            .foregroundStyle(store.isOnline ? .green : .red)
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    HStack(spacing: 12) {
+                        Button {
+                            reloadTrigger = true
+                            UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .foregroundStyle(Brand.primary)
+                        }
+
+                        Button {
+                            UIApplication.shared.open(adminURL)
+                        } label: {
+                            Image(systemName: "safari")
+                                .foregroundStyle(Brand.primary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - WKWEBVIEW REPRESENTABLE FOR LIVE EMBEDDED CONTROL PANEL
+struct CloudAdminWebView: UIViewRepresentable {
+    let url: URL
+    @Binding var reloadTrigger: Bool
+
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.allowsInlineMediaPlayback = true
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = context.coordinator
+        webView.isOpaque = false
+        webView.backgroundColor = UIColor(red: 0.06, green: 0.08, blue: 0.12, alpha: 1.0)
+        webView.scrollView.backgroundColor = UIColor(red: 0.06, green: 0.08, blue: 0.12, alpha: 1.0)
+
+        let refreshControl = UIRefreshControl()
+        refreshControl.addTarget(context.coordinator, action: #selector(Coordinator.handleRefresh(_:)), for: .valueChanged)
+        refreshControl.tintColor = UIColor(red: 0.13, green: 0.77, blue: 0.36, alpha: 1.0)
+        webView.scrollView.addSubview(refreshControl)
+        context.coordinator.refreshControl = refreshControl
+        context.coordinator.webView = webView
+
+        let req = URLRequest(url: url)
+        webView.load(req)
+        return webView
+    }
+
+    func updateUIView(_ uiView: WKWebView, context: Context) {
+        if reloadTrigger {
+            uiView.reload()
+            DispatchQueue.main.async {
+                reloadTrigger = false
+            }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject, WKNavigationDelegate {
+        var parent: CloudAdminWebView
+        weak var webView: WKWebView?
+        weak var refreshControl: UIRefreshControl?
+
+        init(_ parent: CloudAdminWebView) {
+            self.parent = parent
+        }
+
+        @objc func handleRefresh(_ sender: UIRefreshControl) {
+            webView?.reload()
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            refreshControl?.endRefreshing()
+        }
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            refreshControl?.endRefreshing()
+        }
+    }
+}
+
+// MARK: - TAB 5: WEB, SERVIDOR & CENTRO DE ACTUALIZACIONES OTA
 struct WebAdminView: View {
     @ObservedObject var store: LawnCareStore
     @State private var serverInput = ""
@@ -2102,7 +2357,84 @@ struct WebAdminView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        // Analytics Card (Visitas en Vivo)
+                        // 1. OTA & ONLINE UPDATES CENTER
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "bolt.horizontal.fill")
+                                    .foregroundStyle(Brand.accent)
+                                Text("CENTRO DE ACTUALIZACIONES ONLINE (OTA)")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                                Spacer()
+                                Text("v\(store.currentAppVersion)")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(Brand.primary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(Brand.primaryDark.opacity(0.3))
+                                    .clipShape(Capsule())
+                            }
+
+                            Text("Actualiza la app inalámbricamente por el aire sin necesidad de conectarla por cable a la PC ni reenviar archivos.")
+                                .font(.caption)
+                                .foregroundStyle(.gray)
+
+                            HStack {
+                                Text("Estado:")
+                                    .font(.caption).foregroundStyle(.gray)
+                                Spacer()
+                                Text(store.updateCheckStatus)
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.primary)
+                            }
+
+                            HStack(spacing: 10) {
+                                Button {
+                                    Task { await store.checkOTAUpdate(manual: true) }
+                                } label: {
+                                    HStack {
+                                        if store.isCheckingUpdate {
+                                            ProgressView().tint(.white).scaleEffect(0.8)
+                                        } else {
+                                            Image(systemName: "arrow.triangle.2.circlepath")
+                                        }
+                                        Text("Buscar Actualizaciones")
+                                    }
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(10)
+                                    .background(Brand.cardLight)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                }
+
+                                Button {
+                                    if let url = URL(string: "\(store.cleanURL)/instalar") {
+                                        UIApplication.shared.open(url)
+                                    }
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "arrow.down.circle.fill")
+                                        Text("Instalar OTA")
+                                    }
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.black)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(10)
+                                    .background(Brand.primary)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                }
+                            }
+                        }
+                        .padding()
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Brand.accent.opacity(0.4), lineWidth: 1)
+                        )
+
+                        // 2. Analytics Card (Visitas en Vivo)
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Image(systemName: "chart.bar.xaxis")
@@ -2131,7 +2463,7 @@ struct WebAdminView: View {
                         .background(Brand.card)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
 
-                        // HERO BACKGROUND MANAGER BUTTON (MATCHING IMAGE 2)
+                        // 3. HERO BACKGROUND MANAGER
                         VStack(alignment: .leading, spacing: 10) {
                             Text("ADMINISTRADOR DEL FONDO DE LA PÁGINA")
                                 .font(.caption.bold())
@@ -2171,11 +2503,11 @@ struct WebAdminView: View {
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 14)
                                         .stroke(Brand.primary.opacity(0.4), lineWidth: 1)
-                                )
+                                 )
                             }
                         }
 
-                        // Server Health & Status
+                        // 4. Server Health & Status
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Circle()
@@ -2227,62 +2559,7 @@ struct WebAdminView: View {
                         .background(Brand.card)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
 
-                        // Quick Access Shortcuts
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("ACCESOS DIRECTOS DE TU NEGOCIO")
-                                .font(.caption.bold()).foregroundStyle(.gray)
-
-                            Button {
-                                if let url = URL(string: "https://rodriguezlawncarenuevaa-production.up.railway.app") {
-                                    UIApplication.shared.open(url)
-                                }
-                            } label: {
-                                HStack {
-                                    Image(systemName: "safari.fill").foregroundStyle(Brand.primary)
-                                    VStack(alignment: .leading) {
-                                        Text("Abrir Sitio Web de Rodriguez LawnCare")
-                                            .font(.subheadline.bold()).foregroundStyle(.white)
-                                        Text("rodriguezlawncare.com / Railway")
-                                            .font(.caption2).foregroundStyle(.gray)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "arrow.up.right").font(.caption).foregroundStyle(.gray)
-                                }
-                                .padding()
-                                .background(Brand.card)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                            }
-
-                            HStack(spacing: 10) {
-                                Button {
-                                    if let url = URL(string: "tel://2548528163") { UIApplication.shared.open(url) }
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text("Línea IA 24/7").font(.caption2).foregroundStyle(.gray)
-                                        Text("(254) 852-8163").font(.caption.bold()).foregroundStyle(Brand.primary)
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(10)
-                                    .background(Brand.card)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                                }
-
-                                Button {
-                                    if let url = URL(string: "tel://2546121399") { UIApplication.shared.open(url) }
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text("Línea Directa").font(.caption2).foregroundStyle(.gray)
-                                        Text("(254) 612-1399").font(.caption.bold()).foregroundStyle(.white)
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(10)
-                                    .background(Brand.card)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                                }
-                            }
-                        }
-
-                        // Server URL Settings
+                        // 5. Server URL Settings
                         VStack(alignment: .leading, spacing: 10) {
                             Text("URL DEL SERVIDOR WEB").font(.caption.bold()).foregroundStyle(.gray)
                             TextField("https://tu-servidor.up.railway.app", text: $serverInput)
@@ -2306,9 +2583,9 @@ struct WebAdminView: View {
                         }
 
                         VStack(spacing: 4) {
-                            Text("Rodriguez LawnCare Manager • Versión 2.0.0")
-                                .font(.caption2).foregroundStyle(.gray)
-                            Text("Conectado en tiempo real con la web y notificaciones automáticas")
+                            Text("rodriguezlawncareios • Versión \(store.currentAppVersion) (Build \(store.currentAppBuild))")
+                                .font(.caption2.bold()).foregroundStyle(.gray)
+                            Text("Conexión 100% online con Railway y compilación inalámbrica OTA")
                                 .font(.caption2).foregroundStyle(.gray.opacity(0.7))
                         }
                         .frame(maxWidth: .infinity)
@@ -2317,7 +2594,7 @@ struct WebAdminView: View {
                     .padding()
                 }
             }
-            .navigationTitle("Web & Servidor ⚙️")
+            .navigationTitle("Ajustes & Sistema OTA ⚙️")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 serverInput = store.serverURL
@@ -2334,6 +2611,400 @@ struct WebAdminView: View {
     }
 }
 
+// MARK: - OTA UPDATE MODAL SHEET (1-TAP WIRELESS INSTALLATION)
+struct OTAUpdateSheetView: View {
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject var store: LawnCareStore
+
+    var info: AppVersionInfo? {
+        store.availableUpdate
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 20) {
+                        VStack(spacing: 12) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 24)
+                                    .fill(Brand.primary.opacity(0.15))
+                                    .frame(width: 90, height: 90)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 24)
+                                            .stroke(Brand.primary, lineWidth: 2)
+                                    )
+                                Image(systemName: "arrow.down.circle.fill")
+                                    .font(.system(size: 46))
+                                    .foregroundStyle(Brand.primary)
+                            }
+                            .padding(.top, 10)
+
+                            Text("¡Nueva Actualización Online!")
+                                .font(.title2.bold())
+                                .foregroundStyle(.white)
+
+                            Text("rodriguezlawncareios \(info?.version ?? "v1.2.0")")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(Brand.accent)
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("NOVEDADES DE ESTA VERSIÓN")
+                                .font(.caption.bold())
+                                .foregroundStyle(.gray)
+
+                            Text(info?.release_notes ?? "Conexión 100% online con Railway, ícono oficial y actualización inalámbrica OTA sin cables.")
+                                .font(.subheadline)
+                                .foregroundStyle(.white)
+                                .lineSpacing(4)
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                        // Button 1: Safari OTA
+                        Button {
+                            if let s = info?.ota_install_url, let url = URL(string: s) {
+                                UIApplication.shared.open(url)
+                                dismiss()
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: "wifi")
+                                    .font(.title3)
+                                Text("Instalar por Aire (Safari OTA)")
+                                    .font(.headline)
+                            }
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+
+                        // Button 2: TrollStore
+                        Button {
+                            if let s = info?.trollstore_url, let url = URL(string: s) {
+                                UIApplication.shared.open(url)
+                                dismiss()
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: "bolt.fill")
+                                Text("Instalar con TrollStore (1 Toque)")
+                                    .font(.subheadline.bold())
+                            }
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.orange)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+
+                        // Button 3: ESign
+                        Button {
+                            if let s = info?.esign_url, let url = URL(string: s) {
+                                UIApplication.shared.open(url)
+                                dismiss()
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: "signature")
+                                Text("Abrir en ESign / Scarlet")
+                                    .font(.subheadline.bold())
+                            }
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Brand.cardLight)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+
+                        // Button 4: Web Install
+                        Button {
+                            if let s = info?.web_install_url, let url = URL(string: s) {
+                                UIApplication.shared.open(url)
+                                dismiss()
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: "globe")
+                                Text("Abrir Portal Web de Instalación")
+                                    .font(.footnote)
+                            }
+                            .foregroundStyle(.gray)
+                        }
+                        .padding(.top, 4)
+
+                        Button("Recordar más tarde") {
+                            dismiss()
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.gray)
+                        .padding(.top, 6)
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Actualizador OTA")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - HERO BACKGROUND MANAGER SHEET (MATCHING IMAGE 2)
+struct HeroBackgroundManagerSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject var store: LawnCareStore
+
+    @State private var selectedHeroType: String = "video"
+    @State private var selectedPresetId: String = "drone_tundra"
+    @State private var customVideoURL: String = ""
+    @State private var customPosterURL: String = ""
+    @State private var showSuccessBanner: Bool = false
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        // Success Banner
+                        if showSuccessBanner {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.black)
+                                Text("¡Fondo de la web actualizado con éxito!")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.black)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(12)
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+
+                        // Explanation card
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("PERSONALIZACIÓN DEL FONDO WEB")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                            Text("Controla qué se ve al entrar a tu sitio web oficial. Puedes activar los videos aéreos con dron generados por IA o fotos estáticas en alta definición.")
+                                .font(.caption)
+                                .foregroundStyle(.gray)
+                                .lineSpacing(3)
+                        }
+                        .padding()
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                        // Type selector: Video vs Image
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("1. TIPO DE FONDO PRINCIPAL")
+                                .font(.caption.bold())
+                                .foregroundStyle(.gray)
+
+                            Picker("Tipo", selection: $selectedHeroType) {
+                                Text("🎬 Video (Dron IA)").tag("video")
+                                Text("📸 Foto Estática").tag("image")
+                            }
+                            .pickerStyle(.segmented)
+                        }
+
+                        // Presets List
+                        if selectedHeroType == "video" {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("2. SELECCIONA EL VIDEO CON DRON IA")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.gray)
+
+                                if let presets = store.settings?.video_presets {
+                                    ForEach(presets) { preset in
+                                        PresetVideoCard(
+                                            preset: preset,
+                                            isSelected: selectedPresetId == preset.id,
+                                            store: store
+                                        ) {
+                                            selectedPresetId = preset.id
+                                            customVideoURL = preset.video_url
+                                            customPosterURL = preset.poster_url
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("2. SELECCIONA LA FOTO ESTÁTICA")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.gray)
+
+                                if let presets = store.settings?.photo_presets {
+                                    ForEach(presets) { preset in
+                                        PresetPhotoCard(
+                                            preset: preset,
+                                            isSelected: selectedPresetId == preset.id,
+                                            store: store
+                                        ) {
+                                            selectedPresetId = preset.id
+                                            customPosterURL = preset.photo_url
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Apply Button
+                        Button {
+                            Task {
+                                let vUrl = customVideoURL.isEmpty ? "./assets/video/hero.mp4" : customVideoURL
+                                let pUrl = customPosterURL.isEmpty ? "./assets/images/drone_tundra_intro.jpg" : customPosterURL
+                                await store.updateHeroBackground(
+                                    type: selectedHeroType,
+                                    videoURL: vUrl,
+                                    posterURL: pUrl,
+                                    presetId: selectedPresetId
+                                )
+                                showSuccessBanner = true
+                                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                                    dismiss()
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                Text("Aplicar Fondo a la Web Ahora")
+                            }
+                            .font(.headline)
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+                        .padding(.top, 10)
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Fondo Hero & Videos IA 🎬")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                }
+            }
+            .onAppear {
+                if let s = store.settings {
+                    selectedHeroType = s.hero_type
+                    selectedPresetId = s.hero_preset_id ?? "drone_tundra"
+                    customVideoURL = s.hero_video_url
+                    customPosterURL = s.hero_poster_url
+                }
+            }
+        }
+    }
+}
+
+// MARK: - PRESET VIDEO CARD
+struct PresetVideoCard: View {
+    let preset: VideoPreset
+    let isSelected: Bool
+    @ObservedObject var store: LawnCareStore
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                AsyncImage(url: URL(string: store.fullMediaURL(preset.poster_url))) { phase in
+                    if let img = phase.image {
+                        img.resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        Brand.cardLight
+                    }
+                }
+                .frame(width: 80, height: 60)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(preset.name)
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                    Text(preset.desc)
+                        .font(.caption2)
+                        .foregroundStyle(.gray)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(isSelected ? Brand.primary : .gray)
+            }
+            .padding(10)
+            .background(Brand.card)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Brand.primary : Color.white.opacity(0.06), lineWidth: isSelected ? 2 : 1)
+            )
+        }
+    }
+}
+
+// MARK: - PRESET PHOTO CARD
+struct PresetPhotoCard: View {
+    let preset: PhotoPreset
+    let isSelected: Bool
+    @ObservedObject var store: LawnCareStore
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                AsyncImage(url: URL(string: store.fullMediaURL(preset.photo_url))) { phase in
+                    if let img = phase.image {
+                        img.resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        Brand.cardLight
+                    }
+                }
+                .frame(width: 80, height: 60)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                Text(preset.name)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+
+                Spacer()
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(isSelected ? Brand.primary : .gray)
+            }
+            .padding(10)
+            .background(Brand.card)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Brand.primary : Color.white.opacity(0.06), lineWidth: isSelected ? 2 : 1)
+            )
+        }
+    }
+}
+
+// MARK: - ANALYTICS METRIC BOX
 struct AnalyticsMetricBox: View {
     let title: String
     let value: String
@@ -2350,181 +3021,7 @@ struct AnalyticsMetricBox: View {
             Image(systemName: icon).foregroundStyle(color)
         }
         .padding(12)
-        .frame(maxWidth: .infinity)
-        .background(Brand.cardLight.opacity(0.5))
+        .background(Brand.cardLight)
         .clipShape(RoundedRectangle(cornerRadius: 10))
-    }
-}
-
-// MARK: - HERO BACKGROUND MANAGER SHEET (MATCHING IMAGE 2)
-struct HeroBackgroundManagerSheet: View {
-    @Environment(\.dismiss) var dismiss
-    @ObservedObject var store: LawnCareStore
-
-    @State private var selectedType: String = "video"
-    @State private var selectedPresetId: String = "drone_tundra"
-    @State private var customVideoURL: String = ""
-    @State private var customPosterURL: String = ""
-    @State private var showAppliedAlert = false
-
-    var body: some View {
-        NavigationView {
-            ZStack {
-                Brand.background.ignoresSafeArea()
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        Text("Personaliza el fondo principal que ven los clientes al entrar a tu sitio web.")
-                            .font(.caption)
-                            .foregroundStyle(.gray)
-
-                        // Mode Selector (Video vs Photo)
-                        Picker("Tipo de Fondo", selection: $selectedType) {
-                            Text("🎬 Video de Fondo").tag("video")
-                            Text("📸 Foto Estática").tag("image")
-                        }
-                        .pickerStyle(.segmented)
-
-                        if selectedType == "video" {
-                            // VIDEO PRESETS SECTION
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("VIDEOS GENERADOS POR IA (CON TUS CRÉDITOS)")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(Brand.accent)
-
-                                if let presets = store.settings?.video_presets {
-                                    ForEach(presets) { preset in
-                                        Button {
-                                            selectedPresetId = preset.id
-                                            customVideoURL = preset.video_url
-                                            customPosterURL = preset.poster_url
-                                        } label: {
-                                            HStack(alignment: .top, spacing: 12) {
-                                                Image(systemName: selectedPresetId == preset.id ? "checkmark.circle.fill" : "circle")
-                                                    .foregroundStyle(selectedPresetId == preset.id ? Brand.primary : .gray)
-                                                    .font(.title3)
-
-                                                VStack(alignment: .leading, spacing: 4) {
-                                                    Text(preset.name)
-                                                        .font(.subheadline.bold())
-                                                        .foregroundStyle(.white)
-                                                    Text(preset.desc)
-                                                        .font(.caption2)
-                                                        .foregroundStyle(.gray)
-                                                }
-                                                Spacer()
-                                            }
-                                            .padding(12)
-                                            .background(selectedPresetId == preset.id ? Brand.primaryDark.opacity(0.25) : Brand.card)
-                                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 12)
-                                                    .stroke(selectedPresetId == preset.id ? Brand.primary : Color.clear, lineWidth: 1.5)
-                                            )
-                                        }
-                                    }
-                                }
-
-                                // Custom Video URL
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("O pega un enlace de Video personalizado:")
-                                        .font(.caption2)
-                                        .foregroundStyle(.gray)
-                                    TextField("https://... o ./assets/video/hero.mp4", text: $customVideoURL)
-                                        .padding(10)
-                                        .background(Brand.card)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                        .foregroundStyle(.white)
-                                }
-                            }
-                        } else {
-                            // PHOTO PRESETS SECTION
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("FOTOS DESTACADAS DISPONIBLES")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(Brand.primary)
-
-                                if let photoPresets = store.settings?.photo_presets {
-                                    ForEach(photoPresets) { photo in
-                                        Button {
-                                            selectedPresetId = photo.id
-                                            customPosterURL = photo.photo_url
-                                        } label: {
-                                            HStack {
-                                                Image(systemName: selectedPresetId == photo.id ? "checkmark.circle.fill" : "circle")
-                                                    .foregroundStyle(selectedPresetId == photo.id ? Brand.primary : .gray)
-                                                Text(photo.name)
-                                                    .font(.subheadline.bold())
-                                                    .foregroundStyle(.white)
-                                                Spacer()
-                                            }
-                                            .padding(12)
-                                            .background(selectedPresetId == photo.id ? Brand.primaryDark.opacity(0.25) : Brand.card)
-                                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                                        }
-                                    }
-                                }
-
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("O pega la URL de una Foto personalizada:")
-                                        .font(.caption2)
-                                        .foregroundStyle(.gray)
-                                    TextField("https://... o ./assets/images/drone_tundra_intro.jpg", text: $customPosterURL)
-                                        .padding(10)
-                                        .background(Brand.card)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                        .foregroundStyle(.white)
-                                }
-                            }
-                        }
-
-                        // Apply Button
-                        Button {
-                            let videoURL = customVideoURL.isEmpty ? "./assets/video/hero.mp4" : customVideoURL
-                            let posterURL = customPosterURL.isEmpty ? "./assets/images/drone_tundra_intro.jpg" : customPosterURL
-                            Task {
-                                await store.updateHeroBackground(
-                                    type: selectedType,
-                                    videoURL: videoURL,
-                                    posterURL: posterURL,
-                                    presetId: selectedPresetId
-                                )
-                                showAppliedAlert = true
-                            }
-                        } label: {
-                            Text("Guardar y Aplicar a la Web en Vivo")
-                                .font(.headline)
-                                .foregroundStyle(.black)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Brand.primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                        .padding(.top, 10)
-                    }
-                    .padding()
-                }
-            }
-            .navigationTitle("Fondo de la Web 🎬")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Cerrar") { dismiss() }
-                }
-            }
-            .onAppear {
-                if let s = store.settings {
-                    selectedType = s.hero_type
-                    selectedPresetId = s.hero_preset_id ?? "drone_tundra"
-                    customVideoURL = s.hero_video_url
-                    customPosterURL = s.hero_poster_url
-                }
-            }
-            .alert("¡Fondo Actualizado!", isPresented: $showAppliedAlert) {
-                Button("OK") { dismiss() }
-            } message: {
-                Text("El fondo de tu página web ha sido actualizado en tiempo real.")
-            }
-        }
     }
 }

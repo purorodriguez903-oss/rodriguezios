@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct RodriguezLawnCareApp: App {
+struct rodriguezlawncareiosApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -10,4 +10,3 @@ struct RodriguezLawnCareApp: App {
         }
     }
 }
-

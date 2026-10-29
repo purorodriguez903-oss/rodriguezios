@@ -15,8 +15,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "D10000000000000000000001"
-               BuildableName = "RodriguezLawnCare.app"
-               BlueprintName = "RodriguezLawnCare"
+               BuildableName = "rodriguezlawncareios.app"
+               BlueprintName = "rodriguezlawncareios"
                ReferencedContainer = "container:RodriguezLawnCare.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -45,8 +45,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D10000000000000000000001"
-            BuildableName = "RodriguezLawnCare.app"
-            BlueprintName = "RodriguezLawnCare"
+            BuildableName = "rodriguezlawncareios.app"
+            BlueprintName = "rodriguezlawncareios"
             ReferencedContainer = "container:RodriguezLawnCare.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -62,8 +62,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D10000000000000000000001"
-            BuildableName = "RodriguezLawnCare.app"
-            BlueprintName = "RodriguezLawnCare"
+            BuildableName = "rodriguezlawncareios.app"
+            BlueprintName = "rodriguezlawncareios"
             ReferencedContainer = "container:RodriguezLawnCare.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -76,4 +76,3 @@
       revealArchiveInOrganizer = "YES">
    </ArchiveAction>
 </Scheme>
-
