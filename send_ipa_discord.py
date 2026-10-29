@@ -26,10 +26,14 @@ if os.path.exists(cloud_cfg_path):
         pass
 
 IPA_CANDIDATES = [
-    os.path.join(BASE_DIR, "ipa online", "rodriguezlawncareios.ipa"),
-    os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa online", "rodriguezlawncareios.ipa"),
-    os.path.join(BASE_DIR, "ipa here", "rodriguezlawncareios.ipa"),
+    os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare_v1.7.2_Build20.ipa"),
+    os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare_Actualizado.ipa"),
+    os.path.join(BASE_DIR, "ipa here", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
     os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare.ipa"),
+    os.path.join(BASE_DIR, "ipa online", "rodriguezlawncareios.ipa"),
+    os.path.join(BASE_DIR, "ipa here", "rodriguezlawncareios.ipa"),
+    os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa here", "RodriguezLawnCare_v1.7.2_Build20.ipa"),
+    os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa online", "rodriguezlawncareios.ipa"),
 ]
 
 ipa_file_path = None
@@ -41,6 +45,10 @@ for p in IPA_CANDIDATES:
 if not ipa_file_path:
     print("ERROR: Could not find any valid IPA file to upload!")
     sys.exit(1)
+
+file_name_display = os.path.basename(ipa_file_path)
+if file_name_display == "rodriguezlawncareios.ipa" or file_name_display == "RodriguezLawnCare.ipa":
+    file_name_display = f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"
 
 file_size_bytes = os.path.getsize(ipa_file_path)
 file_size_mb = file_size_bytes / (1024 * 1024)
@@ -67,7 +75,7 @@ async def main():
         color=0x22C55E
     )
     
-    embed.add_field(name="📦 Archivo", value="`rodriguezlawncareios.ipa`", inline=True)
+    embed.add_field(name="📦 Archivo", value=f"`{file_name_display}`", inline=True)
     embed.add_field(name="🔢 Versión", value=f"**v{version_str} (Build {build_num})**", inline=True)
     embed.add_field(name="⚖️ Tamaño", value=f"**{file_size_mb:.2f} MB**", inline=True)
     
@@ -87,8 +95,8 @@ async def main():
     )
     
     embed.add_field(
-        name="📲 ¿Cómo instalar con GBox?",
-        value="1. Toca el archivo adjunto `rodriguezlawncareios.ipa` aquí en Discord.\n2. Presiona el botón de **Compartir** y selecciona **GBox**.\n3. En GBox, toca **Instalar** y ¡listo!",
+        name="📲 ¿Cómo instalar con GBox (Evitando Caché Viejo)?",
+        value=f"1. Toca el archivo adjunto `{file_name_display}` aquí en Discord.\n2. Presiona el botón de **Compartir** y selecciona **GBox**.\n3. En GBox, toca **Instalar** (al tener nombre único nuevo, GBox firma e instala la versión real v{version_str} Build {build_num}) y ¡listo!",
         inline=False
     )
     
@@ -107,7 +115,7 @@ async def main():
         print(f"Notice history cleanup: {hist_err}")
     
     with open(ipa_file_path, "rb") as f:
-        discord_file = discord.File(f, filename="rodriguezlawncareios.ipa")
+        discord_file = discord.File(f, filename=file_name_display)
         msg = await channel.send(
             content="🚀 **¡Nueva actualización de la App iOS disponible para descargar!**",
             embed=embed,

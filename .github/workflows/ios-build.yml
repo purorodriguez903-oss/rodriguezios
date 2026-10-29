@@ -54,9 +54,13 @@ jobs:
           mkdir -p "ipa here"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare_Actualizado.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare_v1.7.2_Build20.ipa"
           mkdir -p "RodriguezLawnCareIosAPP/ipa here"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_Actualizado.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_v1.7.2_Build20.ipa"
           ls -la "ipa online"
 
       - name: Commit and push IPA to repository
@@ -89,6 +93,8 @@ jobs:
             ipa online/rodriguezlawncareios.ipa
             ipa here/rodriguezlawncareios.ipa
             ipa here/RodriguezLawnCare.ipa
+            ipa here/RodriguezLawnCare_v1.7.2_Build20.ipa
+            ipa here/RodriguezLawnCare_Actualizado.ipa
 
       - name: Send IPA directly to Discord Channel (#ipalwan)
         continue-on-error: true

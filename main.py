@@ -435,11 +435,19 @@ def parse_job_details(text: str):
 
 # ----------------- IPA AUTO DELIVERY HELPER -----------------
 def get_ipa_file_path():
+    cfg = load_cloud_config()
+    version_str = cfg.get("app_version", "1.7.2")
+    build_num = cfg.get("app_build", 20)
     candidates = [
+        os.path.join(BASE_DIR, "ipa here", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
+        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare_Actualizado.ipa"),
+        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare_v1.7.2_Build20.ipa"),
+        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare.ipa"),
         os.path.join(BASE_DIR, "ipa online", "rodriguezlawncareios.ipa"),
+        os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa here", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
+        os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa here", "RodriguezLawnCare_Actualizado.ipa"),
         os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa online", "rodriguezlawncareios.ipa"),
         os.path.join(BASE_DIR, "ipa here", "rodriguezlawncareios.ipa"),
-        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare.ipa"),
     ]
     for p in candidates:
         if os.path.exists(p) and os.path.getsize(p) > 100000:
@@ -503,7 +511,11 @@ async def send_ipa_to_discord(bot_instance, channel_id=IPA_CHANNEL_ID, force=Fal
             ),
             color=0x22C55E
         )
-        embed.add_field(name="\U0001f4e6 Archivo", value="`rodriguezlawncareios.ipa`", inline=True)
+        file_name_display = os.path.basename(ipa_path)
+        if file_name_display in ["rodriguezlawncareios.ipa", "RodriguezLawnCare.ipa"]:
+            file_name_display = f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"
+
+        embed.add_field(name="\U0001f4e6 Archivo", value=f"`{file_name_display}`", inline=True)
         embed.add_field(name="\U0001f522 Versi\u00f3n", value=f"**v{version_str} (Build {build_num})**", inline=True)
         embed.add_field(name="\u2696\ufe0f Tama\u00f1o", value=f"**{file_size_mb:.2f} MB**", inline=True)
 
@@ -530,7 +542,7 @@ async def send_ipa_to_discord(bot_instance, channel_id=IPA_CHANNEL_ID, force=Fal
         embed.set_footer(text="Rodriguez Lawn Care \u2022 Sistema Aut\u00f3nomo de Entrega Continua")
 
         with open(ipa_path, "rb") as f:
-            discord_file = discord.File(f, filename="rodriguezlawncareios.ipa")
+            discord_file = discord.File(f, filename=file_name_display)
             msg = await channel.send(
                 content="🚀 **¡Nueva actualización de la App iOS disponible para descargar!**",
                 embed=embed,
@@ -2272,17 +2284,25 @@ async def handle_send_ipa_discord(request):
 async def handle_download_ipa(request):
     """Serves the latest compiled IPA from 'ipa online' or redirects to GitHub Releases."""
     config = load_cloud_config()
+    version = config.get("app_version", "1.7.2")
+    build = config.get("app_build", 20)
+    target_name = f"RodriguezLawnCare_v{version}_Build{build}.ipa"
     candidate_paths = [
+        os.path.join(BASE_DIR, "ipa here", target_name),
+        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare_v1.7.2_Build20.ipa"),
+        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare_Actualizado.ipa"),
+        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare.ipa"),
         os.path.join(BASE_DIR, "ipa online", "rodriguezlawncareios.ipa"),
-        os.path.join(BASE_DIR, "ipa online", "RodriguezLawnCare.ipa"),
-        os.path.join(BASE_DIR, "ipa here", "rodriguezlawncareios.ipa"),
-        os.path.join(BASE_DIR, "ipa here", "RodriguezLawnCare.ipa")
+        os.path.join(BASE_DIR, "ipa here", "rodriguezlawncareios.ipa")
     ]
     for p in candidate_paths:
         if os.path.exists(p) and os.path.getsize(p) > 10000:
+            out_filename = os.path.basename(p)
+            if out_filename in ["rodriguezlawncareios.ipa", "RodriguezLawnCare.ipa"]:
+                out_filename = target_name
             return web.FileResponse(p, headers={
                 "Content-Type": "application/octet-stream",
-                "Content-Disposition": 'attachment; filename="rodriguezlawncareios.ipa"'
+                "Content-Disposition": f'attachment; filename="{out_filename}"'
             })
     ipa_url = config.get("ipa_url", "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa")
     raise web.HTTPFound(ipa_url)
