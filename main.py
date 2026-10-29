@@ -51,6 +51,7 @@ PORT = int(get_env_var("PORT", "8080"))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 GALLERY_JSON_PATH = os.path.join(BASE_DIR, "gallery.json")
 GALLERY_FOLDER = os.path.join(BASE_DIR, "assets", "gallery")
+LEADS_JSON_PATH = os.path.join(BASE_DIR, "leads.json")
 
 THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000
 
@@ -74,6 +75,25 @@ def save_gallery(data):
         return True
     except Exception as e:
         print(f"[Error] Guardando gallery.json: {e}")
+        return False
+
+def load_leads():
+    if not os.path.exists(LEADS_JSON_PATH):
+        return []
+    try:
+        with open(LEADS_JSON_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"[Error] Cargando leads.json: {e}")
+        return []
+
+def save_leads(data):
+    try:
+        with open(LEADS_JSON_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"[Error] Guardando leads.json: {e}")
         return False
 
 def get_next_id(gallery):
@@ -984,6 +1004,25 @@ def build_bot(enable_message_content: bool):
 
 # ----------------- WEB SERVER (AIOHTTP) -----------------
 bot_global = None
+SERVER_START_TIME = time.time()
+
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, X-Admin-Pin",
+    "Access-Control-Max-Age": "86400"
+}
+
+def cors_json_response(data, status=200, extra_headers=None):
+    headers = dict(CORS_HEADERS)
+    headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    if extra_headers:
+        headers.update(extra_headers)
+    return web.json_response(data, status=status, headers=headers)
+
+async def handle_cors_options(request):
+    """Handles preflight CORS requests."""
+    return web.Response(status=200, headers=CORS_HEADERS)
 
 async def handle_index(request):
     """Serves the main website homepage."""
@@ -993,20 +1032,83 @@ async def handle_index(request):
 async def handle_gallery_json(request):
     """Serves gallery.json with no-cache headers so visitors always see live photos."""
     gallery = load_gallery()
-    return web.json_response(gallery, headers={
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Access-Control-Allow-Origin": "*"
-    })
+    return cors_json_response(gallery)
+
+async def forward_lead_to_discord(name, phone, services, address, date_val, time_val, frequency, description, source):
+    """Sends notification to Discord channel if bot is ready."""
+    global bot_global
+    if not bot_global:
+        return
+    try:
+        if not bot_global.is_ready():
+            try:
+                await asyncio.wait_for(bot_global.wait_until_ready(), timeout=5.0)
+            except Exception:
+                pass
+
+        target_chan_id = LEADS_CHANNEL_ID
+        channel = bot_global.get_channel(target_chan_id)
+        if not channel and bot_global.is_ready():
+            try:
+                channel = await bot_global.fetch_channel(target_chan_id)
+            except Exception as e:
+                print(f"⚠️ Error obteniendo canal de leads {target_chan_id} vía fetch_channel: {e}")
+
+        if channel:
+            clean_digits = "".join(c for c in phone if c.isdigit())
+            phone_dial = clean_digits if clean_digits.startswith("1") else f"1{clean_digits}"
+            formatted_phone = phone
+            if len(clean_digits) == 10:
+                formatted_phone = f"({clean_digits[:3]}) {clean_digits[3:6]}-{clean_digits[6:]}"
+
+            if isinstance(services, list) and services:
+                services_list_text = "\n".join(f"• {s}" for s in services)
+            else:
+                services_list_text = f"• {services or 'Servicio General'}"
+
+            embed = discord.Embed(
+                title="🚨 ¡NUEVA COTIZACIÓN RECIBIDA EN LA WEB!",
+                description=f"Un cliente acaba de enviar una solicitud (**{source}**):\n",
+                color=discord.Color.from_rgb(22, 163, 74),
+                timestamp=discord.utils.utcnow()
+            )
+            embed.add_field(name="👤 Cliente", value=f"**{name}**", inline=True)
+            embed.add_field(name="📱 Teléfono", value=f"**{formatted_phone}**", inline=True)
+            embed.add_field(name="🌐 Formulario", value=f"`{source}`", inline=True)
+            embed.add_field(name="🌿 Servicios Solicitados", value=services_list_text, inline=False)
+
+            if address and address not in ["Por coordinar por llamada/mensaje", "To be confirmed by call/text"]:
+                embed.add_field(name="📍 Dirección", value=f"`{address}`", inline=True)
+            if date_val and date_val not in ["Lo antes posible", "As soon as possible"]:
+                embed.add_field(name="📅 Fecha / Horario", value=f"`{date_val} ({time_val})`", inline=True)
+            if frequency and frequency not in ["To be decided", "No especificada"]:
+                embed.add_field(name="🔄 Frecuencia", value=f"`{frequency}`", inline=True)
+            if description and description not in ["Quick request from website", "No additional notes", ""]:
+                embed.add_field(name="📝 Notas / Mensaje", value=f"*{description}*", inline=False)
+
+            embed.set_footer(text=f"Rodriguez LawnCare • #{channel.name}")
+
+            view = discord.ui.View()
+            if clean_digits:
+                wa_url = f"https://wa.me/{phone_dial}?text=Hola%20{name.replace(' ', '%20')},%20te%20escribimos%20de%20Rodriguez%20LawnCare%20sobre%20tu%20solicitud%20de%20cotizacion."
+                view.add_item(discord.ui.Button(label="Abrir WhatsApp del Cliente", style=discord.ButtonStyle.link, url=wa_url, emoji="💬"))
+
+            await channel.send(
+                content=f"🔔 **¡Nuevo Lead en Rodriguez LawnCare!** (`{name}` • `{formatted_phone}`)",
+                embed=embed,
+                view=view if clean_digits else None
+            )
+            print(f"✅ Lead enviado a Discord (#{channel.name})")
+    except Exception as e:
+        print(f"⚠️ Error enviando lead a Discord: {e}")
 
 async def handle_lead_submission(request):
-    """Handles lead form submissions and sends instant notification to Discord channel 1557306528078237706."""
-    global bot_global
+    """Handles lead form submissions from the website and saves to leads.json + Discord."""
     try:
         data = await request.json()
         name = data.get("name", "Cliente").strip() or "Cliente"
         phone = data.get("phone", "No proporcionado").strip() or "No proporcionado"
         services = data.get("services", [])
-        services_str = ", ".join(services) if isinstance(services, list) else str(services)
         address = data.get("address", "Por coordinar por llamada/mensaje")
         date_val = data.get("date", "Lo antes posible")
         time_val = data.get("time", "Horario habitual")
@@ -1016,96 +1118,292 @@ async def handle_lead_submission(request):
 
         print(f"📥 [LEAD RECIBIDO] De: {name} | Tel: {phone} | Origen: {source}")
 
-        if bot_global:
-            if not bot_global.is_ready():
-                try:
-                    await asyncio.wait_for(bot_global.wait_until_ready(), timeout=5.0)
-                except Exception:
-                    pass
+        # Persist to leads.json
+        leads = load_leads()
+        lead_id = int(time.time() * 1000)
+        new_lead = {
+            "id": lead_id,
+            "created_at": int(time.time()),
+            "date_str": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+            "name": name,
+            "phone": phone,
+            "services": services if isinstance(services, list) else [str(services)],
+            "address": address,
+            "date": date_val,
+            "time": time_val,
+            "frequency": frequency,
+            "description": description,
+            "source": source,
+            "status": "pending",
+            "estimated_amount": 0.0,
+            "notes": ""
+        }
+        leads.insert(0, new_lead)
+        save_leads(leads)
 
-            target_chan_id = LEADS_CHANNEL_ID
-            channel = bot_global.get_channel(target_chan_id)
-            if not channel and bot_global.is_ready():
-                try:
-                    channel = await bot_global.fetch_channel(target_chan_id)
-                except Exception as e:
-                    print(f"⚠️ Error obteniendo canal de leads {target_chan_id} vía fetch_channel: {e}")
+        # Notify Discord asynchronously
+        asyncio.create_task(forward_lead_to_discord(name, phone, services, address, date_val, time_val, frequency, description, source))
 
-            if channel:
-                clean_digits = "".join(c for c in phone if c.isdigit())
-                phone_dial = clean_digits if clean_digits.startswith("1") else f"1{clean_digits}"
-                
-                # Format phone nicely for reading
-                formatted_phone = phone
-                if len(clean_digits) == 10:
-                    formatted_phone = f"({clean_digits[:3]}) {clean_digits[3:6]}-{clean_digits[6:]}"
-
-                # Format services as clean bullets
-                if isinstance(services, list) and services:
-                    services_list_text = "\n".join(f"• {s}" for s in services)
-                else:
-                    services_list_text = f"• {services_str or 'Servicio General'}"
-
-                embed = discord.Embed(
-                    title="🚨 ¡NUEVA COTIZACIÓN RECIBIDA EN LA WEB!",
-                    description=f"Un cliente acaba de llenar el formulario en tu página web (**{source}**):\n",
-                    color=discord.Color.from_rgb(22, 163, 74),
-                    timestamp=discord.utils.utcnow()
-                )
-                embed.add_field(name="👤 Cliente", value=f"**{name}**", inline=True)
-                embed.add_field(name="📱 Teléfono", value=f"**{formatted_phone}**", inline=True)
-                embed.add_field(name="🌐 Formulario", value=f"`{source}`", inline=True)
-                embed.add_field(name="🌿 Servicios Solicitados", value=services_list_text, inline=False)
-                
-                if address and address != "Por coordinar por llamada/mensaje" and address != "To be confirmed by call/text":
-                    embed.add_field(name="📍 Dirección", value=f"`{address}`", inline=True)
-                if date_val and date_val != "Lo antes posible" and date_val != "As soon as possible":
-                    embed.add_field(name="📅 Fecha / Horario", value=f"`{date_val} ({time_val})`", inline=True)
-                if frequency and frequency not in ["To be decided", "No especificada"]:
-                    embed.add_field(name="🔄 Frecuencia", value=f"`{frequency}`", inline=True)
-                if description and description not in ["Quick request from website", "No additional notes", ""]:
-                    embed.add_field(name="📝 Notas / Mensaje", value=f"*{description}*", inline=False)
-
-                embed.set_footer(text=f"Rodriguez LawnCare • Sistema de Notificaciones Web • #{channel.name}")
-
-                view = discord.ui.View()
-                if clean_digits:
-                    wa_url = f"https://wa.me/{phone_dial}?text=Hola%20{name.replace(' ', '%20')},%20te%20escribimos%20de%20Rodriguez%20LawnCare%20sobre%20tu%20solicitud%20de%20cotizacion."
-                    view.add_item(discord.ui.Button(label="Abrir WhatsApp del Cliente", style=discord.ButtonStyle.link, url=wa_url, emoji="💬"))
-
-                await channel.send(
-                    content=f"🔔 **¡Nuevo Cliente interesado en tu página web!** (`{name}` • `{formatted_phone}`)",
-                    embed=embed,
-                    view=view if clean_digits else None
-                )
-                print(f"✅ Lead enviado exitosamente a canal Discord {target_chan_id} (#{channel.name})")
-            else:
-                print(f"⚠️ No se pudo enviar el lead: canal {target_chan_id} no disponible")
-
-        return web.json_response({"success": True, "message": "Lead received and forwarded to Discord"})
+        return cors_json_response({"success": True, "message": "Lead received and saved", "lead": new_lead})
     except Exception as e:
         print(f"❌ Error procesando lead web: {e}")
-        return web.json_response({"success": False, "error": str(e)}, status=400)
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+# ----------------- REST API FOR IOS APP & ADMIN -----------------
+
+async def handle_api_get_leads(request):
+    """Returns list of leads/appointments for iOS app with optional status filter."""
+    leads = load_leads()
+    status_filter = request.query.get("status", "").strip().lower()
+    if status_filter and status_filter != "all":
+        leads = [l for l in leads if l.get("status", "").lower() == status_filter]
+    return cors_json_response({"success": True, "leads": leads, "count": len(leads)})
+
+async def handle_api_create_lead(request):
+    """Creates a new appointment/lead from the iOS App."""
+    try:
+        data = await request.json()
+        name = data.get("name", "Cliente").strip() or "Cliente"
+        phone = data.get("phone", "No proporcionado").strip() or "No proporcionado"
+        services = data.get("services", ["Lawn Mowing & Edging"])
+        address = data.get("address", "")
+        date_val = data.get("date", "Por coordinar")
+        time_val = data.get("time", "Horario regular")
+        frequency = data.get("frequency", "One-Time")
+        description = data.get("description", "")
+        source = data.get("source", "iOS App")
+        status = data.get("status", "pending")
+        estimated_amount = float(data.get("estimated_amount", 0.0) or 0.0)
+        notes = data.get("notes", "")
+
+        leads = load_leads()
+        lead_id = int(time.time() * 1000)
+        new_lead = {
+            "id": lead_id,
+            "created_at": int(time.time()),
+            "date_str": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+            "name": name,
+            "phone": phone,
+            "services": services if isinstance(services, list) else [str(services)],
+            "address": address,
+            "date": date_val,
+            "time": time_val,
+            "frequency": frequency,
+            "description": description,
+            "source": source,
+            "status": status,
+            "estimated_amount": estimated_amount,
+            "notes": notes
+        }
+        leads.insert(0, new_lead)
+        save_leads(leads)
+
+        # Notify Discord as well
+        asyncio.create_task(forward_lead_to_discord(name, phone, services, address, date_val, time_val, frequency, f"[App] {description}", source))
+
+        return cors_json_response({"success": True, "lead": new_lead})
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+async def handle_api_update_lead(request):
+    """Updates lead status, notes, or estimated_amount from iOS App."""
+    try:
+        data = await request.json()
+        lead_id = data.get("id")
+        if not lead_id:
+            return cors_json_response({"success": False, "error": "Missing 'id' parameter"}, status=400)
+
+        leads = load_leads()
+        updated = False
+        target_lead = None
+        for item in leads:
+            if str(item.get("id")) == str(lead_id):
+                if "status" in data:
+                    item["status"] = data["status"]
+                if "notes" in data:
+                    item["notes"] = data["notes"]
+                if "estimated_amount" in data:
+                    try:
+                        item["estimated_amount"] = float(data["estimated_amount"])
+                    except (ValueError, TypeError):
+                        pass
+                if "name" in data and data["name"]:
+                    item["name"] = data["name"]
+                if "phone" in data and data["phone"]:
+                    item["phone"] = data["phone"]
+                if "address" in data:
+                    item["address"] = data["address"]
+                if "date" in data:
+                    item["date"] = data["date"]
+                if "time" in data:
+                    item["time"] = data["time"]
+                if "services" in data:
+                    item["services"] = data["services"]
+                updated = True
+                target_lead = item
+                break
+
+        if updated:
+            save_leads(leads)
+            return cors_json_response({"success": True, "lead": target_lead})
+        else:
+            return cors_json_response({"success": False, "error": f"Lead {lead_id} not found"}, status=404)
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+async def handle_api_delete_lead(request):
+    """Deletes a lead from leads.json."""
+    try:
+        lead_id = request.match_info.get("id")
+        if not lead_id:
+            data = await request.json()
+            lead_id = data.get("id")
+
+        if not lead_id:
+            return cors_json_response({"success": False, "error": "Missing 'id'"}, status=400)
+
+        leads = load_leads()
+        before_len = len(leads)
+        leads = [l for l in leads if str(l.get("id")) != str(lead_id)]
+        if len(leads) < before_len:
+            save_leads(leads)
+            return cors_json_response({"success": True, "message": f"Lead {lead_id} deleted"})
+        else:
+            return cors_json_response({"success": False, "error": f"Lead {lead_id} not found"}, status=404)
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+async def handle_api_get_gallery(request):
+    """Returns website gallery with CORS."""
+    gallery = load_gallery()
+    return cors_json_response({"success": True, "gallery": gallery})
+
+async def handle_api_add_gallery(request):
+    """Adds a new photo to the website gallery from iOS App."""
+    try:
+        data = await request.json()
+        title = data.get("title", "Lawn Care Service").strip()
+        category = data.get("category", "Front Yard").strip()
+        url = data.get("url", "").strip()
+        image_base64 = data.get("image_base64", "").strip()
+
+        gallery = load_gallery()
+        next_id = get_next_id(gallery)
+
+        if image_base64:
+            # Handle base64 image upload
+            import base64
+            if "," in image_base64:
+                image_base64 = image_base64.split(",", 1)[1]
+            img_bytes = base64.b64decode(image_base64)
+            filename = f"work_{next_id}.jpg"
+            file_path = os.path.join(GALLERY_FOLDER, filename)
+            with open(file_path, "wb") as f:
+                f.write(img_bytes)
+            url = f"./assets/gallery/{filename}"
+        elif not url:
+            url = f"./assets/gallery/work_{next_id}.jpg"
+
+        new_item = {
+            "id": next_id,
+            "filename": os.path.basename(url),
+            "url": url,
+            "uploaded_at": int(time.time() * 1000),
+            "title": title,
+            "category": category
+        }
+        gallery.insert(0, new_item)
+        save_gallery(gallery)
+
+        return cors_json_response({"success": True, "item": new_item})
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+async def handle_api_delete_gallery(request):
+    """Deletes a photo from the gallery."""
+    try:
+        photo_id = request.match_info.get("id")
+        if not photo_id:
+            data = await request.json()
+            photo_id = data.get("id")
+
+        if not photo_id:
+            return cors_json_response({"success": False, "error": "Missing 'id'"}, status=400)
+
+        gallery = load_gallery()
+        before_len = len(gallery)
+        gallery = [g for g in gallery if str(g.get("id")) != str(photo_id)]
+        if len(gallery) < before_len:
+            save_gallery(gallery)
+            return cors_json_response({"success": True, "message": f"Photo {photo_id} deleted"})
+        else:
+            return cors_json_response({"success": False, "error": f"Photo {photo_id} not found"}, status=404)
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+async def handle_api_stats(request):
+    """Returns website and business statistics for the iOS Dashboard."""
+    leads = load_leads()
+    gallery = load_gallery()
+    pending = sum(1 for l in leads if l.get("status") == "pending")
+    confirmed = sum(1 for l in leads if l.get("status") == "confirmed")
+    completed = sum(1 for l in leads if l.get("status") == "completed")
+    estimated = sum(1 for l in leads if l.get("status") == "estimated")
+    is_bot_ready = bool(bot_global and bot_global.is_ready())
+
+    stats = {
+        "status": "online",
+        "bot_online": is_bot_ready,
+        "bot_user": str(bot_global.user) if is_bot_ready else None,
+        "total_leads": len(leads),
+        "pending_leads": pending,
+        "confirmed_leads": confirmed,
+        "completed_leads": completed,
+        "estimated_leads": estimated,
+        "gallery_count": len(gallery),
+        "uptime_seconds": int(time.time() - SERVER_START_TIME),
+        "server_time": time.time()
+    }
+    return cors_json_response({"success": True, "stats": stats})
 
 async def handle_health(request):
     """Healthcheck endpoint for Railway, uptime pingers, and system diagnostics."""
     is_bot_ready = bool(bot_global and bot_global.is_ready())
-    return web.json_response({
+    return cors_json_response({
         "status": "healthy",
         "bot_online": is_bot_ready,
         "bot_user": str(bot_global.user) if is_bot_ready else None,
         "leads_channel_id": LEADS_CHANNEL_ID,
         "server_time": time.time()
-    }, headers={"Cache-Control": "no-cache"})
+    })
 
 def create_web_app():
     app = web.Application()
+    # Website static & pages
     app.router.add_get('/', handle_index)
     app.router.add_get('/index.html', handle_index)
     app.router.add_get('/gallery.json', handle_gallery_json)
     app.router.add_get('/health', handle_health)
     app.router.add_get('/ping', handle_health)
+
+    # Lead Submission (Web form)
     app.router.add_post('/api/lead', handle_lead_submission)
+
+    # REST API for iOS App & Admin
+    app.router.add_route('OPTIONS', '/api/{tail:.*}', handle_cors_options)
+    app.router.add_get('/api/leads', handle_api_get_leads)
+    app.router.add_post('/api/leads', handle_api_create_lead)
+    app.router.add_post('/api/leads/update', handle_api_update_lead)
+    app.router.add_post('/api/leads/delete', handle_api_delete_lead)
+    app.router.add_delete('/api/leads/{id}', handle_api_delete_lead)
+
+    app.router.add_get('/api/gallery', handle_api_get_gallery)
+    app.router.add_post('/api/gallery', handle_api_add_gallery)
+    app.router.add_post('/api/gallery/delete', handle_api_delete_gallery)
+    app.router.add_delete('/api/gallery/{id}', handle_api_delete_gallery)
+
+    app.router.add_get('/api/stats', handle_api_stats)
+
     # Static files (CSS, JS, Assets)
     app.router.add_static('/', path=BASE_DIR, show_index=False)
     return app
