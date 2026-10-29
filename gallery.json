@@ -1,19 +1,43 @@
 [
   {
-    "id": 2,
-    "filename": "work_2.jpg",
-    "url": "./assets/gallery/work_2.jpg",
-    "uploaded_at": 1791331200000,
-    "title": "Front Yard Renovation & Razor Edging",
-    "category": "Front Yard"
+    "id": 8,
+    "filename": "work_8.jpg",
+    "url": "./assets/gallery/work_8.jpg",
+    "uploaded_at": 1793250000000,
+    "title": "Builder Duplex",
+    "category": "General LawnCare",
+    "location": "Killeen & Central TX",
+    "verified": true
   },
   {
-    "id": 3,
-    "filename": "work_3.jpg",
-    "url": "./assets/gallery/work_3.jpg",
-    "uploaded_at": 1790900000000,
-    "title": "Hedge Trimming & Shrub Shaping",
-    "category": "Shrubs & Bushes"
+    "id": 7,
+    "filename": "work_7.jpg",
+    "url": "./assets/gallery/work_7.jpg",
+    "uploaded_at": 1793240000000,
+    "title": "Front Yard Clean & Sharp Mowing",
+    "category": "Front Yard",
+    "location": "Killeen & Central TX",
+    "verified": true
+  },
+  {
+    "id": 6,
+    "filename": "work_6.jpg",
+    "url": "./assets/gallery/work_6.jpg",
+    "uploaded_at": 1793230000000,
+    "title": "7 duplex",
+    "category": "General LawnCare",
+    "location": "Killeen & Central TX",
+    "verified": true
+  },
+  {
+    "id": 5,
+    "filename": "work_5.jpg",
+    "url": "./assets/gallery/work_5.jpg",
+    "uploaded_at": 1793220000000,
+    "title": "Front and back",
+    "category": "Front Yard",
+    "location": "Killeen & Central TX",
+    "verified": true
   },
   {
     "id": 4,
@@ -21,6 +45,28 @@
     "url": "./assets/gallery/work_4.jpg",
     "uploaded_at": 1790900000000,
     "title": "Fresh Dark Mulch Installation",
-    "category": "Mulch"
+    "category": "Mulch",
+    "location": "Killeen & Central TX",
+    "verified": true
+  },
+  {
+    "id": 3,
+    "filename": "work_3.jpg",
+    "url": "./assets/gallery/work_3.jpg",
+    "uploaded_at": 1790900000000,
+    "title": "Hedge Trimming & Shrub Shaping",
+    "category": "Shrubs & Bushes",
+    "location": "Killeen & Central TX",
+    "verified": true
+  },
+  {
+    "id": 2,
+    "filename": "work_2.jpg",
+    "url": "./assets/gallery/work_2.jpg",
+    "uploaded_at": 1791331200000,
+    "title": "Front Yard Renovation & Razor Edging",
+    "category": "Front Yard",
+    "location": "Killeen & Central TX",
+    "verified": true
   }
 ]

@@ -1,0 +1,77 @@
+name: Build Rodriguez LawnCare iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  build-ios:
+    name: Build & Package iOS App (IPA)
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Select Xcode Version
+        run: |
+          xcodebuild -version
+
+      - name: Build unsigned iOS app
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project RodriguezLawnCare.xcodeproj \
+            -scheme RodriguezLawnCare \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build | tee build.log
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p package/Payload
+          cp -R build/DerivedData/Build/Products/Release-iphoneos/RodriguezLawnCare.app package/Payload/
+          cd package
+          /usr/bin/zip -qry ../RodriguezLawnCare-unsigned.ipa Payload
+          cd ..
+
+      - name: Copy IPA to 'ipa here' folder
+        run: |
+          mkdir -p "ipa here"
+          cp RodriguezLawnCare-unsigned.ipa "ipa here/RodriguezLawnCare.ipa"
+          ls -la "ipa here"
+
+      - name: Commit and push IPA to repository
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add "ipa here/RodriguezLawnCare.ipa"
+          git commit -m "Automated build: Update RodriguezLawnCare.ipa in 'ipa here' [skip ci]" || echo "No changes to commit"
+          git push origin main
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RodriguezLawnCare-iOS-IPA
+          path: |
+            ipa here/RodriguezLawnCare.ipa
+            build.log
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        continue-on-error: true
+        with:
+          tag_name: latest-ipa
+          name: "Rodriguez LawnCare iOS App (Latest IPA)"
+          body: "Descarga directa de RodriguezLawnCare.ipa compilada automáticamente por GitHub Actions."
+          files: ipa here/RodriguezLawnCare.ipa

@@ -1,0 +1,53 @@
+{
+  "hero_type": "video",
+  "hero_video_url": "./assets/video/hero.mp4",
+  "hero_poster_url": "./assets/images/drone_tundra_intro.jpg",
+  "hero_preset_id": "drone_tundra",
+  "hero_title": "Your Dream Lawn, Flawlessly Maintained",
+  "hero_subtitle": "Crisp commercial stripe mowing, razor-sharp concrete edging, and premium landscape care. Available for direct homeowner jobs and general contractors.",
+  "video_presets": [
+    {
+      "id": "drone_tundra",
+      "name": "🚁 Drone Aéreo Tundra & Remolque (Con Créditos)",
+      "video_url": "./assets/video/hero.mp4",
+      "poster_url": "./assets/images/drone_tundra_intro.jpg",
+      "desc": "Vista de dron 4K, camioneta Toyota Tundra negra, remolque rotulado, créditos de Rafael Rodriguez y transición Antes/Después."
+    },
+    {
+      "id": "mower_stripes",
+      "name": "🚜 Corte Comercial con Líneas y Orillado",
+      "video_url": "./assets/video/hero.mp4",
+      "poster_url": "./assets/images/mowing.jpg",
+      "desc": "Corte de césped con podadora zero-turn comercial y orillado profundo en concreto."
+    },
+    {
+      "id": "luxury_estate",
+      "name": "🏡 Residencia de Lujo & Mulch Premium",
+      "video_url": "./assets/video/hero.mp4",
+      "poster_url": "./assets/images/drone_intro.jpg",
+      "desc": "Panorámica de propiedad residencial en Central Texas con jardineras de mulch oscuro."
+    }
+  ],
+  "photo_presets": [
+    {
+      "id": "photo_drone",
+      "name": "📸 Foto Dron Tundra & Residencia",
+      "photo_url": "./assets/images/drone_tundra_intro.jpg"
+    },
+    {
+      "id": "photo_mowing",
+      "name": "📸 Foto Líneas de Corte de Césped",
+      "photo_url": "./assets/images/mowing.jpg"
+    },
+    {
+      "id": "photo_mulch",
+      "name": "📸 Foto Mulch e Instalación",
+      "photo_url": "./assets/images/mulch.jpg"
+    },
+    {
+      "id": "photo_hero",
+      "name": "📸 Foto Jardín Principal Clásico",
+      "photo_url": "./assets/images/hero.jpg"
+    }
+  ]
+}

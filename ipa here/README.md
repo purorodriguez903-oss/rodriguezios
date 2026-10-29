@@ -4,3 +4,4 @@ Esta carpeta está configurada para almacenar automáticamente el archivo ejecut
 
 ### Archivo generado:
 * `RodriguezLawnCare.ipa`: Archivo IPA listo para firmar e instalar en tu iPhone con **ESign**, **TrollStore**, **AltStore** o **Scarlet**.
+

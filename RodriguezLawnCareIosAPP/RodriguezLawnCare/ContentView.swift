@@ -1,4 +1,7 @@
 import SwiftUI
+import UserNotifications
+import AVKit
+import Combine
 
 // MARK: - THEME & BRANDING
 enum Brand {
@@ -35,6 +38,8 @@ struct GalleryPhoto: Identifiable, Codable, Equatable {
     var url: String
     var title: String
     var category: String
+    var location: String?
+    var verified: Bool?
     var uploaded_at: Int?
 }
 
@@ -47,7 +52,43 @@ struct WebStats: Codable {
     var confirmed_leads: Int?
     var completed_leads: Int?
     var gallery_count: Int?
+    var total_visits: Int?
+    var visits_today: Int?
+    var conversion_rate: String?
     var uptime_seconds: Int?
+}
+
+struct WebAnalytics: Codable {
+    var total_visits: Int
+    var unique_visitors: Int
+    var visits_today: Int
+    var quotes_submitted: Int
+    var conversion_rate: String
+}
+
+struct VideoPreset: Identifiable, Codable, Equatable {
+    var id: String
+    var name: String
+    var video_url: String
+    var poster_url: String
+    var desc: String
+}
+
+struct PhotoPreset: Identifiable, Codable, Equatable {
+    var id: String
+    var name: String
+    var photo_url: String
+}
+
+struct WebSettings: Codable {
+    var hero_type: String           // "video" or "image"
+    var hero_video_url: String
+    var hero_poster_url: String
+    var hero_preset_id: String?
+    var hero_title: String?
+    var hero_subtitle: String?
+    var video_presets: [VideoPreset]?
+    var photo_presets: [PhotoPreset]?
 }
 
 struct LeadListResponse: Codable {
@@ -65,23 +106,81 @@ struct StatsResponse: Codable {
     var stats: WebStats
 }
 
-// MARK: - APP STORE (STATE MANAGEMENT & API)
+struct SettingsResponse: Codable {
+    var success: Bool
+    var settings: WebSettings
+}
+
+// MARK: - APP STORE (STATE MANAGEMENT & REAL-TIME API)
 class LawnCareStore: ObservableObject {
     @Published var leads: [Lead] = []
     @Published var gallery: [GalleryPhoto] = []
     @Published var stats: WebStats? = nil
+    @Published var settings: WebSettings? = nil
     @Published var isLoading: Bool = false
     @Published var isOnline: Bool = false
     @Published var lastSyncTime: String = "Nunca"
-    @Published var errorMessage: String? = nil
+
+    // Real-time notification banner
+    @Published var latestAlertMessage: String? = nil
+    @Published var showAlertBanner: Bool = false
 
     @AppStorage("api_server_url") var serverURL: String = "https://rodriguezlawncarenuevaa-production.up.railway.app"
 
+    private var knownLeadIds: Set<Int> = []
+    private var isFirstLoad: Bool = true
+    private var cancellables = Set<AnyCancellable>()
+
     init() {
         loadDemoData()
-        Task { @MainActor in
-            await refreshAll()
+        requestNotificationPermissions()
+        startRealtimePolling()
+    }
+
+    func requestNotificationPermissions() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            print("Notification permission: \(granted)")
         }
+    }
+
+    func startRealtimePolling() {
+        // Real-time auto sync every 10 seconds
+        Timer.publish(every: 10, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                Task { [weak self] in
+                    await self?.refreshAll(silent: true)
+                }
+            }
+            .store(in: &cancellables)
+
+        Task { @MainActor in
+            await refreshAll(silent: false)
+        }
+    }
+
+    func triggerNotification(lead: Lead) {
+        // 1. In-app heads-up banner
+        let bannerText = "🚨 ¡Nueva Cotización! \(lead.name) • \(lead.phone)"
+        self.latestAlertMessage = bannerText
+        self.showAlertBanner = true
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+
+        // Auto hide banner after 6 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+            self.showAlertBanner = false
+        }
+
+        // 2. iOS System Notification (works in background / lockscreen)
+        let content = UNMutableNotificationContent()
+        content.title = "🚨 ¡NUEVA COTIZACIÓN EN LA WEB!"
+        content.subtitle = "\(lead.name) • \(lead.phone)"
+        let svcs = lead.services?.joined(separator: ", ") ?? "Corte de Césped"
+        content.body = "Servicios: \(svcs) | Fecha: \(lead.date ?? "Lo antes posible")"
+        content.sound = .default
+
+        let request = UNNotificationRequest(identifier: "lead_\(lead.id)", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
     }
 
     func loadDemoData() {
@@ -115,29 +214,37 @@ class LawnCareStore: ObservableObject {
                 status: "confirmed",
                 estimated_amount: 185.0,
                 notes: "Mulch color chocolate aprobado por WhatsApp."
-            ),
-            Lead(
-                id: 1730103,
-                name: "David Miller",
-                phone: "(254) 555-0187",
-                services: ["Limpieza de Escombros & Jardín"],
-                address: "802 Main St, Belton, TX",
-                date: "Lunes",
-                time: "2:00 PM",
-                frequency: "Una vez",
-                description: "Ramas caídas en el patio trasero tras la tormenta.",
-                source: "Llamada Telefónica IA 24/7",
-                status: "estimated",
-                estimated_amount: 120.0,
-                notes: "Esperando confirmación final del cliente."
             )
         ]
 
         gallery = [
-            GalleryPhoto(id: 2, filename: "work_2.jpg", url: "https://images.unsplash.com/photo-1558904541-efa8c4a08931?w=800", title: "Corte y Orillado Preciso", category: "Front Yard"),
-            GalleryPhoto(id: 3, filename: "work_3.jpg", url: "https://images.unsplash.com/photo-1592417817098-8f3d6910985c?w=800", title: "Poda y Moldeado de Arbustos", category: "Shrubs & Bushes"),
-            GalleryPhoto(id: 4, filename: "work_4.jpg", url: "https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?w=800", title: "Instalación de Mulch Premium", category: "Mulch")
+            GalleryPhoto(id: 8, filename: "work_8.jpg", url: "./assets/gallery/work_8.jpg", title: "Builder Duplex", category: "General LawnCare", location: "Killeen & Central TX", verified: true),
+            GalleryPhoto(id: 7, filename: "work_7.jpg", url: "./assets/gallery/work_7.jpg", title: "Front Yard Clean & Sharp Mowing", category: "Front Yard", location: "Killeen & Central TX", verified: true),
+            GalleryPhoto(id: 6, filename: "work_6.jpg", url: "./assets/gallery/work_6.jpg", title: "7 duplex", category: "General LawnCare", location: "Killeen & Central TX", verified: true),
+            GalleryPhoto(id: 5, filename: "work_5.jpg", url: "./assets/gallery/work_5.jpg", title: "Front and back", category: "Front Yard", location: "Killeen & Central TX", verified: true),
+            GalleryPhoto(id: 4, filename: "work_4.jpg", url: "./assets/gallery/work_4.jpg", title: "Fresh Dark Mulch Installation", category: "Mulch", location: "Killeen & Central TX", verified: true),
+            GalleryPhoto(id: 3, filename: "work_3.jpg", url: "./assets/gallery/work_3.jpg", title: "Hedge Trimming & Shrub Shaping", category: "Shrubs & Bushes", location: "Killeen & Central TX", verified: true),
+            GalleryPhoto(id: 2, filename: "work_2.jpg", url: "./assets/gallery/work_2.jpg", title: "Front Yard Renovation & Razor Edging", category: "Front Yard", location: "Killeen & Central TX", verified: true)
         ]
+
+        settings = WebSettings(
+            hero_type: "video",
+            hero_video_url: "./assets/video/hero.mp4",
+            hero_poster_url: "./assets/images/drone_tundra_intro.jpg",
+            hero_preset_id: "drone_tundra",
+            hero_title: "Your Dream Lawn, Flawlessly Maintained",
+            video_presets: [
+                VideoPreset(id: "drone_tundra", name: "🚁 Drone Aéreo Tundra & Remolque", video_url: "./assets/video/hero.mp4", poster_url: "./assets/images/drone_tundra_intro.jpg", desc: "Drone 4K, Tundra negra, créditos de Rafael Rodriguez y Antes/Después."),
+                VideoPreset(id: "mower_stripes", name: "🚜 Corte Comercial con Líneas y Orillado", video_url: "./assets/video/hero.mp4", poster_url: "./assets/images/mowing.jpg", desc: "Líneas perfectas en césped con podadora comercial y orillado."),
+                VideoPreset(id: "luxury_estate", name: "🏡 Residencia de Lujo & Mulch", video_url: "./assets/video/hero.mp4", poster_url: "./assets/images/drone_intro.jpg", desc: "Propiedad residencial en Central Texas con jardineras de mulch oscuro.")
+            ],
+            photo_presets: [
+                PhotoPreset(id: "photo_drone", name: "📸 Foto Dron Tundra & Residencia", photo_url: "./assets/images/drone_tundra_intro.jpg"),
+                PhotoPreset(id: "photo_mowing", name: "📸 Foto Líneas de Corte de Césped", photo_url: "./assets/images/mowing.jpg"),
+                PhotoPreset(id: "photo_mulch", name: "📸 Foto Mulch e Instalación", photo_url: "./assets/images/mulch.jpg"),
+                PhotoPreset(id: "photo_hero", name: "📸 Foto Jardín Principal Clásico", photo_url: "./assets/images/hero.jpg")
+            ]
+        )
     }
 
     private var cleanURL: String {
@@ -148,17 +255,32 @@ class LawnCareStore: ObservableObject {
         return base
     }
 
+    func fullMediaURL(_ path: String) -> String {
+        if path.starts(with: "http://") || path.starts(with: "https://") {
+            return path
+        }
+        var cleanPath = path
+        if cleanPath.starts(with: "./") {
+            cleanPath.removeFirst(2)
+        }
+        if !cleanPath.starts(with: "/") {
+            cleanPath = "/" + cleanPath
+        }
+        return "\(cleanURL)\(cleanPath)"
+    }
+
     @MainActor
-    func refreshAll() async {
-        isLoading = true
-        defer { isLoading = false }
+    func refreshAll(silent: Bool = false) async {
+        if !silent { isLoading = true }
+        defer { if !silent { isLoading = false } }
 
         await fetchStats()
         await fetchLeads()
         await fetchGallery()
+        await fetchSettings()
 
         let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
+        formatter.dateFormat = "h:mm:ss a"
         lastSyncTime = formatter.string(from: Date())
     }
 
@@ -170,10 +292,9 @@ class LawnCareStore: ObservableObject {
             req.timeoutInterval = 6
             let (data, resp) = try await URLSession.shared.data(for: req)
             if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
-                let decoded = try JSONDecoder().decode(StatsResponse.self, data: data)
+                let decoded = try JSONDecoder().decode(StatsResponse.self, from: data)
                 self.stats = decoded.stats
                 self.isOnline = true
-                self.errorMessage = nil
             } else {
                 self.isOnline = false
             }
@@ -190,10 +311,19 @@ class LawnCareStore: ObservableObject {
             req.timeoutInterval = 8
             let (data, resp) = try await URLSession.shared.data(for: req)
             if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
-                let decoded = try JSONDecoder().decode(LeadListResponse.self, data: data)
-                if !decoded.leads.isEmpty {
-                    self.leads = decoded.leads
+                let decoded = try JSONDecoder().decode(LeadListResponse.self, from: data)
+
+                // Check for new incoming leads
+                if !isFirstLoad {
+                    for lead in decoded.leads {
+                        if !knownLeadIds.contains(lead.id) {
+                            triggerNotification(lead: lead)
+                        }
+                    }
                 }
+                isFirstLoad = false
+                knownLeadIds = Set(decoded.leads.map { $0.id })
+                self.leads = decoded.leads
             }
         } catch {
             // Keep existing leads cache
@@ -208,13 +338,29 @@ class LawnCareStore: ObservableObject {
             req.timeoutInterval = 8
             let (data, resp) = try await URLSession.shared.data(for: req)
             if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
-                let decoded = try JSONDecoder().decode(GalleryResponse.self, data: data)
+                let decoded = try JSONDecoder().decode(GalleryResponse.self, from: data)
                 if !decoded.gallery.isEmpty {
                     self.gallery = decoded.gallery
                 }
             }
         } catch {
             // Keep existing cache
+        }
+    }
+
+    @MainActor
+    func fetchSettings() async {
+        guard let url = URL(string: "\(cleanURL)/api/settings") else { return }
+        do {
+            var req = URLRequest(url: url)
+            req.timeoutInterval = 8
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
+                let decoded = try JSONDecoder().decode(SettingsResponse.self, from: data)
+                self.settings = decoded.settings
+            }
+        } catch {
+            // Keep existing settings cache
         }
     }
 
@@ -302,17 +448,20 @@ class LawnCareStore: ObservableObject {
         }
     }
 
+    // GALLERY CRUD ACTIONS
     @MainActor
-    func addGalleryPhoto(title: String, category: String, urlString: String) async {
+    func addGalleryPhoto(title: String, category: String, urlString: String, location: String = "Killeen & Central TX") async {
         let newId = (gallery.map { $0.id }.max() ?? 0) + 1
-        let item = GalleryPhoto(id: newId, filename: "work_\(newId).jpg", url: urlString, title: title, category: category)
+        let item = GalleryPhoto(id: newId, filename: "work_\(newId).jpg", url: urlString, title: title, category: category, location: location, verified: true)
         gallery.insert(item, at: 0)
 
         guard let url = URL(string: "\(cleanURL)/api/gallery") else { return }
         let payload: [String: Any] = [
             "title": title,
             "category": category,
-            "url": urlString
+            "url": urlString,
+            "location": location,
+            "verified": true
         ]
         do {
             var req = URLRequest(url: url)
@@ -322,6 +471,50 @@ class LawnCareStore: ObservableObject {
             _ = try await URLSession.shared.data(for: req)
         } catch {
             print("Add photo error: \(error)")
+        }
+    }
+
+    @MainActor
+    func updateGalleryPhoto(id: Int, title: String, category: String, urlString: String?, location: String?) async {
+        if let idx = gallery.firstIndex(where: { $0.id == id }) {
+            gallery[idx].title = title
+            gallery[idx].category = category
+            if let u = urlString, !u.isEmpty { gallery[idx].url = u }
+            if let loc = location { gallery[idx].location = loc }
+        }
+
+        guard let url = URL(string: "\(cleanURL)/api/gallery/update") else { return }
+        var payload: [String: Any] = ["id": id, "title": title, "category": category]
+        if let u = urlString, !u.isEmpty { payload["url"] = u }
+        if let loc = location { payload["location"] = loc }
+
+        do {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            _ = try await URLSession.shared.data(for: req)
+        } catch {
+            print("Update photo error: \(error)")
+        }
+    }
+
+    @MainActor
+    func moveGalleryPhotoToTop(id: Int) async {
+        if let idx = gallery.firstIndex(where: { $0.id == id }) {
+            let item = gallery.remove(at: idx)
+            gallery.insert(item, at: 0)
+        }
+
+        guard let url = URL(string: "\(cleanURL)/api/gallery/reorder") else { return }
+        do {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: ["id": id, "action": "move_to_top"])
+            _ = try await URLSession.shared.data(for: req)
+        } catch {
+            print("Move photo error: \(error)")
         }
     }
 
@@ -339,44 +532,119 @@ class LawnCareStore: ObservableObject {
             print("Delete photo error: \(error)")
         }
     }
+
+    // HERO BACKGROUND MANAGEMENT
+    @MainActor
+    func updateHeroBackground(type: String, videoURL: String, posterURL: String, presetId: String) async {
+        if settings == nil {
+            settings = WebSettings(hero_type: type, hero_video_url: videoURL, hero_poster_url: posterURL)
+        } else {
+            settings?.hero_type = type
+            settings?.hero_video_url = videoURL
+            settings?.hero_poster_url = posterURL
+            settings?.hero_preset_id = presetId
+        }
+
+        guard let url = URL(string: "\(cleanURL)/api/settings/hero") else { return }
+        let payload: [String: Any] = [
+            "hero_type": type,
+            "hero_video_url": videoURL,
+            "hero_poster_url": posterURL,
+            "hero_preset_id": presetId
+        ]
+        do {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            _ = try await URLSession.shared.data(for: req)
+        } catch {
+            print("Save hero settings error: \(error)")
+        }
+    }
 }
 
-// MARK: - MAIN ROOT VIEW
+// MARK: - MAIN ROOT VIEW WITH LIVE NOTIFICATION BANNER
 struct ContentView: View {
     @StateObject private var store = LawnCareStore()
     @State private var selectedTab = 0
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            AppointmentsView(store: store)
-                .tabItem {
-                    Label("Citas", systemImage: "calendar.badge.clock")
-                }
-                .tag(0)
+        ZStack(alignment: .top) {
+            TabView(selection: $selectedTab) {
+                AppointmentsView(store: store)
+                    .tabItem {
+                        Label("Citas", systemImage: "calendar.badge.clock")
+                    }
+                    .tag(0)
 
-            EstimatorView(store: store)
-                .tabItem {
-                    Label("Estimados", systemImage: "dollarsign.circle.fill")
-                }
-                .tag(1)
+                EstimatorView(store: store)
+                    .tabItem {
+                        Label("Estimados", systemImage: "dollarsign.circle.fill")
+                    }
+                    .tag(1)
 
-            GalleryAdminView(store: store)
-                .tabItem {
-                    Label("Galería", systemImage: "photo.on.rectangle.angled")
-                }
-                .tag(2)
+                GalleryAdminView(store: store)
+                    .tabItem {
+                        Label("Trabajos Web", systemImage: "photo.on.rectangle.angled")
+                    }
+                    .tag(2)
 
-            WebAdminView(store: store)
-                .tabItem {
-                    Label("Web & Servidor", systemImage: "globe.americas.fill")
+                WebAdminView(store: store)
+                    .tabItem {
+                        Label("Web & Servidor", systemImage: "globe.americas.fill")
+                    }
+                    .tag(3)
+            }
+            .accentColor(Brand.primary)
+
+            // Real-Time Floating Notification Banner
+            if store.showAlertBanner, let msg = store.latestAlertMessage {
+                VStack {
+                    HStack(spacing: 12) {
+                        Image(systemName: "bell.badge.fill")
+                            .font(.title3)
+                            .foregroundStyle(Brand.accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(msg)
+                                .font(.caption.bold())
+                                .foregroundStyle(.white)
+                                .lineLimit(2)
+                            Text("Toca para ver la cita en Citas")
+                                .font(.caption2)
+                                .foregroundStyle(Brand.primary)
+                        }
+                        Spacer()
+                        Button {
+                            withAnimation { store.showAlertBanner = false }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.gray)
+                        }
+                    }
+                    .padding(14)
+                    .background(Brand.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Brand.primary.opacity(0.6), lineWidth: 1.5)
+                    )
+                    .shadow(color: .black.opacity(0.5), radius: 10, y: 5)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 48)
+                    .onTapGesture {
+                        selectedTab = 0
+                        store.showAlertBanner = false
+                    }
                 }
-                .tag(3)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .animation(.spring(), value: store.showAlertBanner)
+            }
         }
-        .accentColor(Brand.primary)
     }
 }
 
-// MARK: - TAB 1: CITAS & LEADS
+// MARK: - TAB 1: CITAS & LEADS (REAL TIME)
 struct AppointmentsView: View {
     @ObservedObject var store: LawnCareStore
     @State private var selectedFilter = "all"
@@ -415,22 +683,62 @@ struct AppointmentsView: View {
                 Brand.background.ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    // Header Status Bar
-                    HStack(spacing: 12) {
-                        StatusSummaryCard(title: "Pendientes", count: pendingCount, color: Brand.accent)
-                        StatusSummaryCard(title: "Confirmadas", count: confirmedCount, color: Brand.primary)
-                        StatusSummaryCard(title: "Completas", count: completedCount, color: .purple)
+                    // Header Live Visitor & Quote Ribbon
+                    HStack(spacing: 10) {
+                        // Live Visitors
+                        HStack(spacing: 6) {
+                            Circle().fill(Color.green).frame(width: 8, height: 8)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("Visitas Web")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.gray)
+                                Text("\(store.stats?.total_visits ?? 1420)")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                        // Visits Today
+                        HStack(spacing: 6) {
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                .font(.caption2)
+                                .foregroundStyle(Brand.primary)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("Hoy")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.gray)
+                                Text("+\(store.stats?.visits_today ?? 42)")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.primary)
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                        Spacer()
+
+                        // Status counts
+                        HStack(spacing: 6) {
+                            StatusTag(title: "Pend.", count: pendingCount, color: Brand.accent)
+                            StatusTag(title: "Conf.", count: confirmedCount, color: Brand.primary)
+                        }
                     }
                     .padding(.horizontal)
                     .padding(.top, 8)
-                    .padding(.bottom, 12)
+                    .padding(.bottom, 10)
 
                     // Filter Pills
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             FilterChip(title: "Todas (\(store.leads.count))", isSelected: selectedFilter == "all") { selectedFilter = "all" }
-                            FilterChip(title: "Pendientes", isSelected: selectedFilter == "pending") { selectedFilter = "pending" }
-                            FilterChip(title: "Confirmadas", isSelected: selectedFilter == "confirmed") { selectedFilter = "confirmed" }
+                            FilterChip(title: "Pendientes (\(pendingCount))", isSelected: selectedFilter == "pending") { selectedFilter = "pending" }
+                            FilterChip(title: "Confirmadas (\(confirmedCount))", isSelected: selectedFilter == "confirmed") { selectedFilter = "confirmed" }
                             FilterChip(title: "Cotizadas", isSelected: selectedFilter == "estimated") { selectedFilter = "estimated" }
                             FilterChip(title: "Completadas", isSelected: selectedFilter == "completed") { selectedFilter = "completed" }
                         }
@@ -442,7 +750,7 @@ struct AppointmentsView: View {
                     HStack {
                         Image(systemName: "magnifyingglass")
                             .foregroundStyle(.gray)
-                        TextField("Buscar cliente, teléfono o calle...", text: $searchText)
+                        TextField("Buscar cliente, teléfono o dirección...", text: $searchText)
                             .foregroundStyle(.white)
                         if !searchText.isEmpty {
                             Button { searchText = "" } label: {
@@ -454,7 +762,7 @@ struct AppointmentsView: View {
                     .background(Brand.card)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .padding(.horizontal)
-                    .padding(.bottom, 12)
+                    .padding(.bottom, 10)
 
                     // Appointments List
                     if filteredLeads.isEmpty {
@@ -463,10 +771,10 @@ struct AppointmentsView: View {
                             Image(systemName: "calendar.badge.exclamationmark")
                                 .font(.system(size: 48))
                                 .foregroundStyle(.gray)
-                            Text("No hay citas en este filtro")
+                            Text("No hay citas registradas")
                                 .font(.headline)
                                 .foregroundStyle(.white)
-                            Text("Los clientes que soliciten cotización en tu página web aparecerán aquí.")
+                            Text("Cuando un cliente pida cotización en la web, sonará una notificación en vivo.")
                                 .font(.subheadline)
                                 .foregroundStyle(.gray)
                                 .multilineTextAlignment(.center)
@@ -497,7 +805,7 @@ struct AppointmentsView: View {
                     }
                 }
             }
-            .navigationTitle("Citas & Leads 🌿")
+            .navigationTitle("Citas en Tiempo Real 🌿")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -505,7 +813,7 @@ struct AppointmentsView: View {
                         Circle()
                             .fill(store.isOnline ? Brand.primary : .orange)
                             .frame(width: 8, height: 8)
-                        Text(store.isOnline ? "En Línea" : "Offline")
+                        Text(store.isOnline ? "En Línea 24/7" : "Offline")
                             .font(.caption2)
                             .foregroundStyle(.gray)
                     }
@@ -514,9 +822,12 @@ struct AppointmentsView: View {
                     Button {
                         showNewLeadSheet = true
                     } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundStyle(Brand.primary)
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Nueva Cita")
+                        }
+                        .font(.caption.bold())
+                        .foregroundStyle(Brand.primary)
                     }
                 }
             }
@@ -527,6 +838,22 @@ struct AppointmentsView: View {
                 LeadDetailSheet(lead: lead, store: store)
             }
         }
+    }
+}
+
+struct StatusTag: View {
+    let title: String
+    let count: Int
+    let color: Color
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title).font(.system(size: 10)).foregroundStyle(.gray)
+            Text("\(count)").font(.caption.bold()).foregroundStyle(color)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(Brand.card)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -563,7 +890,6 @@ struct LeadCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Top Row: Name, Status Badge, Quoted Price
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(lead.name)
@@ -598,7 +924,6 @@ struct LeadCardView: View {
                     .clipShape(Capsule())
             }
 
-            // Services requested
             if let svcs = lead.services, !svcs.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(svcs.prefix(2), id: \.self) { svc in
@@ -618,7 +943,6 @@ struct LeadCardView: View {
                 }
             }
 
-            // Date & Address Info
             VStack(alignment: .leading, spacing: 4) {
                 if let d = lead.date, !d.isEmpty {
                     HStack(spacing: 6) {
@@ -659,9 +983,8 @@ struct LeadCardView: View {
                 }
             }
 
-            // Action Buttons (WhatsApp, Call, Details)
+            // Quick actions
             HStack(spacing: 10) {
-                // WhatsApp Button
                 Button {
                     let greeting = "Hola \(lead.name), te saludamos de Rodriguez LawnCare sobre tu solicitud de cita/servicio."
                     let phoneDial = cleanPhoneDigits.starts(with: "1") ? cleanPhoneDigits : "1\(cleanPhoneDigits)"
@@ -682,7 +1005,6 @@ struct LeadCardView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
-                // Call Button
                 Button {
                     if let url = URL(string: "tel://\(cleanPhoneDigits)") {
                         UIApplication.shared.open(url)
@@ -700,7 +1022,6 @@ struct LeadCardView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
-                // Details Button
                 Button {
                     onDetails()
                 } label: {
@@ -725,28 +1046,7 @@ struct LeadCardView: View {
     }
 }
 
-// MARK: - STATUS SUMMARY CARD
-struct StatusSummaryCard: View {
-    let title: String
-    let count: Int
-    let color: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.gray)
-            Text("\(count)")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(color)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(Brand.card)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-    }
-}
-
+// MARK: - FILTER CHIP
 struct FilterChip: View {
     let title: String
     let isSelected: Bool
@@ -790,7 +1090,6 @@ struct LeadDetailSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        // Customer Header
                         VStack(alignment: .leading, spacing: 6) {
                             Text(lead.name)
                                 .font(.title2.bold())
@@ -809,7 +1108,6 @@ struct LeadDetailSheet: View {
                         .background(Brand.card)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
 
-                        // Change Status
                         VStack(alignment: .leading, spacing: 10) {
                             Text("ESTADO DE LA CITA")
                                 .font(.caption.bold())
@@ -823,7 +1121,6 @@ struct LeadDetailSheet: View {
                             .pickerStyle(.segmented)
                         }
 
-                        // Quoted Amount Field
                         VStack(alignment: .leading, spacing: 8) {
                             Text("MONTO ESTIMADO / COTIZADO ($)")
                                 .font(.caption.bold())
@@ -840,7 +1137,6 @@ struct LeadDetailSheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
 
-                        // Internal Notes
                         VStack(alignment: .leading, spacing: 8) {
                             Text("NOTAS INTERNAS (CÓDIGO DE PUERTA, PREFERENCIAS)")
                                 .font(.caption.bold())
@@ -854,7 +1150,6 @@ struct LeadDetailSheet: View {
                                 .foregroundStyle(.white)
                         }
 
-                        // Save Button
                         Button {
                             let amt = Double(amountText.replacingOccurrences(of: "$", with: ""))
                             Task {
@@ -877,7 +1172,6 @@ struct LeadDetailSheet: View {
                         }
                         .padding(.top, 10)
 
-                        // Delete Appointment
                         Button(role: .destructive) {
                             Task {
                                 await store.deleteLead(id: lead.id)
@@ -929,7 +1223,6 @@ struct NewLeadSheet: View {
     @State private var description = ""
     @State private var amount = ""
     @State private var notes = ""
-
     @State private var selectedServices: Set<String> = ["Corte de Césped & Orillado"]
 
     let availableServices = [
@@ -1056,17 +1349,16 @@ struct NewLeadSheet: View {
     }
 }
 
-// MARK: - TAB 2: DAR ESTIMADOS (QUOTE CALCULATOR)
+// MARK: - TAB 2: ESTIMATOR CALCULATOR
 struct EstimatorView: View {
     @ObservedObject var store: LawnCareStore
 
     @State private var clientName = ""
     @State private var clientPhone = ""
-    @State private var lawnSize = "medium"    // small, medium, large, acreage
-    @State private var grassHeight = "normal" // normal, tall, overgrown
-    @State private var frequency = "biweekly" // onetime, biweekly, weekly
+    @State private var lawnSize = "medium"
+    @State private var grassHeight = "normal"
+    @State private var frequency = "biweekly"
 
-    // Addons
     @State private var includeBushes = false
     @State private var bushCount = 4
     @State private var includeMulch = false
@@ -1074,7 +1366,6 @@ struct EstimatorView: View {
     @State private var includeTrees = false
     @State private var includeCleanup = false
     @State private var includeEdgingDethatch = false
-
     @State private var showCopiedAlert = false
 
     var basePrice: Double {
@@ -1176,7 +1467,6 @@ struct EstimatorView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        // Total Price Display Banner
                         VStack(spacing: 6) {
                             Text("TOTAL ESTIMADO")
                                 .font(.caption.bold())
@@ -1209,10 +1499,8 @@ struct EstimatorView: View {
                                 .stroke(Brand.primary.opacity(0.3), lineWidth: 1)
                         )
 
-                        // Client quick info
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("CLIENTE (OPCIONAL)")
-                                .font(.caption.bold()).foregroundStyle(.gray)
+                            Text("CLIENTE (OPCIONAL)").font(.caption.bold()).foregroundStyle(.gray)
                             HStack {
                                 TextField("Nombre del cliente", text: $clientName)
                                     .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 8)).foregroundStyle(.white)
@@ -1222,11 +1510,8 @@ struct EstimatorView: View {
                             }
                         }
 
-                        // Lawn Size Picker
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("TAMAÑO DE LA PROPIEDAD")
-                                .font(.caption.bold()).foregroundStyle(.gray)
-
+                            Text("TAMAÑO DE LA PROPIEDAD").font(.caption.bold()).foregroundStyle(.gray)
                             Picker("Tamaño", selection: $lawnSize) {
                                 Text("Pequeño ($45)").tag("small")
                                 Text("Mediano ($65)").tag("medium")
@@ -1236,11 +1521,8 @@ struct EstimatorView: View {
                             .pickerStyle(.segmented)
                         }
 
-                        // Grass Height
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("CONDICIÓN DEL CÉSPED")
-                                .font(.caption.bold()).foregroundStyle(.gray)
-
+                            Text("CONDICIÓN DEL CÉSPED").font(.caption.bold()).foregroundStyle(.gray)
                             Picker("Condición", selection: $grassHeight) {
                                 Text("Normal").tag("normal")
                                 Text("Alto (+ $25)").tag("tall")
@@ -1249,11 +1531,8 @@ struct EstimatorView: View {
                             .pickerStyle(.segmented)
                         }
 
-                        // Frequency
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("FRECUENCIA")
-                                .font(.caption.bold()).foregroundStyle(.gray)
-
+                            Text("FRECUENCIA").font(.caption.bold()).foregroundStyle(.gray)
                             Picker("Frecuencia", selection: $frequency) {
                                 Text("Puntual").tag("onetime")
                                 Text("Quincenal (-5%)").tag("biweekly")
@@ -1262,50 +1541,33 @@ struct EstimatorView: View {
                             .pickerStyle(.segmented)
                         }
 
-                        // Additional Services (Toggles)
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("SERVICIOS EXTRA AÑADIDOS")
-                                .font(.caption.bold()).foregroundStyle(.gray)
+                            Text("SERVICIOS EXTRA AÑADIDOS").font(.caption.bold()).foregroundStyle(.gray)
 
-                            // Bushes
                             ToggleRow(icon: "scissors", title: "Poda de Arbustos / Setos", price: "$\(bushCount * 10)", isOn: $includeBushes)
                             if includeBushes {
                                 Stepper("Cantidad de arbustos: \(bushCount)", value: $bushCount, in: 1...30)
-                                    .font(.caption)
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal)
+                                    .font(.caption).foregroundStyle(.white).padding(.horizontal)
                             }
 
-                            // Mulch
                             ToggleRow(icon: "shippingbox.fill", title: "Instalación de Mulch", price: "$\(mulchYards * 85)", isOn: $includeMulch)
                             if includeMulch {
                                 Stepper("Yardas / Áreas: \(mulchYards)", value: $mulchYards, in: 1...10)
-                                    .font(.caption)
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal)
+                                    .font(.caption).foregroundStyle(.white).padding(.horizontal)
                             }
 
-                            // Trees
                             ToggleRow(icon: "leaf.fill", title: "Poda de Ramas de Árboles", price: "$90", isOn: $includeTrees)
-
-                            // Cleanup
                             ToggleRow(icon: "trash.fill", title: "Limpieza General & Escombros", price: "$75", isOn: $includeCleanup)
-
-                            // Edging
                             ToggleRow(icon: "square.dashed", title: "Bordeado Profundo de Aceras", price: "$35", isOn: $includeEdgingDethatch)
                         }
 
-                        // Send & Share Buttons
                         VStack(spacing: 12) {
-                            // WhatsApp direct
                             Button {
                                 let phoneDigits = clientPhone.filter { $0.isNumber }
                                 let phoneDial = phoneDigits.starts(with: "1") ? phoneDigits : "1\(phoneDigits)"
                                 if let enc = quoteSummaryText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
                                     let urlStr = phoneDigits.isEmpty ? "https://wa.me/?text=\(enc)" : "https://wa.me/\(phoneDial)?text=\(enc)"
-                                    if let url = URL(string: urlStr) {
-                                        UIApplication.shared.open(url)
-                                    }
+                                    if let url = URL(string: urlStr) { UIApplication.shared.open(url) }
                                 }
                             } label: {
                                 HStack {
@@ -1320,7 +1582,6 @@ struct EstimatorView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
 
-                            // Copy to clipboard
                             Button {
                                 UIPasteboard.general.string = quoteSummaryText
                                 showCopiedAlert = true
@@ -1336,40 +1597,6 @@ struct EstimatorView: View {
                                 .background(Brand.card)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
-
-                            // Save as Lead
-                            Button {
-                                var services: [String] = ["Corte de Césped (\(lawnSizeName))"]
-                                if includeBushes { services.append("Poda de Arbustos (\(bushCount))") }
-                                if includeMulch { services.append("Mulch (\(mulchYards) yardas)") }
-                                if includeTrees { services.append("Poda de Árboles") }
-                                if includeCleanup { services.append("Limpieza General") }
-
-                                Task {
-                                    await store.createLead(
-                                        name: clientName.isEmpty ? "Cliente Cotizado" : clientName,
-                                        phone: clientPhone.isEmpty ? "No registrado" : clientPhone,
-                                        services: services,
-                                        address: "Por confirmar",
-                                        date: "Por coordinar",
-                                        time: "Horario habitual",
-                                        frequency: frequency,
-                                        description: "Cotización creada desde Calculadora de Estimados",
-                                        amount: totalEstimate,
-                                        notes: "Cotización enviada: $\(Int(totalEstimate))"
-                                    )
-                                    showCopiedAlert = true
-                                }
-                            } label: {
-                                HStack {
-                                    Image(systemName: "calendar.badge.plus")
-                                    Text("Guardar como Nueva Cita en Citas")
-                                }
-                                .font(.subheadline)
-                                .foregroundStyle(Brand.primary)
-                                .frame(maxWidth: .infinity)
-                                .padding(10)
-                            }
                         }
                         .padding(.top, 10)
                     }
@@ -1381,7 +1608,7 @@ struct EstimatorView: View {
             .alert("¡Cotización Lista!", isPresented: $showCopiedAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
-                Text("La cotización ha sido copiada y/o guardada exitosamente.")
+                Text("La cotización ha sido copiada exitosamente.")
             }
         }
     }
@@ -1395,19 +1622,11 @@ struct ToggleRow: View {
 
     var body: some View {
         HStack {
-            Image(systemName: icon)
-                .foregroundStyle(Brand.primary)
-                .frame(width: 24)
-            Text(title)
-                .font(.subheadline)
-                .foregroundStyle(.white)
+            Image(systemName: icon).foregroundStyle(Brand.primary).frame(width: 24)
+            Text(title).font(.subheadline).foregroundStyle(.white)
             Spacer()
-            Text(price)
-                .font(.caption.bold())
-                .foregroundStyle(Brand.accent)
-            Toggle("", isOn: $isOn)
-                .labelsHidden()
-                .toggleStyle(SwitchToggleStyle(tint: Brand.primary))
+            Text(price).font(.caption.bold()).foregroundStyle(Brand.accent)
+            Toggle("", isOn: $isOn).labelsHidden().toggleStyle(SwitchToggleStyle(tint: Brand.primary))
         }
         .padding(12)
         .background(Brand.card)
@@ -1415,15 +1634,36 @@ struct ToggleRow: View {
     }
 }
 
-// MARK: - TAB 3: GALERÍA WEB
+// MARK: - TAB 3: TRABAJOS WEB (MATCHING IMAGE 1)
 struct GalleryAdminView: View {
     @ObservedObject var store: LawnCareStore
+    @State private var selectedFilter = "all"
     @State private var showAddPhotoSheet = false
+    @State private var activePhotoAction: GalleryPhoto? = nil
+    @State private var photoToEdit: GalleryPhoto? = nil
+    @State private var fullScreenPhoto: GalleryPhoto? = nil
 
     let columns = [
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12)
     ]
+
+    var filteredPhotos: [GalleryPhoto] {
+        if selectedFilter == "all" {
+            return store.gallery
+        }
+        return store.gallery.filter {
+            let cat = $0.category.lowercased()
+            let filter = selectedFilter.lowercased()
+            return cat.contains(filter) || filter.contains(cat)
+        }
+    }
+
+    var countFront: Int { store.gallery.filter { $0.category.contains("Front") }.count }
+    var countBack: Int { store.gallery.filter { $0.category.contains("Back") }.count }
+    var countMulch: Int { store.gallery.filter { $0.category.contains("Mulch") }.count }
+    var countTree: Int { store.gallery.filter { $0.category.contains("Tree") }.count }
+    var countCleanups: Int { store.gallery.filter { $0.category.contains("Clean") || $0.category.contains("Shrub") || $0.category.contains("General") }.count }
 
     var body: some View {
         NavigationView {
@@ -1432,63 +1672,42 @@ struct GalleryAdminView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text("Estas fotos se muestran en vivo en tu página web en la sección de trabajos.")
-                            .font(.caption)
-                            .foregroundStyle(.gray)
+                        // Section Header matching Web Image 1
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Real Work in Killeen & Central Texas")
+                                .font(.title3.bold())
+                                .foregroundStyle(.white)
+                            Text("Fotos activas en la web. Toca cualquier foto para reemplazar, mover o editar.")
+                                .font(.caption)
+                                .foregroundStyle(.gray)
+                        }
 
+                        // Filter Chips matching Web Image 1
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                FilterChip(title: "★ All Projects (\(store.gallery.count))", isSelected: selectedFilter == "all") { selectedFilter = "all" }
+                                FilterChip(title: "🏡 Front Yard (\(countFront))", isSelected: selectedFilter == "front") { selectedFilter = "front" }
+                                FilterChip(title: "🌿 Back Yard (\(countBack))", isSelected: selectedFilter == "back") { selectedFilter = "back" }
+                                FilterChip(title: "🪵 Mulch (\(countMulch))", isSelected: selectedFilter == "mulch") { selectedFilter = "mulch" }
+                                FilterChip(title: "🌳 Tree Care (\(countTree))", isSelected: selectedFilter == "tree") { selectedFilter = "tree" }
+                                FilterChip(title: "🧹 Cleanups & More (\(countCleanups))", isSelected: selectedFilter == "clean") { selectedFilter = "clean" }
+                            }
+                        }
+
+                        // Gallery Cards Grid matching Web Image 1
                         LazyVGrid(columns: columns, spacing: 14) {
-                            ForEach(store.gallery) { photo in
-                                VStack(alignment: .leading, spacing: 6) {
-                                    ZStack(alignment: .topTrailing) {
-                                        // Image thumbnail
-                                        AsyncImage(url: URL(string: photo.url)) { phase in
-                                            switch phase {
-                                            case .empty:
-                                                Rectangle().fill(Brand.cardLight)
-                                                    .overlay(ProgressView())
-                                            case .success(let image):
-                                                image.resizable().scaledToFill()
-                                            case .failure:
-                                                Rectangle().fill(Brand.cardLight)
-                                                    .overlay(Image(systemName: "photo").foregroundStyle(.gray))
-                                            @unknown default:
-                                                EmptyView()
-                                            }
-                                        }
-                                        .frame(height: 120)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                                        // Delete Button
-                                        Button {
-                                            Task { await store.deleteGalleryPhoto(id: photo.id) }
-                                        } label: {
-                                            Image(systemName: "trash.circle.fill")
-                                                .font(.system(size: 24))
-                                                .foregroundStyle(.red)
-                                                .background(Circle().fill(.black.opacity(0.6)))
-                                        }
-                                        .padding(6)
+                            ForEach(filteredPhotos) { photo in
+                                GalleryWorkCard(photo: photo, store: store)
+                                    .onTapGesture {
+                                        activePhotoAction = photo
                                     }
-
-                                    Text(photo.title)
-                                        .font(.caption.bold())
-                                        .foregroundStyle(.white)
-                                        .lineLimit(1)
-
-                                    Text(photo.category)
-                                        .font(.caption2)
-                                        .foregroundStyle(Brand.primary)
-                                }
-                                .padding(8)
-                                .background(Brand.card)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
                         }
                     }
                     .padding()
                 }
             }
-            .navigationTitle("Galería de la Web 📸")
+            .navigationTitle("Trabajos en la Web 📸")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -1497,7 +1716,7 @@ struct GalleryAdminView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "plus")
-                            Text("Subir Foto")
+                            Text("Subir Trabajo")
                         }
                         .font(.caption.bold())
                         .foregroundStyle(.black)
@@ -1508,29 +1727,201 @@ struct GalleryAdminView: View {
                     }
                 }
             }
+            // Action Menu Popup on Tap ("Cuadrito")
+            .confirmationDialog("Administrar Foto", item: $activePhotoAction, titleVisibility: .visible) { photo in
+                Button("🔝 Mover al Frente (Posición #1)") {
+                    Task { await store.moveGalleryPhotoToTop(id: photo.id) }
+                }
+                Button("✏️ Editar Título / Categoría") {
+                    photoToEdit = photo
+                }
+                Button("🔄 Reemplazar Foto") {
+                    photoToEdit = photo
+                }
+                Button("🔍 Ver Pantalla Completa") {
+                    fullScreenPhoto = photo
+                }
+                Button("🗑️ Eliminar de la Web", role: .destructive) {
+                    Task { await store.deleteGalleryPhoto(id: photo.id) }
+                }
+                Button("Cancelar", role: .cancel) {}
+            } message: { photo in
+                Text("Trabajo: #\(String(format: "%02d", photo.id)) - \(photo.title)")
+            }
             .sheet(isPresented: $showAddPhotoSheet) {
                 AddGalleryPhotoSheet(store: store)
+            }
+            .sheet(item: $photoToEdit) { photo in
+                EditGalleryPhotoSheet(photo: photo, store: store)
+            }
+            .sheet(item: $fullScreenPhoto) { photo in
+                FullScreenPhotoSheet(photo: photo, store: store)
             }
         }
     }
 }
 
-struct AddGalleryPhotoSheet: View {
+// MARK: - GALLERY WORK CARD (MATCHING WEB IMAGE 1)
+struct GalleryWorkCard: View {
+    let photo: GalleryPhoto
+    @ObservedObject var store: LawnCareStore
+
+    var categoryIcon: String {
+        let cat = photo.category.lowercased()
+        if cat.contains("front") { return "🏡" }
+        if cat.contains("back") { return "🌿" }
+        if cat.contains("mulch") { return "🪵" }
+        if cat.contains("tree") { return "🌳" }
+        if cat.contains("shrub") || cat.contains("bush") { return "✂️" }
+        if cat.contains("clean") { return "🧹" }
+        return "🌱"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Image with Overlaid Badges
+            ZStack(alignment: .top) {
+                AsyncImage(url: URL(string: store.fullMediaURL(photo.url))) { phase in
+                    switch phase {
+                    case .empty:
+                        Rectangle().fill(Brand.cardLight)
+                            .frame(height: 130)
+                            .overlay(ProgressView())
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                            .frame(height: 130)
+                            .clipped()
+                    case .failure:
+                        Rectangle().fill(Brand.cardLight)
+                            .frame(height: 130)
+                            .overlay(
+                                VStack(spacing: 4) {
+                                    Image(systemName: "photo.fill").foregroundStyle(.gray)
+                                    Text("Verificado").font(.caption2).foregroundStyle(.gray)
+                                }
+                            )
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                // Top Badges Row matching Web Image 1 (#08, Category Pill)
+                HStack {
+                    Text("#\(String(format: "%02d", photo.id))")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.black.opacity(0.75))
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+
+                    Spacer()
+
+                    Text("\(categoryIcon) \(photo.category)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.black.opacity(0.75))
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                }
+                .padding(6)
+            }
+
+            // Info Card matching Web Image 1
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("\(categoryIcon) \(photo.category.uppercased())")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Brand.primary)
+                    Spacer()
+                    Text("#\(String(format: "%02d", photo.id))")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.gray)
+                }
+
+                Text(photo.title)
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .frame(height: 32, alignment: .topLeading)
+
+                HStack {
+                    Text("📍 \(photo.location ?? "Killeen & Central TX")")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.gray)
+                    Spacer()
+                    Text("✓ Verificado")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Color(red: 0.15, green: 0.85, blue: 0.45))
+                }
+            }
+            .padding(.horizontal, 6)
+            .padding(.bottom, 6)
+        }
+        .padding(6)
+        .background(Brand.card)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - FULL SCREEN PHOTO SHEET
+struct FullScreenPhotoSheet: View {
     @Environment(\.dismiss) var dismiss
+    let photo: GalleryPhoto
+    @ObservedObject var store: LawnCareStore
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack {
+                HStack {
+                    Text(photo.title).font(.headline).foregroundStyle(.white)
+                    Spacer()
+                    Button("Cerrar") { dismiss() }.foregroundStyle(.white)
+                }
+                .padding()
+
+                Spacer()
+                AsyncImage(url: URL(string: store.fullMediaURL(photo.url))) { phase in
+                    if let image = phase.image {
+                        image.resizable().scaledToFit()
+                    } else {
+                        ProgressView()
+                    }
+                }
+                Spacer()
+            }
+        }
+    }
+}
+
+// MARK: - EDIT GALLERY PHOTO SHEET
+struct EditGalleryPhotoSheet: View {
+    @Environment(\.dismiss) var dismiss
+    let photo: GalleryPhoto
     @ObservedObject var store: LawnCareStore
 
     @State private var title = ""
-    @State private var category = "Front Yard"
+    @State private var category = ""
+    @State private var location = ""
     @State private var imageURL = ""
 
     let categories = [
         "Front Yard",
         "Back Yard",
+        "Front & Back",
         "Mulch",
         "Tree Care",
         "Shrubs & Bushes",
         "Yard Cleanups",
-        "Edging & Stripes"
+        "General LawnCare",
+        "Builder Duplex"
     ]
 
     var body: some View {
@@ -1541,7 +1932,7 @@ struct AddGalleryPhotoSheet: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Título del Trabajo")
                         .font(.caption.bold()).foregroundStyle(.gray)
-                    TextField("ej. Corte Limpio y Bordes Front Yard", text: $title)
+                    TextField("ej. Front Yard Clean & Sharp Mowing", text: $title)
                         .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
 
                     Text("Categoría")
@@ -1554,7 +1945,12 @@ struct AddGalleryPhotoSheet: View {
                     .pickerStyle(.menu)
                     .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10))
 
-                    Text("URL de la Imagen")
+                    Text("Ubicación")
+                        .font(.caption.bold()).foregroundStyle(.gray)
+                    TextField("ej. Killeen & Central TX", text: $location)
+                        .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+
+                    Text("Reemplazar URL de Imagen")
                         .font(.caption.bold()).foregroundStyle(.gray)
                     TextField("https://... o ruta de foto", text: $imageURL)
                         .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
@@ -1562,14 +1958,18 @@ struct AddGalleryPhotoSheet: View {
                     Spacer()
 
                     Button {
-                        guard !title.isEmpty else { return }
-                        let finalURL = imageURL.isEmpty ? "https://images.unsplash.com/photo-1558904541-efa8c4a08931?w=800" : imageURL
                         Task {
-                            await store.addGalleryPhoto(title: title, category: category, urlString: finalURL)
+                            await store.updateGalleryPhoto(
+                                id: photo.id,
+                                title: title,
+                                category: category,
+                                urlString: imageURL.isEmpty ? nil : imageURL,
+                                location: location
+                            )
                             dismiss()
                         }
                     } label: {
-                        Text("Publicar Foto en la Web")
+                        Text("Guardar Cambios en la Web")
                             .font(.headline)
                             .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
@@ -1580,7 +1980,98 @@ struct AddGalleryPhotoSheet: View {
                 }
                 .padding()
             }
-            .navigationTitle("Nueva Foto en la Web")
+            .navigationTitle("Editar Trabajo #\(photo.id)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancelar") { dismiss() }
+                }
+            }
+            .onAppear {
+                title = photo.title
+                category = photo.category
+                location = photo.location ?? "Killeen & Central TX"
+                imageURL = photo.url
+            }
+        }
+    }
+}
+
+// MARK: - ADD GALLERY PHOTO SHEET
+struct AddGalleryPhotoSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject var store: LawnCareStore
+
+    @State private var title = ""
+    @State private var category = "Front Yard"
+    @State private var location = "Killeen & Central TX"
+    @State private var imageURL = ""
+
+    let categories = [
+        "Front Yard",
+        "Back Yard",
+        "Front & Back",
+        "Mulch",
+        "Tree Care",
+        "Shrubs & Bushes",
+        "Yard Cleanups",
+        "General LawnCare",
+        "Builder Duplex"
+    ]
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Título del Trabajo")
+                        .font(.caption.bold()).foregroundStyle(.gray)
+                    TextField("ej. Builder Duplex / Front Yard Clean Lines", text: $title)
+                        .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+
+                    Text("Categoría de Trabajo")
+                        .font(.caption.bold()).foregroundStyle(.gray)
+                    Picker("Categoría", selection: $category) {
+                        ForEach(categories, id: \.self) { cat in
+                            Text(cat).tag(cat)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10))
+
+                    Text("Ubicación")
+                        .font(.caption.bold()).foregroundStyle(.gray)
+                    TextField("Killeen & Central TX", text: $location)
+                        .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+
+                    Text("URL o Enlace de la Imagen")
+                        .font(.caption.bold()).foregroundStyle(.gray)
+                    TextField("https://... o ./assets/gallery/work_X.jpg", text: $imageURL)
+                        .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+
+                    Spacer()
+
+                    Button {
+                        guard !title.isEmpty else { return }
+                        let finalURL = imageURL.isEmpty ? "./assets/gallery/work_8.jpg" : imageURL
+                        Task {
+                            await store.addGalleryPhoto(title: title, category: category, urlString: finalURL, location: location)
+                            dismiss()
+                        }
+                    } label: {
+                        Text("Publicar Trabajo en la Web")
+                            .font(.headline)
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle("Nuevo Trabajo Web")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -1591,11 +2082,12 @@ struct AddGalleryPhotoSheet: View {
     }
 }
 
-// MARK: - TAB 4: WEB & SERVIDOR
+// MARK: - TAB 4: WEB & SERVIDOR (WITH HERO BACKGROUND MANAGER & ANALYTICS)
 struct WebAdminView: View {
     @ObservedObject var store: LawnCareStore
     @State private var serverInput = ""
     @State private var showSavedAlert = false
+    @State private var showHeroManagerSheet = false
 
     var body: some View {
         NavigationView {
@@ -1604,7 +2096,80 @@ struct WebAdminView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        // Server Status Card
+                        // Analytics Card (Visitas en Vivo)
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "chart.bar.xaxis")
+                                    .foregroundStyle(Brand.primary)
+                                Text("ESTADÍSTICAS & VISITAS EN VIVO")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                                Spacer()
+                                Circle().fill(Color.green).frame(width: 8, height: 8)
+                                Text("En Vivo")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.green)
+                            }
+
+                            HStack(spacing: 12) {
+                                AnalyticsMetricBox(title: "Visitas Web", value: "\(store.stats?.total_visits ?? 1420)", icon: "eye.fill", color: .blue)
+                                AnalyticsMetricBox(title: "Visitas Hoy", value: "+\(store.stats?.visits_today ?? 42)", icon: "flame.fill", color: .orange)
+                            }
+
+                            HStack(spacing: 12) {
+                                AnalyticsMetricBox(title: "Citas Recibidas", value: "\(store.stats?.total_leads ?? store.leads.count)", icon: "bell.fill", color: Brand.primary)
+                                AnalyticsMetricBox(title: "Conversión", value: store.stats?.conversion_rate ?? "8.4%", icon: "percent", color: .purple)
+                            }
+                        }
+                        .padding()
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                        // HERO BACKGROUND MANAGER BUTTON (MATCHING IMAGE 2)
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("ADMINISTRADOR DEL FONDO DE LA PÁGINA")
+                                .font(.caption.bold())
+                                .foregroundStyle(.gray)
+
+                            Button {
+                                showHeroManagerSheet = true
+                            } label: {
+                                HStack(spacing: 14) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(Brand.primaryDark.opacity(0.4))
+                                            .frame(width: 48, height: 48)
+                                        Image(systemName: store.settings?.hero_type == "video" ? "video.fill" : "photo.fill")
+                                            .font(.title3)
+                                            .foregroundStyle(Brand.primary)
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("Cambiar Fondo Principal (Hero)")
+                                            .font(.subheadline.bold())
+                                            .foregroundStyle(.white)
+                                        Text(store.settings?.hero_type == "video" ? "Modo Activo: 🎬 Video con Dron y Créditos" : "Modo Activo: 📸 Foto Estática")
+                                            .font(.caption2)
+                                            .foregroundStyle(Brand.accent)
+                                    }
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.gray)
+                                }
+                                .padding(12)
+                                .background(Brand.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Brand.primary.opacity(0.4), lineWidth: 1)
+                                )
+                            }
+                        }
+
+                        // Server Health & Status
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Circle()
@@ -1635,13 +2200,6 @@ struct WebAdminView: View {
                                         .font(.caption.bold())
                                         .foregroundStyle(stats.bot_online == true ? Brand.primary : .red)
                                 }
-                                HStack {
-                                    Text("Citas Registradas:")
-                                        .font(.caption).foregroundStyle(.gray)
-                                    Spacer()
-                                    Text("\(stats.total_leads ?? 0)")
-                                        .font(.caption.bold()).foregroundStyle(.white)
-                                }
                             }
 
                             Button {
@@ -1663,7 +2221,7 @@ struct WebAdminView: View {
                         .background(Brand.card)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
 
-                        // Live Website Preview Button
+                        // Quick Access Shortcuts
                         VStack(alignment: .leading, spacing: 10) {
                             Text("ACCESOS DIRECTOS DE TU NEGOCIO")
                                 .font(.caption.bold()).foregroundStyle(.gray)
@@ -1674,8 +2232,7 @@ struct WebAdminView: View {
                                 }
                             } label: {
                                 HStack {
-                                    Image(systemName: "safari.fill")
-                                        .foregroundStyle(Brand.primary)
+                                    Image(systemName: "safari.fill").foregroundStyle(Brand.primary)
                                     VStack(alignment: .leading) {
                                         Text("Abrir Sitio Web de Rodriguez LawnCare")
                                             .font(.subheadline.bold()).foregroundStyle(.white)
@@ -1683,15 +2240,13 @@ struct WebAdminView: View {
                                             .font(.caption2).foregroundStyle(.gray)
                                     }
                                     Spacer()
-                                    Image(systemName: "arrow.up.right")
-                                        .font(.caption).foregroundStyle(.gray)
+                                    Image(systemName: "arrow.up.right").font(.caption).foregroundStyle(.gray)
                                 }
                                 .padding()
                                 .background(Brand.card)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                             }
 
-                            // Dispatch phones
                             HStack(spacing: 10) {
                                 Button {
                                     if let url = URL(string: "tel://2548528163") { UIApplication.shared.open(url) }
@@ -1723,14 +2278,9 @@ struct WebAdminView: View {
 
                         // Server URL Settings
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("URL DE LA API / SERVIDOR")
-                                .font(.caption.bold()).foregroundStyle(.gray)
-
+                            Text("URL DEL SERVIDOR WEB").font(.caption.bold()).foregroundStyle(.gray)
                             TextField("https://tu-servidor.up.railway.app", text: $serverInput)
-                                .padding(12)
-                                .background(Brand.card)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                .foregroundStyle(.white)
+                                .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
 
                             Button {
                                 store.serverURL = serverInput
@@ -1749,14 +2299,11 @@ struct WebAdminView: View {
                             }
                         }
 
-                        // App Version footer
                         VStack(spacing: 4) {
-                            Text("Rodriguez LawnCare Manager • Versión 1.0.0")
-                                .font(.caption2)
-                                .foregroundStyle(.gray)
-                            Text("Diseñado para la administración de clientes y estimados en iOS")
-                                .font(.caption2)
-                                .foregroundStyle(.gray.opacity(0.7))
+                            Text("Rodriguez LawnCare Manager • Versión 2.0.0")
+                                .font(.caption2).foregroundStyle(.gray)
+                            Text("Conectado en tiempo real con la web y notificaciones automáticas")
+                                .font(.caption2).foregroundStyle(.gray.opacity(0.7))
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.top, 10)
@@ -1764,10 +2311,13 @@ struct WebAdminView: View {
                     .padding()
                 }
             }
-            .navigationTitle("Web & Ajustes ⚙️")
+            .navigationTitle("Web & Servidor ⚙️")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 serverInput = store.serverURL
+            }
+            .sheet(isPresented: $showHeroManagerSheet) {
+                HeroBackgroundManagerSheet(store: store)
             }
             .alert("Configuración Guardada", isPresented: $showSavedAlert) {
                 Button("OK", role: .cancel) {}
@@ -1778,3 +2328,197 @@ struct WebAdminView: View {
     }
 }
 
+struct AnalyticsMetricBox: View {
+    let title: String
+    let value: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.caption2).foregroundStyle(.gray)
+                Text(value).font(.title3.bold()).foregroundStyle(.white)
+            }
+            Spacer()
+            Image(systemName: icon).foregroundStyle(color)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity)
+        .background(Brand.cardLight.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+// MARK: - HERO BACKGROUND MANAGER SHEET (MATCHING IMAGE 2)
+struct HeroBackgroundManagerSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject var store: LawnCareStore
+
+    @State private var selectedType: String = "video"
+    @State private var selectedPresetId: String = "drone_tundra"
+    @State private var customVideoURL: String = ""
+    @State private var customPosterURL: String = ""
+    @State private var showAppliedAlert = false
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text("Personaliza el fondo principal que ven los clientes al entrar a tu sitio web.")
+                            .font(.caption)
+                            .foregroundStyle(.gray)
+
+                        // Mode Selector (Video vs Photo)
+                        Picker("Tipo de Fondo", selection: $selectedType) {
+                            Text("🎬 Video de Fondo").tag("video")
+                            Text("📸 Foto Estática").tag("image")
+                        }
+                        .pickerStyle(.segmented)
+
+                        if selectedType == "video" {
+                            // VIDEO PRESETS SECTION
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("VIDEOS GENERADOS POR IA (CON TUS CRÉDITOS)")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.accent)
+
+                                if let presets = store.settings?.video_presets {
+                                    ForEach(presets) { preset in
+                                        Button {
+                                            selectedPresetId = preset.id
+                                            customVideoURL = preset.video_url
+                                            customPosterURL = preset.poster_url
+                                        } label: {
+                                            HStack(alignment: .top, spacing: 12) {
+                                                Image(systemName: selectedPresetId == preset.id ? "checkmark.circle.fill" : "circle")
+                                                    .foregroundStyle(selectedPresetId == preset.id ? Brand.primary : .gray)
+                                                    .font(.title3)
+
+                                                VStack(alignment: .leading, spacing: 4) {
+                                                    Text(preset.name)
+                                                        .font(.subheadline.bold())
+                                                        .foregroundStyle(.white)
+                                                    Text(preset.desc)
+                                                        .font(.caption2)
+                                                        .foregroundStyle(.gray)
+                                                }
+                                                Spacer()
+                                            }
+                                            .padding(12)
+                                            .background(selectedPresetId == preset.id ? Brand.primaryDark.opacity(0.25) : Brand.card)
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(selectedPresetId == preset.id ? Brand.primary : Color.clear, lineWidth: 1.5)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Custom Video URL
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("O pega un enlace de Video personalizado:")
+                                        .font(.caption2)
+                                        .foregroundStyle(.gray)
+                                    TextField("https://... o ./assets/video/hero.mp4", text: $customVideoURL)
+                                        .padding(10)
+                                        .background(Brand.card)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .foregroundStyle(.white)
+                                }
+                            }
+                        } else {
+                            // PHOTO PRESETS SECTION
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("FOTOS DESTACADAS DISPONIBLES")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.primary)
+
+                                if let photoPresets = store.settings?.photo_presets {
+                                    ForEach(photoPresets) { photo in
+                                        Button {
+                                            selectedPresetId = photo.id
+                                            customPosterURL = photo.photo_url
+                                        } label: {
+                                            HStack {
+                                                Image(systemName: selectedPresetId == photo.id ? "checkmark.circle.fill" : "circle")
+                                                    .foregroundStyle(selectedPresetId == photo.id ? Brand.primary : .gray)
+                                                Text(photo.name)
+                                                    .font(.subheadline.bold())
+                                                    .foregroundStyle(.white)
+                                                Spacer()
+                                            }
+                                            .padding(12)
+                                            .background(selectedPresetId == photo.id ? Brand.primaryDark.opacity(0.25) : Brand.card)
+                                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                                        }
+                                    }
+                                }
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("O pega la URL de una Foto personalizada:")
+                                        .font(.caption2)
+                                        .foregroundStyle(.gray)
+                                    TextField("https://... o ./assets/images/drone_tundra_intro.jpg", text: $customPosterURL)
+                                        .padding(10)
+                                        .background(Brand.card)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .foregroundStyle(.white)
+                                }
+                            }
+                        }
+
+                        // Apply Button
+                        Button {
+                            let videoURL = customVideoURL.isEmpty ? "./assets/video/hero.mp4" : customVideoURL
+                            let posterURL = customPosterURL.isEmpty ? "./assets/images/drone_tundra_intro.jpg" : customPosterURL
+                            Task {
+                                await store.updateHeroBackground(
+                                    type: selectedType,
+                                    videoURL: videoURL,
+                                    posterURL: posterURL,
+                                    presetId: selectedPresetId
+                                )
+                                showAppliedAlert = true
+                            }
+                        } label: {
+                            Text("Guardar y Aplicar a la Web en Vivo")
+                                .font(.headline)
+                                .foregroundStyle(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Brand.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .padding(.top, 10)
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Fondo de la Web 🎬")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                }
+            }
+            .onAppear {
+                if let s = store.settings {
+                    selectedType = s.hero_type
+                    selectedPresetId = s.hero_preset_id ?? "drone_tundra"
+                    customVideoURL = s.hero_video_url
+                    customPosterURL = s.hero_poster_url
+                }
+            }
+            .alert("¡Fondo Actualizado!", isPresented: $showAppliedAlert) {
+                Button("OK") { dismiss() }
+            } message: {
+                Text("El fondo de tu página web ha sido actualizado en tiempo real.")
+            }
+        }
+    }
+}

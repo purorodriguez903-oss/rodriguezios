@@ -224,7 +224,46 @@ document.addEventListener('DOMContentLoaded', () => {
   initNavbarScroll();
   initMobileMenu();
   initHeroVideo();
+  initLiveHeroSettings();
+  pingVisitorAnalytics();
 });
+
+function pingVisitorAnalytics() {
+  try {
+    fetch('/api/analytics/visit', { method: 'POST' }).catch(() => {});
+  } catch (e) {}
+}
+
+async function initLiveHeroSettings() {
+  try {
+    const res = await fetch('/api/settings');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.settings) return;
+    const s = data.settings;
+    const video = document.getElementById('heroBgVideo');
+    const fallbackImg = document.querySelector('.hero-fallback-img');
+
+    if (s.hero_type === 'image') {
+      if (video) video.style.display = 'none';
+      if (fallbackImg) {
+        fallbackImg.style.display = 'block';
+        if (s.hero_poster_url) fallbackImg.src = s.hero_poster_url;
+      }
+    } else if (s.hero_type === 'video') {
+      if (video) {
+        video.style.display = 'block';
+        if (s.hero_poster_url) video.setAttribute('poster', s.hero_poster_url);
+        const source = video.querySelector('source');
+        if (source && s.hero_video_url && !source.src.endsWith(s.hero_video_url.replace('./', ''))) {
+          source.src = s.hero_video_url;
+          video.load();
+          video.play().catch(() => {});
+        }
+      }
+    }
+  } catch (e) {}
+}
 
 // --- 1. LANGUAGE INITIALIZATION (100% ENGLISH) ---
 function initLanguage() {
