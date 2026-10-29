@@ -103,6 +103,39 @@ struct WebSettings: Codable {
     var music_presets: [MusicPreset]?
 }
 
+struct AIEstimateItem: Identifiable, Codable {
+    var id: String { item + (sku ?? "") }
+    var item: String
+    var store: String
+    var qty: String
+    var unit_price: Double
+    var subtotal: Double
+    var sku: String?
+}
+
+struct AIEstimateStoreInfo: Codable {
+    var name: String?
+    var location: String?
+    var phone: String?
+}
+
+struct AIEstimateResponse: Codable {
+    var success: Bool
+    var total_quote: Double?
+    var total_materials: Double?
+    var total_labor: Double?
+    var overhead: Double?
+    var net_profit: Double?
+    var profit_margin: String?
+    var labor_details: String?
+    var store_info: AIEstimateStoreInfo?
+    var materials: [AIEstimateItem]?
+    var whatsapp_text: String?
+    var ai_confidence: String?
+    var ai_tips: String?
+    var error: String?
+}
+
 struct AppVersionInfo: Codable {
     var success: Bool?
     var app_name: String?
@@ -191,8 +224,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "1.4.0"
-    let currentAppBuild: Int = 14
+    let currentAppVersion: String = "1.5.0"
+    let currentAppBuild: Int = 15
 
     @AppStorage("api_server_url") var serverURL: String = "https://web-production-b6891b.up.railway.app"
 
@@ -247,14 +280,23 @@ class LawnCareStore: ObservableObject {
         }
 
         let content = UNMutableNotificationContent()
-        content.title = "🚨 ¡NUEVA COTIZACIÓN EN LA WEB!"
+        content.title = "🚨 ¡NUEVA CITA / COTIZACIÓN WEB!"
         content.subtitle = "\(lead.name) • \(lead.phone)"
         let svcs = lead.services?.joined(separator: ", ") ?? "Corte de Césped"
-        content.body = "Servicios: \(svcs) | Fecha: \(lead.date ?? "Lo antes posible")"
-        content.sound = .default
+        content.body = "Servicios: \(svcs) | \(lead.extra_details ?? "Cliente solicita cotización")"
+        content.sound = .defaultCritical
+        content.badge = 1
+        if #available(iOS 15.0, *) {
+            content.interruptionLevel = .timeSensitive
+        }
 
-        let request = UNNotificationRequest(identifier: "lead_\(lead.id)", content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1.0, repeats: false)
+        let request = UNNotificationRequest(identifier: "lead_\(lead.id)_\(Int(Date().timeIntervalSince1970))", content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request) { err in
+            if let err = err {
+                print("Error system notification: \(err)")
+            }
+        }
     }
 
     func loadDemoData() {
@@ -724,6 +766,62 @@ class LawnCareStore: ObservableObject {
         VideoPreset(id: "duplex_commercial", name: "🏢 Mantenimiento a Complejos Duplex & Contratistas", video_url: "./assets/video/hero.mp4", poster_url: "./assets/gallery/work_8.jpg", desc: "Servicio de mantenimiento integral para constructoras, duplex y propiedades multifamiliares en Killeen.")
     ]
 
+    func testSystemNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "🔔 PRUEBA DE NOTIFICACIÓN DEL SISTEMA"
+        content.subtitle = "Rodriguez LawnCare • 24/7 En Vivo"
+        content.body = "¡Excelente! Las notificaciones fuera de la app están activas. Te llegarán alertas en la calle al recibir cotizaciones."
+        content.sound = .defaultCritical
+        content.badge = 1
+        if #available(iOS 15.0, *) {
+            content.interruptionLevel = .timeSensitive
+        }
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3.0, repeats: false)
+        let request = UNNotificationRequest(identifier: "test_notify_\(Int(Date().timeIntervalSince1970))", content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    @MainActor
+    func generateAIEstimate(
+        description: String,
+        workersCount: Int,
+        payType: String,
+        payRate: Double,
+        duration: Double,
+        storePreference: String,
+        imageBase64: String? = nil
+    ) async -> AIEstimateResponse? {
+        guard let url = URL(string: "\(cleanURL)/api/ai/estimate") else { return nil }
+        var payload: [String: Any] = [
+            "description": description,
+            "workers_count": workersCount,
+            "pay_type": payType,
+            "pay_rate": payRate,
+            "duration": duration,
+            "store_preference": storePreference
+        ]
+        if let img = imageBase64 {
+            payload["image_base64"] = img
+        }
+
+        do {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.timeoutInterval = 18
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
+                return try JSONDecoder().decode(AIEstimateResponse.self, from: data)
+            }
+        } catch {
+            print("AI Estimate error: \(error)")
+        }
+        return nil
+    }
+
     static let defaultMusicPresets: [MusicPreset] = [
         MusicPreset(id: "texas_guitar", name: "🎸 Texas Acoustic & Guitarra Campestre", genre: "Acoustic Chill", url: "./assets/audio/texas_acoustic.mp3", desc: "Acordes suaves de guitarra acústica y vibra texana para ambientar la página con clase."),
         MusicPreset(id: "lofi_garden", name: "☕ Lofi Beats & Jardinería Relajante", genre: "Lofi Hip-Hop", url: "./assets/audio/lofi_garden.mp3", desc: "Ritmo lofi relajante con beats modernos y frescos, ideal para navegar cotizaciones."),
@@ -748,9 +846,9 @@ struct ContentView: View {
                     }
                     .tag(0)
 
-                EstimatorView(store: store)
+                IAEstimateView(store: store)
                     .tabItem {
-                        Label("Estimados", systemImage: "dollarsign.circle.fill")
+                        Label("IA Estimate", systemImage: "sparkles")
                     }
                     .tag(1)
 
@@ -2309,6 +2407,7 @@ struct EditGalleryPhotoSheet: View {
 // MARK: - PHOTO LIBRARY PICKER (UIKIT BRIDGE)
 struct PhotoLibraryPicker: UIViewControllerRepresentable {
     @Binding var selectedImage: UIImage?
+    var sourceType: UIImagePickerController.SourceType = .photoLibrary
     @Environment(\.dismiss) var dismiss
 
     class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
@@ -2334,7 +2433,11 @@ struct PhotoLibraryPicker: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
-        picker.sourceType = .photoLibrary
+        if UIImagePickerController.isSourceTypeAvailable(sourceType) {
+            picker.sourceType = sourceType
+        } else {
+            picker.sourceType = .photoLibrary
+        }
         return picker
     }
 
@@ -2634,6 +2737,7 @@ struct WebAdminView: View {
     @State private var showSavedAlert = false
     @State private var showHeroManagerSheet = false
     @State private var showCloudPanelSheet = false
+    @State private var showQuickEstimatorSheet = false
 
     var body: some View {
         NavigationView {
@@ -2645,6 +2749,7 @@ struct WebAdminView: View {
                         otaUpdatesCard
                         analyticsCard
                         heroManagerCard
+                        quickEstimatorCard
                         panelCloudCard
                         serverHealthCard
                         serverUrlSettingsCard
@@ -2677,6 +2782,45 @@ struct WebAdminView: View {
             } message: {
                 Text("Se ha actualizado la dirección del servidor.")
             }
+        }
+    }
+
+    // QUICK ESTIMATOR CARD
+    private var quickEstimatorCard: some View {
+        Button {
+            showQuickEstimatorSheet = true
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Brand.primary.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "dollarsign.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(Brand.primary)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Calculadora Rápida por Acre")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text("Precios por lote pequeño, mediano, grande o acre")
+                        .font(.caption)
+                        .foregroundStyle(.gray)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundStyle(.gray)
+            }
+            .padding(14)
+            .background(Brand.card)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .sheet(isPresented: $showQuickEstimatorSheet) {
+            EstimatorView(store: store)
         }
     }
 
@@ -2807,6 +2951,22 @@ struct WebAdminView: View {
                 .frame(maxWidth: .infinity)
                 .padding(11)
                 .background(Color(red: 0.05, green: 0.55, blue: 0.85))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+
+            // Botón: Probar Notificación del Sistema fuera de la app
+            Button {
+                store.testSystemNotification()
+            } label: {
+                HStack {
+                    Image(systemName: "bell.badge.fill")
+                    Text("🔔 Probar Notificación del Sistema (Fuera de la App)")
+                }
+                .font(.caption.bold())
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(11)
+                .background(Brand.cardLight)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
         }
@@ -3169,6 +3329,548 @@ struct OTAUpdateSheetView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Cerrar") { dismiss() }
                 }
+            }
+        }
+    }
+}
+
+// MARK: - TAB 2: IA ESTIMATE VIEW (ESTIMADOR CON FOTOS Y PRECIOS KILLEEN TX)
+struct IAEstimateView: View {
+    @ObservedObject var store: LawnCareStore
+
+    @State private var selectedImage: UIImage? = nil
+    @State private var showImagePicker: Bool = false
+    @State private var pickerSource: UIImagePickerController.SourceType = .photoLibrary
+    @State private var showSourceSheet: Bool = false
+
+    @State private var taskDescription: String = ""
+    @State private var workersCount: Int = 2
+    @State private var payType: String = "hourly" // "hourly" or "daily"
+    @State private var payRateText: String = "18.00"
+    @State private var durationText: String = "4.0"
+    @State private var storePreference: String = "home_depot"
+
+    @State private var isCalculating: Bool = false
+    @State private var estimateResult: AIEstimateResponse? = nil
+    @State private var showCopiedAlert: Bool = false
+    @State private var errorMessage: String? = nil
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        headerCard
+                        photoCard
+                        descriptionCard
+                        workersCard
+                        storeCard
+                        calculateButton
+
+                        if let err = errorMessage {
+                            errorBanner(err)
+                        }
+
+                        if let res = estimateResult, res.success {
+                            resultsSection(res)
+                        }
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("IA Estimate 🤖")
+            .navigationBarTitleDisplayMode(.inline)
+            .confirmationDialog("Selecciona origen de la foto", isPresented: $showSourceSheet) {
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    Button("📷 Tomar Foto con la Cámara") {
+                        pickerSource = .camera
+                        showImagePicker = true
+                    }
+                }
+                Button("🖼️ Elegir de la Galería de Fotos") {
+                    pickerSource = .photoLibrary
+                    showImagePicker = true
+                }
+                Button("Cancelar", role: .cancel) {}
+            }
+            .sheet(isPresented: $showImagePicker) {
+                PhotoLibraryPicker(selectedImage: $selectedImage, sourceType: pickerSource)
+            }
+            .alert("Presupuesto Copiado", isPresented: $showCopiedAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Se copió el presupuesto oficial al portapapeles. Listo para pegarlo en WhatsApp o mensaje de texto para el cliente.")
+            }
+        }
+    }
+
+    private var headerCard: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Brand.primary.opacity(0.15))
+                    .frame(width: 46, height: 46)
+                Image(systemName: "sparkles")
+                    .font(.title3)
+                    .foregroundStyle(Brand.primary)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("ESTIMADOR IA EN TIEMPO REAL")
+                    .font(.caption.bold())
+                    .foregroundStyle(Brand.primary)
+                Text("Calcula materiales en Killeen TX (Home Depot, Lowe's, Tractor Supply), mano de obra y tu ganancia limpia.")
+                    .font(.caption2)
+                    .foregroundStyle(.gray)
+            }
+            Spacer()
+        }
+        .padding(14)
+        .background(Brand.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var photoCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("1. FOTO DEL TRABAJO")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                Spacer()
+                if selectedImage != nil {
+                    Text("Foto cargada")
+                        .font(.caption2.bold())
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+
+            if let img = selectedImage {
+                VStack(spacing: 10) {
+                    Image(uiImage: img)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 200)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                    HStack(spacing: 12) {
+                        Button {
+                            showSourceSheet = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                Text("Cambiar Foto")
+                            }
+                            .font(.caption.bold())
+                            .foregroundStyle(.white)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 14)
+                            .background(Brand.cardLight)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+
+                        Button {
+                            selectedImage = nil
+                        } label: {
+                            HStack {
+                                Image(systemName: "trash")
+                                Text("Quitar")
+                            }
+                            .font(.caption.bold())
+                            .foregroundStyle(.red)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 14)
+                            .background(Color.red.opacity(0.15))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                }
+            } else {
+                Button {
+                    showSourceSheet = true
+                } label: {
+                    VStack(spacing: 8) {
+                        Image(systemName: "camera.badge.ellipsis")
+                            .font(.system(size: 32))
+                            .foregroundStyle(Brand.primary)
+                        Text("Tocar para Agregar Foto")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.white)
+                        Text("Toma una foto en el patio o súbela de la galería")
+                            .font(.caption2)
+                            .foregroundStyle(.gray)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 28)
+                    .background(Brand.cardLight.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [6]))
+                            .foregroundStyle(Brand.primary.opacity(0.5))
+                    )
+                }
+            }
+        }
+        .padding()
+        .background(Brand.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var descriptionCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("2. ¿QUÉ QUIERE HACER EL CLIENTE AQUÍ?")
+                .font(.caption.bold())
+                .foregroundStyle(.white)
+
+            ZStack(alignment: .topLeading) {
+                if taskDescription.isEmpty {
+                    Text("Ej: Poner mulch oscuro en 2 jardineras de enfrente, podar 3 arbustos, cortar ramas bajas del árbol y orillar banquetas de concreto...")
+                        .font(.subheadline)
+                        .foregroundStyle(.gray.opacity(0.6))
+                        .padding(.top, 8)
+                        .padding(.leading, 5)
+                }
+                TextEditor(text: $taskDescription)
+                    .frame(minHeight: 80)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
+                    .foregroundStyle(.white)
+                    .font(.subheadline)
+            }
+            .padding(8)
+            .background(Brand.cardLight)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .padding()
+        .background(Brand.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var workersCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("3. TRABAJADORES Y PAGO DE MANO DE OBRA")
+                .font(.caption.bold())
+                .foregroundStyle(.white)
+
+            HStack {
+                Text("Trabajadores:")
+                    .font(.subheadline)
+                    .foregroundStyle(.gray)
+                Spacer()
+                HStack(spacing: 8) {
+                    ForEach([1, 2, 3, 4], id: \.self) { num in
+                        Button {
+                            workersCount = num
+                        } label: {
+                            Text("\(num)")
+                                .font(.caption.bold())
+                                .foregroundStyle(workersCount == num ? .black : .white)
+                                .frame(width: 34, height: 32)
+                                .background(workersCount == num ? Brand.primary : Brand.cardLight)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                }
+            }
+
+            Divider().background(Color.white.opacity(0.1))
+
+            HStack {
+                Text("Tipo de Pago:")
+                    .font(.subheadline)
+                    .foregroundStyle(.gray)
+                Spacer()
+                Picker("Tipo", selection: $payType) {
+                    Text("Por Hora ($/hr)").tag("hourly")
+                    Text("Por Día ($/día)").tag("daily")
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 190)
+            }
+
+            Divider().background(Color.white.opacity(0.1))
+
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(payType == "hourly" ? "Pago x Hora ($):" : "Pago x Día ($):")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.gray)
+                    TextField("18.00", text: $payRateText)
+                        .keyboardType(.decimalPad)
+                        .padding(8)
+                        .background(Brand.cardLight)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .foregroundStyle(.white)
+                        .font(.subheadline.bold())
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(payType == "hourly" ? "Horas estimadas:" : "Días estimados:")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.gray)
+                    TextField("4.0", text: $durationText)
+                        .keyboardType(.decimalPad)
+                        .padding(8)
+                        .background(Brand.cardLight)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .foregroundStyle(.white)
+                        .font(.subheadline.bold())
+                }
+            }
+        }
+        .padding()
+        .background(Brand.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var storeCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("4. TIENDA DE MATERIALES EN KILLEEN, TX")
+                .font(.caption.bold())
+                .foregroundStyle(.white)
+
+            HStack(spacing: 8) {
+                storeButton(title: "Home Depot", key: "home_depot", color: Color.orange)
+                storeButton(title: "Lowe's", key: "lowes", color: Color.blue)
+                storeButton(title: "Tractor Supply", key: "tractor_supply", color: Color.red)
+            }
+        }
+        .padding()
+        .background(Brand.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func storeButton(title: String, key: String, color: Color) -> some View {
+        Button {
+            storePreference = key
+        } label: {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundStyle(storePreference == key ? .white : .gray)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(storePreference == key ? color.opacity(0.85) : Brand.cardLight)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(storePreference == key ? color : Color.clear, lineWidth: 1.5)
+                )
+        }
+    }
+
+    private var calculateButton: some View {
+        Button {
+            executeEstimate()
+        } label: {
+            HStack(spacing: 8) {
+                if isCalculating {
+                    ProgressView().tint(.black)
+                    Text("Analizando foto y materiales en Killeen...")
+                } else {
+                    Image(systemName: "sparkles")
+                    Text("⚡ Generar Estimado con Precios Reales e IA")
+                }
+            }
+            .font(.headline)
+            .foregroundStyle(.black)
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(Brand.primary)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .disabled(isCalculating)
+    }
+
+    private func errorBanner(_ msg: String) -> some View {
+        Text(msg)
+            .font(.caption.bold())
+            .foregroundStyle(.red)
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(Color.red.opacity(0.15))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func resultsSection(_ res: AIEstimateResponse) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(spacing: 12) {
+                Text("COTIZACIÓN TOTAL SUGERIDA AL CLIENTE")
+                    .font(.caption.bold())
+                    .foregroundStyle(.gray)
+
+                Text("$\(String(format: "%.2f", res.total_quote ?? 0.0))")
+                    .font(.system(size: 38, weight: .black, design: .rounded))
+                    .foregroundStyle(Brand.primary)
+
+                Divider().background(Color.white.opacity(0.1))
+
+                HStack(spacing: 12) {
+                    VStack(spacing: 2) {
+                        Text("Materiales")
+                            .font(.caption2)
+                            .foregroundStyle(.gray)
+                        Text("$\(String(format: "%.2f", res.total_materials ?? 0.0))")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    VStack(spacing: 2) {
+                        Text("Mano de Obra")
+                            .font(.caption2)
+                            .foregroundStyle(.gray)
+                        Text("$\(String(format: "%.2f", res.total_labor ?? 0.0))")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    VStack(spacing: 2) {
+                        Text("Tu Ganancia Limpia")
+                            .font(.caption2.bold())
+                            .foregroundStyle(Brand.primary)
+                        Text("+$\(String(format: "%.2f", res.net_profit ?? 0.0))")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(Brand.primary)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding()
+            .background(Brand.card)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Brand.primary.opacity(0.4), lineWidth: 1.5)
+            )
+
+            if let mats = res.materials, !mats.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("LISTA DE COMPRAS EN KILLEEN, TX")
+                            .font(.caption.bold())
+                            .foregroundStyle(Brand.accent)
+                        Spacer()
+                        Text(res.store_info?.name ?? "Killeen Local")
+                            .font(.caption2)
+                            .foregroundStyle(.gray)
+                    }
+
+                    ForEach(mats) { item in
+                        HStack(alignment: .top, spacing: 10) {
+                            Circle()
+                                .fill(Brand.primary.opacity(0.2))
+                                .frame(width: 8, height: 8)
+                                .padding(.top, 5)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.item)
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                                Text("\(item.qty) • Tienda: \(item.store)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.gray)
+                            }
+                            Spacer()
+                            Text("$\(String(format: "%.2f", item.subtotal))")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                        }
+                        .padding(.vertical, 4)
+                        Divider().background(Color.white.opacity(0.05))
+                    }
+                }
+                .padding()
+                .background(Brand.card)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+
+            if let tip = res.ai_tips {
+                HStack(alignment: .top, spacing: 10) {
+                    Text(tip)
+                        .font(.caption2)
+                        .foregroundStyle(.gray)
+                        .lineSpacing(2)
+                }
+                .padding(12)
+                .background(Brand.cardLight)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+
+            VStack(spacing: 10) {
+                Button {
+                    if let text = res.whatsapp_text {
+                        UIPasteboard.general.string = text
+                        showCopiedAlert = true
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: "doc.on.doc.fill")
+                        Text("Copiar Cotización Oficial")
+                    }
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(12)
+                    .background(Brand.cardLight)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+
+                Button {
+                    if let text = res.whatsapp_text,
+                       let encoded = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+                       let url = URL(string: "https://wa.me/?text=\(encoded)") {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: "message.fill")
+                        Text("💬 Enviar al Cliente por WhatsApp")
+                    }
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(14)
+                    .background(Color(red: 0.13, green: 0.69, blue: 0.3))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+            }
+        }
+    }
+
+    private func executeEstimate() {
+        errorMessage = nil
+        let rate = Double(payRateText) ?? 18.0
+        let dur = Double(durationText) ?? 4.0
+
+        var base64Str: String? = nil
+        if let img = selectedImage, let jpegData = img.jpegData(compressionQuality: 0.7) {
+            base64Str = jpegData.base64EncodedString()
+        }
+
+        isCalculating = true
+        Task {
+            let resp = await store.generateAIEstimate(
+                description: taskDescription,
+                workersCount: workersCount,
+                payType: payType,
+                payRate: rate,
+                duration: dur,
+                storePreference: storePreference,
+                imageBase64: base64Str
+            )
+            isCalculating = false
+            if let resp = resp, resp.success {
+                estimateResult = resp
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            } else {
+                errorMessage = "No se pudo generar el estimado. Verifica la conexión con el servidor de Railway."
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
             }
         }
     }
