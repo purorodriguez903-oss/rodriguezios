@@ -133,7 +133,15 @@ def load_settings():
         "hero_poster_url": "./assets/images/drone_tundra_intro.jpg",
         "hero_preset_id": "drone_tundra",
         "hero_title": "Your Dream Lawn, Flawlessly Maintained",
-        "hero_subtitle": "Crisp commercial stripe mowing, razor-sharp concrete edging, and premium landscape care. Available for direct homeowner jobs and general contractors."
+        "hero_subtitle": "Crisp commercial stripe mowing, razor-sharp concrete edging, and premium landscape care. Available for direct homeowner jobs and general contractors.",
+        "music": {
+            "enabled": False,
+            "title": "🎸 Texas Acoustic & Guitarra Campestre",
+            "genre": "Acoustic Chill",
+            "stream_url": "./assets/audio/texas_acoustic.mp3",
+            "volume": 0.40,
+            "preset_id": "texas_guitar"
+        }
     }
     if not os.path.exists(SETTINGS_JSON_PATH):
         return default_settings
