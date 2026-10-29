@@ -5539,13 +5539,13 @@ struct InvoiceSheetView: View {
                                     .foregroundStyle(Brand.primary)
                                 HStack {
                                     Image(systemName: "creditcard.fill").foregroundStyle(Brand.primary)
-                                    Text("Zelle: arizmendir754@gmail.com • (254) 852-8163")
+                                    Text("Zelle: Olivia Rodriguez • (623) 764-4177")
                                         .font(.caption2.bold())
                                         .foregroundStyle(.white)
                                 }
                                 HStack {
                                     Image(systemName: "dollarsign.circle.fill").foregroundStyle(.green)
-                                    Text("Cash App: $RodriguezLawnCare9 / Efectivo al terminar")
+                                    Text("Cash App: $rafajrii (cash.app/$rafajrii)")
                                         .font(.caption2)
                                         .foregroundStyle(.white.opacity(0.9))
                                 }
@@ -5724,8 +5724,8 @@ struct InvoiceSheetView: View {
 📅 *Fecha:* \(timeFormatted(Date()))
 
 💳 *MÉTODOS DE PAGO ACEPTADOS:*
-• Zelle: arizmendir754@gmail.com o (254) 852-8163
-• Cash App: $RodriguezLawnCare9
+• Zelle: Olivia Rodriguez • (623) 764-4177
+• Cash App: $rafajrii (https://cash.app/$rafajrii)
 • Efectivo al terminar el trabajo
 
 ✅ *Garantía 100% de Calidad y Satisfacción.*
