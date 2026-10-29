@@ -5380,6 +5380,8 @@ struct InvoiceSheetView: View {
     @State private var customPriceText: String = ""
     @State private var showSavedAlert: Bool = false
     @State private var showCalendarSheet: Bool = false
+    @State private var showSignaturePadSheet: Bool = false
+    @State private var clientSignatureImage: UIImage? = nil
 
     var totalAmount: Double {
         if let custom = Double(customPriceText), custom > 0 {
