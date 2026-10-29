@@ -2721,3 +2721,139 @@ button, input, select, textarea {
   color: #f1f5f9;
 }
 
+
+/* ==================== FLASH PROMOTION BANNER ==================== */
+.promo-section {
+  padding: 1.5rem 0;
+  background: linear-gradient(135deg, rgba(22, 163, 74, 0.08) 0%, rgba(15, 23, 42, 0.04) 100%);
+  border-top: 1px solid rgba(34, 197, 94, 0.2);
+  border-bottom: 1px solid rgba(34, 197, 94, 0.2);
+}
+.promo-card {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 2px solid #22c55e;
+  border-radius: 16px;
+  padding: 1.5rem 2rem;
+  box-shadow: 0 10px 30px rgba(34, 197, 94, 0.18);
+  position: relative;
+  overflow: hidden;
+}
+.promo-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(34, 197, 94, 0.12) 0%, transparent 60%);
+  pointer-events: none;
+}
+.promo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 0.75rem;
+}
+.promo-badge {
+  background: #22c55e;
+  color: #052e16;
+  font-weight: 800;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.5);
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 10px rgba(34, 197, 94, 0.4); }
+  50% { box-shadow: 0 0 25px rgba(34, 197, 94, 0.8); }
+}
+.promo-timer {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  padding: 0.3rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+.promo-title {
+  color: #ffffff;
+  font-size: 1.45rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+}
+.promo-message {
+  color: #cbd5e1;
+  font-size: 1rem;
+  line-height: 1.5;
+  margin-bottom: 1.25rem;
+}
+
+/* ==================== AVAILABILITY NOTICES ==================== */
+.availability-notice {
+  margin-top: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.availability-notice.full {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #f87171;
+}
+.availability-notice.available {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+/* ==================== PHOTO ATTACHMENT UPLOADER ==================== */
+.custom-file-upload {
+  display: block;
+  width: 100%;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 0.75rem;
+  text-align: center;
+  cursor: pointer;
+  background: #f8fafc;
+  transition: all 0.2s ease;
+  margin-bottom: 0.5rem;
+}
+.custom-file-upload:hover {
+  border-color: #22c55e;
+  background: #f0fdf4;
+}
+.btn-file-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #166534;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.photo-thumbnails-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 0.5rem;
+}
+.photo-thumb-item {
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1.5px solid #22c55e;
+  position: relative;
+}

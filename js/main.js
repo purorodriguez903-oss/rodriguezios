@@ -221,6 +221,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initAreaChecker();
   initFaqAccordion();
   initBookingForms();
+  initFlashPromotions();
+  initCalendarLiveCheckers();
+  initPhotoUploaders();
   initNavbarScroll();
   initMobileMenu();
   initHeroVideo();
@@ -836,11 +839,15 @@ function initBookingForms() {
         service: services.join(', '),
         frequency: document.getElementById('formFrequency')?.value || 'To be decided',
         description: document.getElementById('formDescription')?.value || 'No additional notes',
+        photos: bookingUploadedPhotos,
         source: 'Full Booking Form (Bottom Section)'
       };
 
       handleAppointmentSubmit(data);
       mainForm.reset();
+      bookingUploadedPhotos = [];
+      const bThumb = document.getElementById('bookingPhotoThumbnails');
+      if (bThumb) bThumb.innerHTML = '';
       const firstCb = document.querySelector('#mainServiceCheckboxes input[type="checkbox"]');
       if (firstCb) {
         firstCb.checked = true;
@@ -860,16 +867,19 @@ function initBookingForms() {
       e.preventDefault();
       const services = getSelectedServices('heroServiceCheckboxes', 'Front & Back Yard Cut');
       const extraNotes = document.getElementById('heroNotes')?.value?.trim() || '';
+      const heroDateVal = document.getElementById('heroDate')?.value || 'As soon as possible';
+      const heroTimeVal = document.getElementById('heroTime')?.value || 'Normal business hours';
       const data = {
         name: document.getElementById('heroName')?.value || 'Customer',
         phone: document.getElementById('heroPhone')?.value || '',
         address: 'To be confirmed by call/text',
-        date: 'As soon as possible',
-        time: 'Normal business hours',
+        date: heroDateVal,
+        time: heroTimeVal,
         services: services,
         service: services.join(', '),
         frequency: 'To be decided',
         description: extraNotes,
+        photos: heroUploadedPhotos,
         source: 'Quick 1-Minute Estimate (Hero Card)'
       };
 
@@ -886,6 +896,9 @@ function initBookingForms() {
 
       handleAppointmentSubmit(data);
       heroForm.reset();
+      heroUploadedPhotos = [];
+      const hThumb = document.getElementById('heroPhotoThumbnails');
+      if (hThumb) hThumb.innerHTML = '';
       const firstHeroCb = document.querySelector('#heroServiceCheckboxes input[type="checkbox"]');
       if (firstHeroCb) {
         firstHeroCb.checked = true;

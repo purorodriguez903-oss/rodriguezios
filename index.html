@@ -187,6 +187,31 @@
               </label>
             </div>
           </div>
+                    <div class="form-row">
+            <div class="form-group">
+              <label for="heroDate" class="form-label">📅 Preferred Date</label>
+              <input type="date" id="heroDate" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label for="heroTime" class="form-label">⏰ Preferred Time</label>
+              <select id="heroTime" class="form-control" required>
+                <option value="Morning (8:00 AM - 12:00 PM)">Morning (8:00 AM - 12:00 PM)</option>
+                <option value="Afternoon (12:00 PM - 4:00 PM)">Afternoon (12:00 PM - 4:00 PM)</option>
+                <option value="Late Afternoon (4:00 PM - 7:00 PM)">Late Afternoon (4:00 PM - 7:00 PM)</option>
+                <option value="Any Available Time Window">Any Available Time Window</option>
+              </select>
+            </div>
+          </div>
+          <div id="heroAvailabilityNotice" class="availability-notice" style="display: none;"></div>
+
+          <div class="form-group">
+            <label class="form-label">📸 Yard Photos (Optional / Opcional)</label>
+            <label for="heroPhotoInput" class="custom-file-upload">
+              <input type="file" id="heroPhotoInput" accept="image/*" multiple style="display:none;">
+              <span class="btn-file-label">📷 Attach Yard Photos (Subir Fotos)</span>
+            </label>
+            <div id="heroPhotoThumbnails" class="photo-thumbnails-container"></div>
+          </div>
           <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" data-i18n="hero_card_btn">
             Get My Free Estimate
           </button>
@@ -194,6 +219,24 @@
         <div class="hero-card-features">
           <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> <span data-i18n="hero_feat_no_contract">No Contracts</span></span>
           <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> <span data-i18n="hero_feat_free_est">100% Free Estimates</span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  
+  <!-- ==================== FLASH PROMOTION BANNER (FROM IOS APP) ==================== -->
+  <section id="promoSection" class="promo-section" style="display: none;">
+    <div class="container">
+      <div class="promo-card" id="promoCard">
+        <div class="promo-header">
+          <span class="promo-badge" id="promoBadge">🔥 OFERTA FLASH</span>
+          <span class="promo-timer" id="promoTimer">⏳ Termina en: Calculando...</span>
+        </div>
+        <h3 class="promo-title" id="promoTitle">Promoción Activa</h3>
+        <p class="promo-message" id="promoMessage"></p>
+        <div class="promo-actions">
+          <a href="#quote-hero" class="btn btn-primary btn-sm">Aprovechar Promoción Ahora 🚀</a>
         </div>
       </div>
     </div>
@@ -1014,8 +1057,19 @@
               </div>
             </div>
 
+                        <div id="bookingAvailabilityNotice" class="availability-notice" style="display: none;"></div>
+
             <div class="form-group">
-              <label for="formFrequency" class="form-label" data-i18n="form_lbl_freq">🔄 Preferred Frequency</label>
+              <label class="form-label">📸 Yard Photos (Optional / Opcional)</label>
+              <label for="bookingPhotoInput" class="custom-file-upload">
+                <input type="file" id="bookingPhotoInput" accept="image/*" multiple style="display:none;">
+                <span class="btn-file-label">📷 Attach Yard Photos (Subir Fotos de tu Jardín)</span>
+              </label>
+              <div id="bookingPhotoThumbnails" class="photo-thumbnails-container"></div>
+            </div>
+
+            <div class="form-group">
+              <label for="formFrequency"  class="form-label" data-i18n="form_lbl_freq">🔄 Preferred Frequency</label>
               <select id="formFrequency" class="form-control">
                 <option value="Weekly (15% OFF)">Weekly (15% OFF - Most Popular)</option>
                 <option value="Bi-Weekly (10% OFF)">Bi-Weekly (10% OFF)</option>

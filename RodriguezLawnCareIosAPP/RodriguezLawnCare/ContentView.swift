@@ -1,3 +1,64 @@
+// MARK: - GLOWING PARTICLES AMBIENT BACKGROUND
+struct ParticleDot: Identifiable {
+    let id = UUID()
+    var x: CGFloat
+    var y: CGFloat
+    var size: CGFloat
+    var opacity: Double
+}
+
+struct GlowingParticlesBackgroundView: View {
+    @State private var particles: [ParticleDot] = (0..<20).map { _ in
+        ParticleDot(
+            x: CGFloat.random(in: 0.05...0.95),
+            y: CGFloat.random(in: 0.05...0.95),
+            size: CGFloat.random(in: 5...14),
+            opacity: Double.random(in: 0.15...0.45)
+        )
+    }
+    @State private var pulse: Bool = false
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                Brand.background.ignoresSafeArea()
+
+                // Ambient Radial Glow
+                RadialGradient(
+                    gradient: Gradient(colors: [Brand.primary.opacity(pulse ? 0.14 : 0.06), Color.clear]),
+                    center: .topTrailing,
+                    startRadius: 20,
+                    endRadius: geo.size.width * 0.85
+                )
+                .ignoresSafeArea()
+
+                RadialGradient(
+                    gradient: Gradient(colors: [Color.green.opacity(pulse ? 0.12 : 0.05), Color.clear]),
+                    center: .bottomLeading,
+                    startRadius: 40,
+                    endRadius: geo.size.width * 0.8
+                )
+                .ignoresSafeArea()
+
+                // Soft Floating Particles
+                ForEach(particles) { p in
+                    Circle()
+                        .fill(Brand.primary)
+                        .frame(width: p.size, height: p.size)
+                        .blur(radius: p.size > 9 ? 3 : 1)
+                        .opacity(p.opacity)
+                        .position(x: p.x * geo.size.width, y: p.y * geo.size.height + (pulse ? -15 : 15))
+                }
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) {
+                pulse.toggle()
+            }
+        }
+    }
+}
+
 import SwiftUI
 import UserNotifications
 import AVKit
@@ -31,6 +92,49 @@ struct Lead: Identifiable, Codable, Equatable {
     var status: String?          // pending, contacted, estimated, confirmed, completed, cancelled
     var estimated_amount: Double?
     var notes: String?
+    var photos: [String]?
+}
+
+// MARK: - CALENDAR & APPOINTMENTS MODELS
+struct CalendarAppointment: Identifiable, Codable, Equatable {
+    var id: Int
+    var date: String
+    var time_window: String
+    var client_name: String
+    var client_phone: String
+    var address: String
+    var services: [String]?
+    var amount: Double?
+    var status: String? // confirmed, scheduled, in_progress, completed, cancelled
+    var notes: String?
+}
+
+struct CalendarData: Codable {
+    var day_status: [String: String]? // "YYYY-MM-DD": "normal" or "full"
+    var appointments: [CalendarAppointment]?
+}
+
+struct CalendarResponse: Codable {
+    var success: Bool
+    var calendar: CalendarData?
+}
+
+// MARK: - FLASH PROMOTIONS MODEL
+struct FlashPromotion: Identifiable, Codable, Equatable {
+    var id: Int?
+    var enabled: Bool
+    var title: String
+    var message: String
+    var badge: String?
+    var created_at: Int?
+    var duration_hours: Int?
+    var expires_at: Int?
+}
+
+struct PromoResponse: Codable {
+    var success: Bool
+    var promo: FlashPromotion?
+    var history: [FlashPromotion]?
 }
 
 struct GalleryPhoto: Identifiable, Codable, Equatable {
@@ -224,8 +328,12 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "1.5.1"
-    let currentAppBuild: Int = 16
+    let currentAppVersion: String = "1.6.0"
+    let currentAppBuild: Int = 17
+
+    @Published var calendarData: CalendarData = CalendarData(day_status: [:], appointments: [])
+    @Published var activePromo: FlashPromotion? = nil
+    @Published var promoHistory: [FlashPromotion] = []
 
     @AppStorage("api_server_url") var serverURL: String = "https://web-production-b6891b.up.railway.app"
 
@@ -244,6 +352,8 @@ class LawnCareStore: ObservableObject {
         Task { @MainActor in
             await checkOTAUpdate(manual: false)
             await fetchCloudConfig()
+        await fetchCalendar()
+        await fetchPromo()
         }
     }
 
@@ -368,6 +478,8 @@ class LawnCareStore: ObservableObject {
         await fetchGallery()
         await fetchSettings()
         await fetchCloudConfig()
+        await fetchCalendar()
+        await fetchPromo()
         await checkOTAUpdate(manual: false)
 
         let formatter = DateFormatter()
@@ -823,6 +935,143 @@ class LawnCareStore: ObservableObject {
         return nil
     }
 
+    // MARK: - CALENDAR API METHODS
+    @MainActor
+    func fetchCalendar() async {
+        guard let url = URL(string: "\(cleanURL)/api/calendar") else { return }
+        do {
+            var req = URLRequest(url: url)
+            req.timeoutInterval = 6
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
+                let decoded = try JSONDecoder().decode(CalendarResponse.self, from: data)
+                if let cal = decoded.calendar {
+                    self.calendarData = cal
+                }
+            }
+        } catch {}
+    }
+
+    @MainActor
+    func toggleCalendarDayStatus(date: String) async {
+        let current = calendarData.day_status?[date] ?? "normal"
+        let nextStatus = (current == "full") ? "normal" : "full"
+        if calendarData.day_status == nil { calendarData.day_status = [:] }
+        calendarData.day_status?[date] = nextStatus
+
+        guard let url = URL(string: "\(cleanURL)/api/calendar/day") else { return }
+        let payload: [String: Any] = ["date": date, "status": nextStatus]
+        do {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            _ = try await URLSession.shared.data(for: req)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        } catch {}
+    }
+
+    @MainActor
+    func saveCalendarAppointment(appt: CalendarAppointment) async {
+        if let idx = calendarData.appointments?.firstIndex(where: { $0.id == appt.id }) {
+            calendarData.appointments?[idx] = appt
+        } else {
+            calendarData.appointments?.insert(appt, at: 0)
+        }
+
+        guard let url = URL(string: "\(cleanURL)/api/calendar/appointment") else { return }
+        let payload: [String: Any] = [
+            "id": appt.id,
+            "date": appt.date,
+            "time_window": appt.time_window,
+            "client_name": appt.client_name,
+            "client_phone": appt.client_phone,
+            "address": appt.address,
+            "services": appt.services ?? [],
+            "amount": appt.amount ?? 0.0,
+            "status": appt.status ?? "confirmed",
+            "notes": appt.notes ?? ""
+        ]
+        do {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            _ = try await URLSession.shared.data(for: req)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        } catch {}
+    }
+
+    @MainActor
+    func deleteCalendarAppointment(id: Int) async {
+        calendarData.appointments?.removeAll { $0.id == id }
+        guard let url = URL(string: "\(cleanURL)/api/calendar/delete") else { return }
+        let payload: [String: Any] = ["id": id]
+        do {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            _ = try await URLSession.shared.data(for: req)
+        } catch {}
+    }
+
+    // MARK: - FLASH PROMOTIONS API METHODS
+    @MainActor
+    func fetchPromo() async {
+        guard let url = URL(string: "\(cleanURL)/api/promo") else { return }
+        do {
+            var req = URLRequest(url: url)
+            req.timeoutInterval = 6
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
+                let decoded = try JSONDecoder().decode(PromoResponse.self, from: data)
+                self.activePromo = decoded.promo
+                self.promoHistory = decoded.history ?? []
+            }
+        } catch {}
+    }
+
+    @MainActor
+    func publishPromo(title: String, message: String, badge: String, durationHours: Int) async {
+        guard let url = URL(string: "\(cleanURL)/api/promo") else { return }
+        let payload: [String: Any] = [
+            "title": title,
+            "message": message,
+            "badge": badge,
+            "duration_hours": durationHours
+        ]
+        do {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
+                let decoded = try JSONDecoder().decode(PromoResponse.self, from: data)
+                self.activePromo = decoded.promo
+                self.promoHistory = decoded.history ?? []
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+        } catch {}
+    }
+
+    @MainActor
+    func deactivatePromo() async {
+        guard let url = URL(string: "\(cleanURL)/api/promo/deactivate") else { return }
+        do {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
+                let decoded = try JSONDecoder().decode(PromoResponse.self, from: data)
+                self.activePromo = decoded.promo
+                await fetchPromo()
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            }
+        } catch {}
+    }
+
     static let defaultMusicPresets: [MusicPreset] = [
         MusicPreset(id: "texas_guitar", name: "🎸 Texas Acoustic & Guitarra Campestre", genre: "Acoustic Chill", url: "./assets/audio/texas_acoustic.mp3", desc: "Acordes suaves de guitarra acústica y vibra texana para ambientar la página con clase."),
         MusicPreset(id: "lofi_garden", name: "☕ Lofi Beats & Jardinería Relajante", genre: "Lofi Hip-Hop", url: "./assets/audio/lofi_garden.mp3", desc: "Ritmo lofi relajante con beats modernos y frescos, ideal para navegar cotizaciones."),
@@ -840,36 +1089,40 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            TabView(selection: $selectedTab) {
-                AppointmentsView(store: store)
-                    .tabItem {
-                        Label("Citas", systemImage: "calendar.badge.clock")
-                    }
-                    .tag(0)
+            ZStack {
+                GlowingParticlesBackgroundView()
 
-                IAEstimateView(store: store)
-                    .tabItem {
-                        Label("IA Estimate", systemImage: "sparkles")
-                    }
-                    .tag(1)
+                TabView(selection: $selectedTab) {
+                    AppointmentsView(store: store)
+                        .tabItem {
+                            Label("Citas", systemImage: "calendar.badge.clock")
+                        }
+                        .tag(0)
 
-                GalleryAdminView(store: store)
-                    .tabItem {
-                        Label("Trabajos Web", systemImage: "photo.on.rectangle.angled")
-                    }
-                    .tag(2)
+                    ProfessionalCalendarView(store: store)
+                        .tabItem {
+                            Label("Calendario", systemImage: "calendar")
+                        }
+                        .tag(1)
 
-                WebMusicControlView(store: store)
-                    .tabItem {
-                        Label("Música Web", systemImage: "music.note.list")
-                    }
-                    .tag(3)
+                    IAEstimateView(store: store)
+                        .tabItem {
+                            Label("IA Estimate", systemImage: "sparkles")
+                        }
+                        .tag(2)
 
-                WebAdminView(store: store)
-                    .tabItem {
-                        Label("OTA & Ajustes", systemImage: "gearshape.fill")
-                    }
-                    .tag(4)
+                    FlashPromotionsView(store: store)
+                        .tabItem {
+                            Label("Promociones", systemImage: "megaphone.fill")
+                        }
+                        .tag(3)
+
+                    WebAdminView(store: store)
+                        .tabItem {
+                            Label("Ajustes & Web", systemImage: "gearshape.2.fill")
+                        }
+                        .tag(4)
+                }
             }
             .accentColor(Brand.primary)
 
@@ -1300,6 +1553,8 @@ struct LeadDetailSheet: View {
     @State private var selectedStatus: String = "pending"
     @State private var amountText: String = ""
     @State private var notesText: String = ""
+    @State private var showInvoiceSheet: Bool = false
+    @State private var showCalendarScheduleSheet: Bool = ""
 
     let statuses = [
         ("pending", "Pendiente"),
@@ -1333,6 +1588,35 @@ struct LeadDetailSheet: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Brand.card)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                        if let photos = lead.photos, !photos.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("📸 FOTOS DEL JARDÍN ENVIADAS POR EL CLIENTE (\(photos.count))")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.primary)
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(photos, id: \.self) { photoUrl in
+                                            AsyncImage(url: URL(string: store.fullMediaURL(photoUrl))) { phase in
+                                                if let img = phase.image {
+                                                    img.resizable()
+                                                        .aspectRatio(contentMode: .fill)
+                                                        .frame(width: 90, height: 90)
+                                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                                } else {
+                                                    ZStack {
+                                                        Color.gray.opacity(0.3)
+                                                        ProgressView().tint(Brand.primary)
+                                                    }
+                                                    .frame(width: 90, height: 90)
+                                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         VStack(alignment: .leading, spacing: 10) {
                             Text("ESTADO DE LA CITA")
@@ -1398,6 +1682,36 @@ struct LeadDetailSheet: View {
                         }
                         .padding(.top, 10)
 
+                        Button {
+                            showInvoiceSheet = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "doc.text.fill")
+                                Text("🧾 Crear Invoice Profesional")
+                            }
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+
+                        Button {
+                            showCalendarScheduleSheet = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "calendar.badge.plus")
+                                Text("✓ Aceptó / Agendar en Calendario")
+                            }
+                            .font(.headline)
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.yellow)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+
                         Button(role: .destructive) {
                             Task {
                                 await store.deleteLead(id: lead.id)
@@ -1418,6 +1732,12 @@ struct LeadDetailSheet: View {
                 }
             }
             .navigationTitle("Detalles de la Cita")
+            .sheet(isPresented: $showInvoiceSheet) {
+                InvoiceSheetView(lead: lead, store: store)
+            }
+            .sheet(isPresented: $showCalendarScheduleSheet) {
+                AddToCalendarSheet(lead: lead, store: store, prefilledAmount: Double(amountText) ?? (lead.estimated_amount ?? 75.0))
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -3849,8 +4169,23 @@ struct IAEstimateView: View {
         let dur = Double(durationText) ?? 4.0
 
         var base64Str: String? = nil
-        if let img = selectedImage, let jpegData = img.jpegData(compressionQuality: 0.7) {
-            base64Str = jpegData.base64EncodedString()
+        if let img = selectedImage {
+            let maxDim: CGFloat = 1000
+            let currentMax = max(img.size.width, img.size.height)
+            var finalImg = img
+            if currentMax > maxDim {
+                let ratio = maxDim / currentMax
+                let newSize = CGSize(width: img.size.width * ratio, height: img.size.height * ratio)
+                UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+                img.draw(in: CGRect(origin: .zero, size: newSize))
+                if let resized = UIGraphicsGetImageFromCurrentImageContext() {
+                    finalImg = resized
+                }
+                UIGraphicsEndImageContext()
+            }
+            if let jpegData = finalImg.jpegData(compressionQuality: 0.6) {
+                base64Str = "data:image/jpeg;base64," + jpegData.base64EncodedString()
+            }
         }
 
         isCalculating = true
@@ -4459,5 +4794,1094 @@ struct AnalyticsMetricBox: View {
         .padding(12)
         .background(Brand.cardLight)
         .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+
+// MARK: - INVOICE GENERATOR SHEET
+struct InvoiceSheetView: View {
+    @Environment(\.dismiss) var dismiss
+    let lead: Lead
+    @ObservedObject var store: LawnCareStore
+
+    @State private var invoiceNumber: String = "RLC-INV-\(Int(Date().timeIntervalSince1970) % 100000)"
+    @State private var customPriceText: String = ""
+    @State private var showSavedAlert: Bool = false
+    @State private var showCalendarSheet: Bool = false
+
+    var totalAmount: Double {
+        if let custom = Double(customPriceText), custom > 0 {
+            return custom
+        }
+        return lead.estimated_amount ?? 75.0
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // Printable Invoice Container
+                        VStack(alignment: .leading, spacing: 16) {
+                            // Header with Logo
+                            HStack(alignment: .top) {
+                                HStack(spacing: 10) {
+                                    Image("AppIcon")
+                                        .resizable()
+                                        .frame(width: 48, height: 48)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("RODRIGUEZ LAWNCARE")
+                                            .font(.headline.bold())
+                                            .foregroundStyle(Brand.primary)
+                                        Text("Landscaping & Maintenance")
+                                            .font(.caption2)
+                                            .foregroundStyle(.gray)
+                                        Text("Killeen & Central Texas • (254) 852-8163")
+                                            .font(.caption2)
+                                            .foregroundStyle(.white.opacity(0.8))
+                                    }
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text("INVOICE / FACTURA")
+                                        .font(.caption.bold())
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(Brand.primary.opacity(0.2))
+                                        .foregroundStyle(Brand.primary)
+                                        .clipShape(Capsule())
+                                    Text("#\(invoiceNumber)")
+                                        .font(.caption2.monospaced())
+                                        .foregroundStyle(.gray)
+                                }
+                            }
+
+                            Divider().background(Color.gray.opacity(0.3))
+
+                            // Bill To & Job Info
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("CLIENTE / BILL TO:")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.gray)
+                                    Text(lead.name)
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.white)
+                                    Text(lead.phone)
+                                        .font(.caption)
+                                        .foregroundStyle(Brand.primary)
+                                    if let addr = lead.address, !addr.isEmpty {
+                                        Text(addr)
+                                            .font(.caption2)
+                                            .foregroundStyle(.gray)
+                                    }
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 3) {
+                                    Text("FECHA:")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.gray)
+                                    Text(timeFormatted(Date()))
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.white)
+                                    Text("TIPO:")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.gray)
+                                    Text("Servicio Residencial")
+                                        .font(.caption2)
+                                        .foregroundStyle(.white)
+                                }
+                            }
+
+                            Divider().background(Color.gray.opacity(0.3))
+
+                            // Itemized Services
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("SERVICIOS A REALIZAR:")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.gray)
+
+                                if let svcs = lead.services, !svcs.isEmpty {
+                                    ForEach(svcs, id: \.self) { s in
+                                        HStack {
+                                            Text("✓ \(s)")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.white)
+                                            Spacer()
+                                            Text("Incluido")
+                                                .font(.caption2)
+                                                .foregroundStyle(.gray)
+                                        }
+                                    }
+                                } else {
+                                    HStack {
+                                        Text("✓ Corte y Mantenimiento General")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.white)
+                                        Spacer()
+                                        Text("Incluido")
+                                            .font(.caption2)
+                                            .foregroundStyle(.gray)
+                                    }
+                                }
+
+                                if let desc = lead.description, !desc.isEmpty {
+                                    Text("Notas del Trabajo: \"\(desc)\"")
+                                        .font(.caption)
+                                        .italic()
+                                        .foregroundStyle(.gray)
+                                        .padding(.top, 4)
+                                }
+                            }
+
+                            Divider().background(Color.gray.opacity(0.3))
+
+                            // Total Due Card
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("TOTAL ESTIMADO / A PAGAR")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.gray)
+                                    Text("Garantía de Satisfacción 100%")
+                                        .font(.caption2)
+                                        .foregroundStyle(Brand.primary)
+                                }
+                                Spacer()
+                                Text(String(format: "$%.2f USD", totalAmount))
+                                    .font(.title2.bold())
+                                    .foregroundStyle(Brand.primary)
+                            }
+                            .padding(12)
+                            .background(Color.white.opacity(0.05))
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                            Text("Gracias por confiar en Rodriguez LawnCare. Pago al finalizar el trabajo.")
+                                .font(.caption2)
+                                .italic()
+                                .foregroundStyle(.gray)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        }
+                        .padding(16)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Brand.primary.opacity(0.4), lineWidth: 1.5)
+                        )
+
+                        // Editable Price Override
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("AJUSTAR MONTO TOTAL SI LO DESEAS ($)")
+                                .font(.caption.bold())
+                                .foregroundStyle(.gray)
+                            TextField("Ej: 85.00", text: $customPriceText)
+                                .keyboardType(.decimalPad)
+                                .padding(12)
+                                .background(Brand.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .foregroundStyle(.white)
+                        }
+
+                        // Action Buttons
+                        VStack(spacing: 12) {
+                            Button {
+                                saveInvoiceSnapshot()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "square.and.arrow.down.fill")
+                                    Text("Guardar Imagen del Invoice en Fotos")
+                                }
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.blue)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+
+                            Button {
+                                sendWhatsAppInvoice()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "message.fill")
+                                    Text("Enviar Invoice por WhatsApp al Cliente")
+                                }
+                                .font(.headline)
+                                .foregroundStyle(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.green)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+
+                            Button {
+                                showCalendarSheet = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "checkmark.seal.fill")
+                                    Text("✓ ¡El Cliente Aceptó! Agendar en Calendario")
+                                }
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Brand.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                        }
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Invoice Oficial")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+            .sheet(isPresented: $showCalendarSheet) {
+                AddToCalendarSheet(lead: lead, store: store, prefilledAmount: totalAmount)
+            }
+            .alert("Invoice Guardado", isPresented: $showSavedAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("La factura oficial ha sido generada y guardada en tu galería de Fotos para enviársela al cliente.")
+            }
+        }
+    }
+
+    private func timeFormatted(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: date)
+    }
+
+    private func saveInvoiceSnapshot() {
+        showSavedAlert = true
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    private func sendWhatsAppInvoice() {
+        var cleanPhone = lead.phone.filter { "0123456789".contains($0) }
+        if cleanPhone.count == 10 { cleanPhone = "1" + cleanPhone }
+        let svcs = lead.services?.joined(separator: ", ") ?? "Corte de Césped"
+        let msg = """
+🌿 *RODRIGUEZ LAWNCARE - FACTURA / PRESUPUESTO OFICIAL*
+📍 Killeen & Central Texas • (254) 852-8163
+
+👤 *Cliente:* \(lead.name)
+📄 *Invoice #:* \(invoiceNumber)
+🌿 *Servicios:* \(svcs)
+💵 *Total a Pagar:* $\(String(format: "%.2f", totalAmount)) USD
+📅 *Fecha:* \(timeFormatted(Date()))
+
+✅ *Garantía 100% de Calidad y Satisfacción.*
+¿Confirmamos este horario para realizar tu servicio? ¡Quedamos a tus órdenes!
+"""
+        if let encoded = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+           let url = URL(string: "https://wa.me/\(cleanPhone)?text=\(encoded)") {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+// MARK: - ADD TO CALENDAR SHEET
+struct AddToCalendarSheet: View {
+    @Environment(\.dismiss) var dismiss
+    let lead: Lead
+    @ObservedObject var store: LawnCareStore
+    var prefilledAmount: Double = 75.0
+
+    @State private var selectedDate: Date = Date().addingTimeInterval(86400)
+    @State private var selectedTimeWindow: String = "Morning (8:00 AM - 12:00 PM)"
+    @State private var amountText: String = ""
+    @State private var notesText: String = ""
+
+    let timeWindows = [
+        "Morning (8:00 AM - 12:00 PM)",
+        "Afternoon (12:00 PM - 4:00 PM)",
+        "Late Afternoon (4:00 PM - 7:00 PM)",
+        "Any Available Time Window"
+    ]
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+
+                Form {
+                    Section(header: Text("CLIENTE & TRABAJO").foregroundStyle(Brand.primary)) {
+                        HStack {
+                            Text("Cliente:")
+                            Spacer()
+                            Text(lead.name).bold()
+                        }
+                        HStack {
+                            Text("Teléfono:")
+                            Spacer()
+                            Text(lead.phone).foregroundStyle(Brand.primary)
+                        }
+                        if let addr = lead.address, !addr.isEmpty {
+                            HStack {
+                                Text("Dirección:")
+                                Spacer()
+                                Text(addr).font(.caption)
+                            }
+                        }
+                    }
+
+                    Section(header: Text("FECHA Y HORARIO").foregroundStyle(Brand.primary)) {
+                        DatePicker("Fecha de Visita", selection: $selectedDate, displayedComponents: .date)
+                        Picker("Horario", selection: $selectedTimeWindow) {
+                            ForEach(timeWindows, id: \.self) { tw in
+                                Text(tw).tag(tw)
+                            }
+                        }
+                    }
+
+                    Section(header: Text("MONTO ACORDADO ($)").foregroundStyle(Brand.primary)) {
+                        TextField("Monto en USD", text: $amountText)
+                            .keyboardType(.decimalPad)
+                    }
+
+                    Section(header: Text("NOTAS DEL CALENDARIO").foregroundStyle(Brand.primary)) {
+                        TextField("Código de puerta, especificaciones...", text: $notesText)
+                    }
+
+                    Section {
+                        Button {
+                            scheduleJob()
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Text("✓ Confirmar y Guardar en Calendario")
+                                    .font(.headline.bold())
+                                    .foregroundStyle(.black)
+                                Spacer()
+                            }
+                        }
+                        .listRowBackground(Brand.primary)
+                    }
+                }
+            }
+            .navigationTitle("Agendar en Calendario")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancelar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+            .onAppear {
+                amountText = String(format: "%.2f", prefilledAmount)
+                notesText = lead.description ?? ""
+                if let t = lead.time, timeWindows.contains(t) {
+                    selectedTimeWindow = t
+                }
+            }
+        }
+    }
+
+    private func scheduleJob() {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        let dateStr = f.string(from: selectedDate)
+        let amt = Double(amountText) ?? prefilledAmount
+
+        let newAppt = CalendarAppointment(
+            id: Int(Date().timeIntervalSince1970 * 1000),
+            date: dateStr,
+            time_window: selectedTimeWindow,
+            client_name: lead.name,
+            client_phone: lead.phone,
+            address: lead.address ?? "",
+            services: lead.services,
+            amount: amt,
+            status: "confirmed",
+            notes: notesText
+        )
+
+        Task {
+            await store.saveCalendarAppointment(appt: newAppt)
+            await store.updateLeadStatus(id: lead.id, status: "confirmed", notes: "Agendado para \(dateStr) (\(selectedTimeWindow))", estimatedAmount: amt)
+            dismiss()
+        }
+    }
+}
+
+
+// MARK: - TAB 2: PROFESSIONAL CALENDAR VIEW
+struct ProfessionalCalendarView: View {
+    @ObservedObject var store: LawnCareStore
+    @State private var selectedDate: Date = Date()
+    @State private var currentMonth: Date = Date()
+    @State private var showAddEventSheet: Bool = false
+    @State private var isTogglingDay: Bool = false
+
+    private var calendar: Calendar { Calendar.current }
+
+    private var selectedDateString: String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: selectedDate)
+    }
+
+    private var monthYearString: String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "es_US")
+        f.dateFormat = "MMMM yyyy"
+        return f.string(from: currentMonth).capitalized
+    }
+
+    private var daysInMonth: [Date] {
+        guard let monthInterval = calendar.dateInterval(of: .month, for: currentMonth),
+              let monthFirstWeek = calendar.dateInterval(of: .weekOfMonth, for: monthInterval.start),
+              let monthLastWeek = calendar.dateInterval(of: .weekOfMonth, for: monthInterval.end - 1)
+        else { return [] }
+
+        var result: [Date] = []
+        var current = monthFirstWeek.start
+        while current < monthLastWeek.end {
+            result.append(current)
+            guard let next = calendar.date(byAdding: .day, value: 1, to: current) else { break }
+            current = next
+        }
+        return result
+    }
+
+    private var appointmentsForSelectedDay: [CalendarAppointment] {
+        let ds = selectedDateString
+        return store.calendarData.appointments?.filter { $0.date == ds } ?? []
+    }
+
+    private var isSelectedDayFull: Bool {
+        store.calendarData.day_status?[selectedDateString] == "full"
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Month Header Navigation
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("CALENDARIO DE TRABAJOS")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.primary)
+                                Text(monthYearString)
+                                    .font(.title2.bold())
+                                    .foregroundStyle(.white)
+                            }
+                            Spacer()
+                            HStack(spacing: 12) {
+                                Button {
+                                    changeMonth(by: -1)
+                                } label: {
+                                    Image(systemName: "chevron.left")
+                                        .padding(8)
+                                        .background(Brand.card)
+                                        .clipShape(Circle())
+                                        .foregroundStyle(.white)
+                                }
+                                Button {
+                                    currentMonth = Date()
+                                    selectedDate = Date()
+                                } label: {
+                                    Text("Hoy")
+                                        .font(.caption.bold())
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Brand.primary.opacity(0.2))
+                                        .foregroundStyle(Brand.primary)
+                                        .clipShape(Capsule())
+                                }
+                                Button {
+                                    changeMonth(by: 1)
+                                } label: {
+                                    Image(systemName: "chevron.right")
+                                        .padding(8)
+                                        .background(Brand.card)
+                                        .clipShape(Circle())
+                                        .foregroundStyle(.white)
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+
+                        // Days of week header
+                        HStack {
+                            ForEach(["DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"], id: \.self) { day in
+                                Text(day)
+                                    .font(.caption2.bold())
+                                    .frame(maxWidth: .infinity)
+                                    .foregroundStyle(.gray)
+                            }
+                        }
+                        .padding(.horizontal)
+
+                        // Calendar Month Grid
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 6) {
+                            ForEach(daysInMonth, id: \.self) { date in
+                                let isCurrentMonth = calendar.isDate(date, equalTo: currentMonth, toGranularity: .month)
+                                let isSelected = calendar.isDate(date, inSameDayAs: selectedDate)
+                                let isToday = calendar.isDateInToday(date)
+                                let df = DateFormatter()
+                                let ds: String = {
+                                    df.dateFormat = "yyyy-MM-dd"
+                                    return df.string(from: date)
+                                }()
+                                let isFull = store.calendarData.day_status?[ds] == "full"
+                                let apptCount = store.calendarData.appointments?.filter { $0.date == ds }.count ?? 0
+
+                                Button {
+                                    selectedDate = date
+                                } label: {
+                                    VStack(spacing: 2) {
+                                        Text("\(calendar.component(.day, from: date))")
+                                            .font(.caption.bold())
+                                            .foregroundStyle(isSelected ? .black : (isToday ? Brand.primary : (isCurrentMonth ? .white : .gray.opacity(0.4))))
+
+                                        if isFull {
+                                            Circle()
+                                                .fill(Color.red)
+                                                .frame(width: 5, height: 5)
+                                        } else if apptCount > 0 {
+                                            Circle()
+                                                .fill(Brand.primary)
+                                                .frame(width: 5, height: 5)
+                                        } else {
+                                            Circle()
+                                                .fill(Color.clear)
+                                                .frame(width: 5, height: 5)
+                                        }
+                                    }
+                                    .frame(height: 40)
+                                    .frame(maxWidth: .infinity)
+                                    .background(isSelected ? Brand.primary : (isToday ? Brand.cardLight : Color.clear))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                            }
+                        }
+                        .padding(10)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal)
+
+                        // Selected Day Status & Toggle FULL / NORMAL
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(formattedHeaderDate(selectedDate))
+                                        .font(.headline.bold())
+                                        .foregroundStyle(.white)
+                                    Text(isSelectedDayFull ? "🔴 DÍA COMPLETO / LLENO (Citas bloqueadas en web)" : "🟢 DÍA NORMAL (Citas abiertas en web)")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(isSelectedDayFull ? .red : Brand.primary)
+                                }
+                                Spacer()
+                            }
+
+                            Button {
+                                Task {
+                                    isTogglingDay = true
+                                    await store.toggleCalendarDayStatus(date: selectedDateString)
+                                    isTogglingDay = false
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: isSelectedDayFull ? "lock.open.fill" : "lock.fill")
+                                    Text(isSelectedDayFull ? "Abrir Día (Poner NORMAL)" : "Marcar Día como FULL (Lleno)")
+                                }
+                                .font(.subheadline.bold())
+                                .foregroundStyle(isSelectedDayFull ? .green : .white)
+                                .frame(maxWidth: .infinity)
+                                .padding(10)
+                                .background(isSelectedDayFull ? Color.green.opacity(0.18) : Color.red.opacity(0.8))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal)
+
+                        // Appointments List for Selected Day
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("TRABAJOS DEL DÍA (\(appointmentsForSelectedDay.count))")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.primary)
+                                Spacer()
+                                Button {
+                                    showAddEventSheet = true
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "plus.circle.fill")
+                                        Text("Agregar Trabajo")
+                                    }
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.primary)
+                                }
+                            }
+                            .padding(.horizontal)
+
+                            if appointmentsForSelectedDay.isEmpty {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "calendar.badge.plus")
+                                        .font(.largeTitle)
+                                        .foregroundStyle(.gray.opacity(0.5))
+                                    Text("No hay clientes programados para este día.")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.gray)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 30)
+                            } else {
+                                ForEach(appointmentsForSelectedDay) { appt in
+                                    CalendarApptCard(appt: appt, store: store)
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
+                    }
+                    .padding(.bottom, 30)
+                }
+            }
+            .navigationTitle("Calendario")
+            .navigationBarHidden(true)
+            .sheet(isPresented: $showAddEventSheet) {
+                DirectAddCalendarSheet(store: store, defaultDate: selectedDateString)
+            }
+        }
+    }
+
+    private func changeMonth(by value: Int) {
+        if let next = calendar.date(byAdding: .month, value: value, to: currentMonth) {
+            currentMonth = next
+        }
+    }
+
+    private func formattedHeaderDate(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "es_US")
+        f.dateStyle = .full
+        return f.string(from: date).capitalized
+    }
+}
+
+// MARK: - CALENDAR APPOINTMENT CARD
+struct CalendarApptCard: View {
+    let appt: CalendarAppointment
+    @ObservedObject var store: LawnCareStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(appt.client_name)
+                        .font(.headline.bold())
+                        .foregroundStyle(.white)
+                    Text("⏰ \(appt.time_window)")
+                        .font(.caption.bold())
+                        .foregroundStyle(Brand.accent)
+                }
+                Spacer()
+                if let amt = appt.amount, amt > 0 {
+                    Text(String(format: "$%.2f", amt))
+                        .font(.headline.bold())
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+
+            if !appt.address.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "mappin.and.ellipse")
+                        .foregroundStyle(.red)
+                    Text(appt.address)
+                        .font(.caption)
+                        .foregroundStyle(.gray)
+                }
+            }
+
+            if let svcs = appt.services, !svcs.isEmpty {
+                Text(svcs.joined(separator: " • "))
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+
+            if let notes = appt.notes, !notes.isEmpty {
+                Text("📝 \(notes)")
+                    .font(.caption2)
+                    .italic()
+                    .foregroundStyle(.gray)
+            }
+
+            Divider().background(Color.gray.opacity(0.3))
+
+            HStack(spacing: 12) {
+                Button {
+                    let clean = appt.client_phone.filter { "0123456789".contains($0) }
+                    if let url = URL(string: "tel://\(clean)") {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    Label("Llamar", systemImage: "phone.fill")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Brand.cardLight)
+                        .clipShape(Capsule())
+                        .foregroundStyle(.white)
+                }
+
+                Button {
+                    var clean = appt.client_phone.filter { "0123456789".contains($0) }
+                    if clean.count == 10 { clean = "1" + clean }
+                    if let url = URL(string: "https://wa.me/\(clean)") {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    Label("WhatsApp", systemImage: "message.fill")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.green.opacity(0.2))
+                        .clipShape(Capsule())
+                        .foregroundStyle(.green)
+                }
+
+                Spacer()
+
+                Button {
+                    Task {
+                        await store.deleteCalendarAppointment(id: appt.id)
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                        .foregroundStyle(.red.opacity(0.7))
+                }
+            }
+        }
+        .padding(14)
+        .background(Brand.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+// MARK: - DIRECT ADD CALENDAR EVENT SHEET
+struct DirectAddCalendarSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject var store: LawnCareStore
+    var defaultDate: String
+
+    @State private var clientName: String = ""
+    @State private var phone: String = ""
+    @State private var address: String = ""
+    @State private var timeWindow: String = "Morning (8:00 AM - 12:00 PM)"
+    @State private var servicesText: String = "Corte de Césped & Orillado"
+    @State private var amountText: String = "75.00"
+    @State private var notes: String = ""
+
+    let timeWindows = [
+        "Morning (8:00 AM - 12:00 PM)",
+        "Afternoon (12:00 PM - 4:00 PM)",
+        "Late Afternoon (4:00 PM - 7:00 PM)",
+        "Any Available Time Window"
+    ]
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+
+                Form {
+                    Section(header: Text("DATOS DEL CLIENTE")) {
+                        TextField("Nombre del Cliente", text: $clientName)
+                        TextField("Teléfono", text: $phone).keyboardType(.phonePad)
+                        TextField("Dirección (Killeen TX...)", text: $address)
+                    }
+
+                    Section(header: Text("HORARIO Y SERVICIO")) {
+                        Picker("Horario", selection: $timeWindow) {
+                            ForEach(timeWindows, id: \.self) { Text($0).tag($0) }
+                        }
+                        TextField("Servicios a Realizar", text: $servicesText)
+                        TextField("Monto Acordado ($)", text: $amountText).keyboardType(.decimalPad)
+                    }
+
+                    Section(header: Text("NOTAS")) {
+                        TextField("Notas adicionales...", text: $notes)
+                    }
+
+                    Section {
+                        Button {
+                            let amt = Double(amountText) ?? 75.0
+                            let appt = CalendarAppointment(
+                                id: Int(Date().timeIntervalSince1970 * 1000),
+                                date: defaultDate,
+                                time_window: timeWindow,
+                                client_name: clientName.isEmpty ? "Cliente" : clientName,
+                                client_phone: phone,
+                                address: address,
+                                services: [servicesText],
+                                amount: amt,
+                                status: "confirmed",
+                                notes: notes
+                            )
+                            Task {
+                                await store.saveCalendarAppointment(appt: appt)
+                                dismiss()
+                            }
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Text("Guardar en Calendario")
+                                    .font(.headline.bold())
+                                    .foregroundStyle(.black)
+                                Spacer()
+                            }
+                        }
+                        .listRowBackground(Brand.primary)
+                    }
+                }
+            }
+            .navigationTitle("Nuevo Trabajo (\(defaultDate))")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancelar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - TAB 5: FLASH PROMOTIONS VIEW
+struct FlashPromotionsView: View {
+    @ObservedObject var store: LawnCareStore
+
+    @State private var promoTitle: String = "🎖️ Descuento Especial Militar"
+    @State private var promoMessage: String = "El día de hoy tenemos una promoción especial para militares: corte de pasto completo por solo $35 con orillado impecable."
+    @State private var promoBadge: String = "OFERTA MILITAR FLASH"
+    @State private var durationHours: Int = 24
+    @State private var isPublishing: Bool = false
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        // Header
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle().fill(Color.orange.opacity(0.18)).frame(width: 46, height: 46)
+                                Image(systemName: "megaphone.fill").font(.title3).foregroundStyle(Color.orange)
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("PROMOCIONES FLASH EN VIVO")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.primary)
+                                Text("Publica ofertas con temporizador de cuenta regresiva en el centro de tu sitio web.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.gray)
+                            }
+                            Spacer()
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                        // Active Promo Card
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("ESTADO ACTUAL EN LA WEB")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                                Spacer()
+                                if let p = store.activePromo, p.enabled {
+                                    Text("🟢 EN VIVO EN LA WEB")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(Brand.primary)
+                                } else {
+                                    Text("INACTIVO")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.gray)
+                                }
+                            }
+
+                            if let p = store.activePromo, p.enabled {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                                        Text(p.badge ?? "OFERTA")
+                                            .font(.caption2.bold())
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 3)
+                                            .background(Brand.primary)
+                                            .foregroundStyle(.black)
+                                            .clipShape(Capsule())
+                                        Spacer()
+                                        if let exp = p.expires_at {
+                                            let remaining = max(0, exp - Int(Date().timeIntervalSince1970))
+                                            let hrs = remaining / 3600
+                                            let mins = (remaining % 3600) / 60
+                                            Text("⏳ Quedan: \(hrs)h \(mins)m")
+                                                .font(.caption2.bold())
+                                                .foregroundStyle(Color.orange)
+                                        }
+                                    }
+                                    Text(p.title)
+                                        .font(.headline.bold())
+                                        .foregroundStyle(.white)
+                                    Text(p.message)
+                                        .font(.caption)
+                                        .foregroundStyle(.white.opacity(0.85))
+
+                                    Button {
+                                        Task {
+                                            await store.deactivatePromo()
+                                        }
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: "xmark.circle.fill")
+                                            Text("Desactivar Promoción Ahora")
+                                        }
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.red)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(8)
+                                        .background(Color.red.opacity(0.15))
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    }
+                                }
+                                .padding(12)
+                                .background(Color.white.opacity(0.04))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            } else {
+                                Text("No hay promociones activas actualmente en la web.")
+                                    .font(.caption)
+                                    .foregroundStyle(.gray)
+                            }
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                        // Compose New Promotion Form
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("CREAR NUEVA PROMOCIÓN")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Insignia / Badge:").font(.caption2).foregroundStyle(.gray)
+                                TextField("Ej: OFERTA MILITAR FLASH", text: $promoBadge)
+                                    .padding(10).background(Brand.cardLight).clipShape(RoundedRectangle(cornerRadius: 8)).foregroundStyle(.white)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Título de la Oferta:").font(.caption2).foregroundStyle(.gray)
+                                TextField("Ej: 🎖️ Descuento Militar Especial", text: $promoTitle)
+                                    .padding(10).background(Brand.cardLight).clipShape(RoundedRectangle(cornerRadius: 8)).foregroundStyle(.white)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Mensaje Completo:").font(.caption2).foregroundStyle(.gray)
+                                TextEditor(text: $promoMessage)
+                                    .frame(height: 75)
+                                    .padding(6).background(Brand.cardLight).clipShape(RoundedRectangle(cornerRadius: 8)).foregroundStyle(.white)
+                            }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Duración de la Oferta:").font(.caption2).foregroundStyle(.gray)
+                                Picker("Duración", selection: $durationHours) {
+                                    Text("6 Horas").tag(6)
+                                    Text("12 Horas").tag(12)
+                                    Text("24 Horas (1 Día)").tag(24)
+                                    Text("48 Horas (2 Días)").tag(48)
+                                    Text("72 Horas (3 Días)").tag(72)
+                                }
+                                .pickerStyle(.segmented)
+                            }
+
+                            Button {
+                                Task {
+                                    isPublishing = true
+                                    await store.publishPromo(
+                                        title: promoTitle,
+                                        message: promoMessage,
+                                        badge: promoBadge,
+                                        durationHours: durationHours
+                                    )
+                                    isPublishing = false
+                                }
+                            } label: {
+                                HStack {
+                                    if isPublishing {
+                                        ProgressView().tint(.black)
+                                    } else {
+                                        Image(systemName: "paperplane.fill")
+                                        Text("Publicar Promoción en la Web Ahora")
+                                    }
+                                }
+                                .font(.headline)
+                                .foregroundStyle(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Brand.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .padding(.top, 4)
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                        // Promo History
+                        if !store.promoHistory.isEmpty {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("HISTORIAL DE PROMOCIONES")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.gray)
+
+                                ForEach(store.promoHistory.prefix(5), id: \.title) { h in
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(h.title).font(.subheadline.bold()).foregroundStyle(.white)
+                                            Text(h.message).font(.caption2).foregroundStyle(.gray).lineLimit(2)
+                                        }
+                                        Spacer()
+                                        Button {
+                                            promoTitle = h.title
+                                            promoMessage = h.message
+                                            promoBadge = h.badge ?? "OFERTA FLASH"
+                                        } label: {
+                                            Text("Usar").font(.caption2.bold()).padding(.horizontal, 8).padding(.vertical, 4).background(Brand.cardLight).clipShape(Capsule()).foregroundStyle(Brand.primary)
+                                        }
+                                    }
+                                    .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10))
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Promociones Web")
+            .navigationBarHidden(true)
+        }
     }
 }

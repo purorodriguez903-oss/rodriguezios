@@ -55,6 +55,11 @@ LEADS_JSON_PATH = os.path.join(BASE_DIR, "leads.json")
 SETTINGS_JSON_PATH = os.path.join(BASE_DIR, "settings.json")
 ANALYTICS_JSON_PATH = os.path.join(BASE_DIR, "analytics.json")
 CLOUD_CONFIG_JSON_PATH = os.path.join(BASE_DIR, "cloud_config.json")
+CALENDAR_JSON_PATH = os.path.join(BASE_DIR, "calendar.json")
+PROMOTIONS_JSON_PATH = os.path.join(BASE_DIR, "promotions.json")
+UPLOADS_LEADS_FOLDER = os.path.join(BASE_DIR, "assets", "uploads", "leads")
+os.makedirs(UPLOADS_LEADS_FOLDER, exist_ok=True)
+
 
 THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000
 
@@ -212,6 +217,94 @@ def save_cloud_config(data):
         return True
     except Exception as e:
         print(f"[Error] Guardando cloud_config.json: {e}")
+        return False
+
+def save_lead_photos(photos_data, lead_id):
+    """Decodes base64 photos uploaded by customers and saves them locally."""
+    saved_urls = []
+    if not photos_data or not isinstance(photos_data, list):
+        return saved_urls
+    import base64
+    for idx, item in enumerate(photos_data):
+        if not item or not isinstance(item, str):
+            continue
+        if item.startswith("data:image"):
+            try:
+                header, encoded = item.split(",", 1)
+                ext = "png" if "png" in header else "jpg"
+                raw = base64.b64decode(encoded)
+                filename = f"lead_{lead_id}_{idx+1}.{ext}"
+                filepath = os.path.join(UPLOADS_LEADS_FOLDER, filename)
+                with open(filepath, "wb") as f:
+                    f.write(raw)
+                saved_urls.append(f"./assets/uploads/leads/{filename}")
+            except Exception as e:
+                print(f"[Error] Guardando foto de lead: {e}")
+        elif item.startswith("http") or item.startswith("./"):
+            saved_urls.append(item)
+    return saved_urls
+
+def load_calendar():
+    default_cal = {
+        "day_status": {}, # "YYYY-MM-DD": "normal" or "full"
+        "appointments": []
+    }
+    if not os.path.exists(CALENDAR_JSON_PATH):
+        return default_cal
+    try:
+        with open(CALENDAR_JSON_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"[Error] Cargando calendar.json: {e}")
+        return default_cal
+
+def save_calendar(data):
+    try:
+        with open(CALENDAR_JSON_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"[Error] Guardando calendar.json: {e}")
+        return False
+
+def load_promotions():
+    default_promo = {
+        "active": {
+            "id": 1,
+            "enabled": True,
+            "title": "🎖️ Descuento Especial Militar & Killeen",
+            "message": "¡El día de hoy aprovecha nuestra promoción para militares: corte de césped profesional a $35 con orillado impecable!",
+            "badge": "OFERTA MILITAR FLASH",
+            "created_at": int(time.time()),
+            "duration_hours": 24,
+            "expires_at": int(time.time()) + 24 * 3600
+        },
+        "history": []
+    }
+    if not os.path.exists(PROMOTIONS_JSON_PATH):
+        return default_promo
+    try:
+        with open(PROMOTIONS_JSON_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            # Check expiration
+            active = data.get("active")
+            if active and active.get("enabled"):
+                if time.time() > active.get("expires_at", 0):
+                    active["enabled"] = False
+                    data.setdefault("history", []).insert(0, dict(active))
+                    save_promotions(data)
+            return data
+    except Exception as e:
+        print(f"[Error] Cargando promotions.json: {e}")
+        return default_promo
+
+def save_promotions(data):
+    try:
+        with open(PROMOTIONS_JSON_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"[Error] Guardando promotions.json: {e}")
         return False
 
 def get_next_id(gallery):
@@ -679,6 +772,17 @@ def build_bot(enable_message_content: bool):
         print("==================================================")
         print(f"Rodriguez LawnCare Bot conectado como: {bot.user}")
         print(f"Server ID: {SERVER_ID} | Canal ID: {CHANNEL_ID}")
+                # Update Discord Bot Avatar with new official Rodriguez LawnCare logo
+        avatar_path = os.path.join(BASE_DIR, "assets", "images", "discord_avatar.png")
+        if os.path.exists(avatar_path):
+            try:
+                with open(avatar_path, "rb") as af:
+                    avatar_bytes = af.read()
+                await bot.user.edit(avatar=avatar_bytes)
+                print("✅ Avatar del bot de Discord actualizado con el nuevo logo.")
+            except Exception as e:
+                print(f"Notice avatar Discord: {e}")
+
         print(f"Message Content Intent: {'ACTIVADO' if enable_message_content else 'DESACTIVADO (Usa /subir o Botones)'}")
         print("==================================================")
 
@@ -1243,7 +1347,11 @@ async def handle_lead_submission(request):
         # Persist to leads.json
         leads = load_leads()
         lead_id = int(time.time() * 1000)
+        photos_raw = data.get("photos", [])
+        saved_photos = save_lead_photos(photos_raw, lead_id)
+
         new_lead = {
+            "photos": saved_photos,
             "id": lead_id,
             "created_at": int(time.time()),
             "date_str": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
@@ -2547,8 +2655,153 @@ async def handle_cloud_admin_page(request):
     return web.Response(text=html, content_type="text/html", headers={"Access-Control-Allow-Origin": "*"})
 
 
+
+# ----------------- CALENDAR & SCHEDULE API -----------------
+async def handle_api_get_calendar(request):
+    """Returns calendar days status and booked appointments."""
+    cal = load_calendar()
+    return cors_json_response({"success": True, "calendar": cal})
+
+async def handle_api_save_calendar_day(request):
+    """Sets a date status as 'normal' or 'full' (Lleno)."""
+    try:
+        data = await request.json()
+        date_str = (data.get("date") or "").strip()
+        status_val = (data.get("status") or "normal").strip().lower()
+        if not date_str:
+            return cors_json_response({"success": False, "error": "date is required"}, status=400)
+
+        cal = load_calendar()
+        cal.setdefault("day_status", {})[date_str] = status_val
+        save_calendar(cal)
+        return cors_json_response({"success": True, "calendar": cal, "date": date_str, "status": status_val})
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+async def handle_api_save_calendar_appointment(request):
+    """Adds or updates a job in the calendar."""
+    try:
+        data = await request.json()
+        cal = load_calendar()
+        appts = cal.setdefault("appointments", [])
+        appt_id = int(data.get("id") or int(time.time() * 1000))
+
+        existing = next((a for a in appts if a.get("id") == appt_id), None)
+        item = {
+            "id": appt_id,
+            "date": data.get("date", time.strftime("%Y-%m-%d")),
+            "time_window": data.get("time_window", "Morning (8:00 AM - 12:00 PM)"),
+            "client_name": data.get("client_name", "Cliente"),
+            "client_phone": data.get("client_phone", ""),
+            "address": data.get("address", ""),
+            "services": data.get("services", ["Corte de Césped"]),
+            "amount": float(data.get("amount", 0.0) or 0.0),
+            "status": data.get("status", "confirmed"),
+            "notes": data.get("notes", "")
+        }
+
+        if existing:
+            existing.update(item)
+        else:
+            appts.insert(0, item)
+
+        save_calendar(cal)
+        return cors_json_response({"success": True, "appointment": item, "calendar": cal})
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+async def handle_api_delete_calendar_appointment(request):
+    """Deletes a job from the calendar."""
+    try:
+        data = await request.json()
+        appt_id = int(data.get("id") or 0)
+        cal = load_calendar()
+        appts = cal.setdefault("appointments", [])
+        cal["appointments"] = [a for a in appts if a.get("id") != appt_id]
+        save_calendar(cal)
+        return cors_json_response({"success": True, "calendar": cal})
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+async def handle_api_calendar_availability(request):
+    """Live availability checker for web visitors booking dates and time slots."""
+    date_val = request.query.get("date", "").strip()
+    cal = load_calendar()
+    day_status = cal.get("day_status", {}).get(date_val, "normal")
+
+    if day_status == "full":
+        return cors_json_response({
+            "success": True,
+            "date": date_val,
+            "is_available": False,
+            "is_full": True,
+            "message": "Día Lleno / Team Fully Booked. Please select another date."
+        })
+
+    # Check booked time slots for this date
+    appts = cal.get("appointments", [])
+    booked_slots = [
+        a.get("time_window") for a in appts
+        if a.get("date") == date_val and a.get("status") in ["confirmed", "scheduled", "in_progress"]
+    ]
+
+    return cors_json_response({
+        "success": True,
+        "date": date_val,
+        "is_available": True,
+        "is_full": False,
+        "booked_slots": booked_slots,
+        "team_working_slots": booked_slots
+    })
+
+# ----------------- PROMOTIONS API -----------------
+async def handle_api_get_promo(request):
+    """Returns active flash promotion for web and app."""
+    promos = load_promotions()
+    return cors_json_response({"success": True, "promo": promos.get("active"), "history": promos.get("history", [])})
+
+async def handle_api_publish_promo(request):
+    """Publishes a new promo to the website with expiration."""
+    try:
+        data = await request.json()
+        promos = load_promotions()
+        active = promos.get("active", {})
+        if active and active.get("enabled"):
+            promos.setdefault("history", []).insert(0, dict(active))
+
+        duration_hours = max(1, int(data.get("duration_hours", 24)))
+        now = int(time.time())
+        new_active = {
+            "id": int(now * 1000),
+            "enabled": True,
+            "title": data.get("title", "🎖️ Descuento Flash").strip(),
+            "message": data.get("message", "Promoción especial activa").strip(),
+            "badge": data.get("badge", "OFERTA LIMITADA").strip(),
+            "created_at": now,
+            "duration_hours": duration_hours,
+            "expires_at": now + (duration_hours * 3600)
+        }
+        promos["active"] = new_active
+        save_promotions(promos)
+        return cors_json_response({"success": True, "promo": new_active, "history": promos.get("history", [])})
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+async def handle_api_deactivate_promo(request):
+    """Deactivates active promo and moves it to history."""
+    try:
+        promos = load_promotions()
+        active = promos.get("active", {})
+        if active and active.get("enabled"):
+            active["enabled"] = False
+            promos.setdefault("history", []).insert(0, dict(active))
+            save_promotions(promos)
+        return cors_json_response({"success": True, "promo": promos.get("active")})
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
 def create_web_app():
-    app = web.Application()
+    app = web.Application(client_max_size=50 * 1024 * 1024)
     # Website static & pages
     app.router.add_get('/', handle_index)
     app.router.add_get('/index.html', handle_index)
@@ -2594,6 +2847,18 @@ def create_web_app():
     app.router.add_post('/api/settings/hero', handle_api_save_hero_settings)
     app.router.add_post('/api/settings/music', handle_api_save_music_settings)
     app.router.add_post('/api/ai/estimate', handle_api_ai_estimate)
+
+    # Calendar & Availability API
+    app.router.add_get('/api/calendar', handle_api_get_calendar)
+    app.router.add_post('/api/calendar/day', handle_api_save_calendar_day)
+    app.router.add_post('/api/calendar/appointment', handle_api_save_calendar_appointment)
+    app.router.add_post('/api/calendar/delete', handle_api_delete_calendar_appointment)
+    app.router.add_get('/api/calendar/availability', handle_api_calendar_availability)
+
+    # Flash Promotions API
+    app.router.add_get('/api/promo', handle_api_get_promo)
+    app.router.add_post('/api/promo', handle_api_publish_promo)
+    app.router.add_post('/api/promo/deactivate', handle_api_deactivate_promo)
 
     # Visitors & Analytics API
     app.router.add_get('/api/analytics', handle_api_get_analytics)
