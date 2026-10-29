@@ -10113,8 +10113,7 @@ struct VipLoyaltyTiersView: View {
                                     Text("🥈 SILVER VIP")
                                         .font(.caption2.bold())
                                         .foregroundStyle(Color.gray)
-                                    Text("5-10 Servicios
-(5% OFF)")
+                                    Text("5-10 Servicios (5% OFF)")
                                         .font(.caption2)
                                         .foregroundStyle(.gray)
                                 }
@@ -10127,8 +10126,7 @@ struct VipLoyaltyTiersView: View {
                                     Text("🥇 GOLD ELITE")
                                         .font(.caption2.bold())
                                         .foregroundStyle(Color.yellow)
-                                    Text("11+ Cortes
-(10% OFF)")
+                                    Text("11+ Cortes (10% OFF)")
                                         .font(.caption2)
                                         .foregroundStyle(.gray)
                                 }
@@ -10276,9 +10274,7 @@ struct EquipmentFleetMaintenanceSheetView: View {
                             
                             Divider().background(Color.gray.opacity(0.3))
                             
-                            Text("• Bujías limpias y calibradas
-• Filtros de aire de repuesto cargados
-• Carrete de tanza 0.095 cargado al 100%")
+                            Text("• Bujías limpias y calibradas\n• Filtros de aire de repuesto cargados\n• Carrete de tanza 0.095 cargado al 100%")
                                 .font(.caption)
                                 .foregroundStyle(.white.opacity(0.9))
                         }
@@ -10304,8 +10300,7 @@ struct EquipmentFleetMaintenanceSheetView: View {
                             Divider().background(Color.gray.opacity(0.3))
                             
                             HStack {
-                                Text("Próximo cambio de aceite: en 2,300 millas
-Presión de llantas: 38 PSI (Correcta)")
+                                Text("Próximo cambio de aceite: en 2,300 millas\nPresión de llantas: 38 PSI (Correcta)")
                                     .font(.caption)
                                     .foregroundStyle(.white.opacity(0.9))
                                 Spacer()
