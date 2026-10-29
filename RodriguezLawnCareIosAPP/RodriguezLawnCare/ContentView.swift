@@ -2691,7 +2691,7 @@ struct WebAdminView: View {
 
             HStack(spacing: 12) {
                 AnalyticsMetricBox(title: "Visitas Web", value: "\(store.stats?.total_visits ?? 0)", icon: "eye.fill", color: .blue)
-                AnalyticsMetricBox(title: "Visitas Hoy", value: (store.stats != nil && store.stats!.visits_today > 0 ? "+\(store.stats!.visits_today)" : "0"), icon: "flame.fill", color: .orange)
+                AnalyticsMetricBox(title: "Visitas Hoy", value: "\(store.stats?.visits_today ?? 0)", icon: "flame.fill", color: .orange)
             }
 
             HStack(spacing: 12) {
