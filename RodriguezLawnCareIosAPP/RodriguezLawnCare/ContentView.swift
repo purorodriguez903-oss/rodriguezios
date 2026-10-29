@@ -2849,34 +2849,6 @@ struct WebAdminView: View {
             }
         }
     }
-
-                        VStack(spacing: 4) {
-                            Text("rodriguezlawncareios • Versión \(store.currentAppVersion) (Build \(store.currentAppBuild))")
-                                .font(.caption2.bold()).foregroundStyle(.gray)
-                            Text("Conexión 100% online con Railway y compilación inalámbrica OTA")
-                                .font(.caption2).foregroundStyle(.gray.opacity(0.7))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 10)
-                    }
-                    .padding()
-                }
-            }
-            .navigationTitle("Ajustes & Sistema OTA ⚙️")
-            .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                serverInput = store.serverURL
-            }
-            .sheet(isPresented: $showHeroManagerSheet) {
-                HeroBackgroundManagerSheet(store: store)
-            }
-            .alert("Configuración Guardada", isPresented: $showSavedAlert) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("Se ha actualizado la dirección del servidor.")
-            }
-        }
-    }
 }
 
 // MARK: - OTA UPDATE MODAL SHEET (1-TAP WIRELESS INSTALLATION)
