@@ -128,11 +128,11 @@ def save_settings(data):
 
 def load_analytics():
     default_analytics = {
-        "total_visits": 1420,
-        "unique_visitors": 890,
-        "visits_today": 42,
-        "quotes_submitted": 18,
-        "conversion_rate": "8.4%",
+        "total_visits": 0,
+        "unique_visitors": 0,
+        "visits_today": 0,
+        "quotes_submitted": 0,
+        "conversion_rate": "0.0%",
         "last_updated": int(time.time())
     }
     if not os.path.exists(ANALYTICS_JSON_PATH):
@@ -164,10 +164,10 @@ def increment_visit():
 def load_cloud_config():
     default_config = {
         "app_name": "rodriguezlawncareios",
-        "app_version": "1.2.0",
-        "app_build": 12,
+        "app_version": "1.3.0",
+        "app_build": 13,
         "min_version": "1.0.0",
-        "release_notes": "Conexión 100% online con Railway, ícono oficial y actualización inalámbrica OTA sin cables.",
+        "release_notes": "Conexión 100% online con Railway (https://web-production-b6891b.up.railway.app), cotizaciones en tiempo real, selector de fotos desde el iPhone y sincronización instantánea de trabajos y fondo Hero.",
         "ipa_url": "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa",
         "ipa_fallback_url": "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/RodriguezLawnCare.ipa",
         "trollstore_url": "apple-magnifier://install?url=https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa",
@@ -1263,6 +1263,14 @@ async def handle_lead_submission(request):
         leads.insert(0, new_lead)
         save_leads(leads)
 
+        # Update real analytics
+        analytics = load_analytics()
+        analytics["quotes_submitted"] = analytics.get("quotes_submitted", 0) + 1
+        tot = analytics.get("total_visits", 0)
+        quotes = analytics.get("quotes_submitted", 0)
+        analytics["conversion_rate"] = f"{(quotes / tot * 100):.1f}%" if tot > 0 else "0.0%"
+        save_analytics(analytics)
+
         # Notify Discord asynchronously
         asyncio.create_task(forward_lead_to_discord(name, phone, services, address, date_val, time_val, frequency, description, source))
 
@@ -1432,7 +1440,9 @@ async def handle_api_add_gallery(request):
             "url": url,
             "uploaded_at": int(time.time() * 1000),
             "title": title,
-            "category": category
+            "category": category,
+            "location": data.get("location", "Killeen & Central TX").strip(),
+            "verified": True
         }
         gallery.insert(0, new_item)
         save_gallery(gallery)
@@ -1482,6 +1492,18 @@ async def handle_api_update_gallery(request):
                     item["category"] = data["category"].strip()
                 if "location" in data:
                     item["location"] = data["location"].strip()
+                if "image_base64" in data and data["image_base64"]:
+                    import base64
+                    b64_str = data["image_base64"].strip()
+                    if "," in b64_str:
+                        b64_str = b64_str.split(",", 1)[1]
+                    img_bytes = base64.b64decode(b64_str)
+                    filename = f"work_{photo_id}.jpg"
+                    file_path = os.path.join(GALLERY_FOLDER, filename)
+                    with open(file_path, "wb") as f:
+                        f.write(img_bytes)
+                    item["url"] = f"./assets/gallery/{filename}?v={int(time.time())}"
+                    item["filename"] = filename
                 if "url" in data and data["url"]:
                     item["url"] = data["url"].strip()
                 if "verified" in data:
@@ -1580,6 +1602,11 @@ async def handle_api_stats(request):
     estimated = sum(1 for l in leads if l.get("status") == "estimated")
     is_bot_ready = bool(bot_global and bot_global.is_ready())
 
+    tot_visits = analytics.get("total_visits", 0)
+    vis_today = analytics.get("visits_today", 0)
+    quotes = len(leads)
+    conv_rate = f"{(quotes / tot_visits * 100):.1f}%" if tot_visits > 0 else "0.0%"
+
     stats = {
         "status": "online",
         "bot_online": is_bot_ready,
@@ -1590,9 +1617,9 @@ async def handle_api_stats(request):
         "completed_leads": completed,
         "estimated_leads": estimated,
         "gallery_count": len(gallery),
-        "total_visits": analytics.get("total_visits", 1420),
-        "visits_today": analytics.get("visits_today", 42),
-        "conversion_rate": analytics.get("conversion_rate", "8.4%"),
+        "total_visits": tot_visits,
+        "visits_today": vis_today,
+        "conversion_rate": conv_rate,
         "uptime_seconds": int(time.time() - SERVER_START_TIME),
         "server_time": time.time()
     }
@@ -2165,7 +2192,7 @@ async def handle_cloud_admin_page(request):
       <div class="stat-label">Total Clientes</div>
     </div>
     <div class="stat-card">
-      <div class="stat-num">{analytics.get("visits_today", 42)}</div>
+      <div class="stat-num">{analytics.get("visits_today", 0)}</div>
       <div class="stat-label">Visitas Hoy</div>
     </div>
     <div class="stat-card">

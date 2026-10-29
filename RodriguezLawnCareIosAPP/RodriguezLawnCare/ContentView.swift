@@ -171,16 +171,20 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "1.2.0"
-    let currentAppBuild: Int = 12
+    let currentAppVersion: String = "1.3.0"
+    let currentAppBuild: Int = 13
 
-    @AppStorage("api_server_url") var serverURL: String = "https://rodriguezlawncarenuevaa-production.up.railway.app"
+    @AppStorage("api_server_url") var serverURL: String = "https://web-production-b6891b.up.railway.app"
 
     private var knownLeadIds: Set<Int> = []
     private var isFirstLoad: Bool = true
     private var cancellables = Set<AnyCancellable>()
 
     init() {
+        if serverURL.contains("rodriguezlawncarenuevaa") || serverURL.isEmpty || !serverURL.contains("web-production-b6891b.up.railway.app") {
+            serverURL = "https://web-production-b6891b.up.railway.app"
+            UserDefaults.standard.set("https://web-production-b6891b.up.railway.app", forKey: "api_server_url")
+        }
         loadDemoData()
         requestNotificationPermissions()
         startRealtimePolling()
@@ -197,8 +201,8 @@ class LawnCareStore: ObservableObject {
     }
 
     func startRealtimePolling() {
-        // Real-time auto sync every 10 seconds
-        Timer.publish(every: 10, on: .main, in: .common)
+        // Real-time auto sync every 6 seconds with Railway
+        Timer.publish(every: 6, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
                 Task { [weak self] in
@@ -234,38 +238,8 @@ class LawnCareStore: ObservableObject {
     }
 
     func loadDemoData() {
-        leads = [
-            Lead(
-                id: 1730101,
-                name: "Marcus Henderson",
-                phone: "(254) 555-0192",
-                services: ["Corte de Césped & Orillado", "Orillado con Navaja"],
-                address: "4201 Trimmier Rd, Killeen, TX",
-                date: "Mañana temprano",
-                time: "9:00 AM",
-                frequency: "Quincenal",
-                description: "Pasto crecido, requiere líneas limpias en banqueta y entrada.",
-                source: "Web Estimado Rápido",
-                status: "pending",
-                estimated_amount: 55.0,
-                notes: "Código portón: 4421. Avisar por texto 15 min antes."
-            ),
-            Lead(
-                id: 1730102,
-                name: "Sarah Jenkins",
-                phone: "(254) 555-0144",
-                services: ["Instalación de Mulch Oscuro", "Poda de Arbustos"],
-                address: "1208 Knights Way, Harker Heights, TX",
-                date: "Viernes",
-                time: "10:30 AM",
-                frequency: "Una vez",
-                description: "4 jardineras con mulch color chocolate y recorte de arbustos.",
-                source: "Web Formulario Citas",
-                status: "confirmed",
-                estimated_amount: 185.0,
-                notes: "Mulch color chocolate aprobado por WhatsApp."
-            )
-        ]
+        // Clean initial leads state: 100% Real data loaded from Railway
+        leads = []
 
         gallery = [
             GalleryPhoto(id: 8, filename: "work_8.jpg", url: "./assets/gallery/work_8.jpg", title: "Builder Duplex", category: "General LawnCare", location: "Killeen & Central TX", verified: true),
@@ -299,6 +273,9 @@ class LawnCareStore: ObservableObject {
 
     var cleanURL: String {
         var base = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if base.isEmpty || base.contains("rodriguezlawncarenuevaa") {
+            base = "https://web-production-b6891b.up.railway.app"
+        }
         if base.hasSuffix("/") {
             base.removeLast()
         }
@@ -547,12 +524,13 @@ class LawnCareStore: ObservableObject {
     }
 
     @MainActor
-    func addGalleryPhoto(title: String, category: String, urlString: String, location: String = "Killeen & Central TX") async {
+    func addGalleryPhoto(title: String, category: String, urlString: String? = nil, location: String = "Killeen & Central TX", imageBase64: String? = nil) async {
         let newId = (gallery.map { $0.id }.max() ?? 0) + 1
+        let finalUrl = (urlString != nil && !urlString!.isEmpty) ? urlString! : "./assets/gallery/work_\(newId).jpg"
         let newPhoto = GalleryPhoto(
             id: newId,
             filename: "work_\(newId).jpg",
-            url: urlString,
+            url: finalUrl,
             title: title,
             category: category,
             location: location,
@@ -562,25 +540,29 @@ class LawnCareStore: ObservableObject {
         gallery.insert(newPhoto, at: 0)
 
         guard let url = URL(string: "\(cleanURL)/api/gallery") else { return }
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "title": title,
             "category": category,
-            "url": urlString,
+            "url": finalUrl,
             "location": location
         ]
+        if let b64 = imageBase64, !b64.isEmpty {
+            payload["image_base64"] = b64
+        }
         do {
             var req = URLRequest(url: url)
             req.httpMethod = "POST"
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try JSONSerialization.data(withJSONObject: payload)
             _ = try await URLSession.shared.data(for: req)
+            await fetchGallery()
         } catch {
             print("Add photo server error: \(error)")
         }
     }
 
     @MainActor
-    func updateGalleryPhoto(id: Int, title: String, category: String, urlString: String? = nil, location: String? = nil) async {
+    func updateGalleryPhoto(id: Int, title: String, category: String, urlString: String? = nil, location: String? = nil, imageBase64: String? = nil) async {
         if let idx = gallery.firstIndex(where: { $0.id == id }) {
             gallery[idx].title = title
             gallery[idx].category = category
@@ -592,6 +574,7 @@ class LawnCareStore: ObservableObject {
         var payload: [String: Any] = ["id": id, "title": title, "category": category]
         if let u = urlString, !u.isEmpty { payload["url"] = u }
         if let loc = location { payload["location"] = loc }
+        if let b64 = imageBase64, !b64.isEmpty { payload["image_base64"] = b64 }
 
         do {
             var req = URLRequest(url: url)
@@ -599,6 +582,7 @@ class LawnCareStore: ObservableObject {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try JSONSerialization.data(withJSONObject: payload)
             _ = try await URLSession.shared.data(for: req)
+            await fetchGallery()
         } catch {
             print("Update photo error: \(error)")
         }
@@ -2066,6 +2050,9 @@ struct EditGalleryPhotoSheet: View {
     @State private var category = "Front Yard"
     @State private var location = ""
     @State private var imageURL = ""
+    @State private var selectedImage: UIImage? = nil
+    @State private var showPhotoPicker = false
+    @State private var isSaving = false
 
     let categories = [
         "Front Yard",
@@ -2074,9 +2061,11 @@ struct EditGalleryPhotoSheet: View {
         "Mulch",
         "Tree Care",
         "Shrubs & Bushes",
-        "Yard Cleanups",
+        "Cleanups & More",
+        "Mowing & Edging",
         "General LawnCare",
-        "Builder Duplex"
+        "Builder Duplex",
+        "Commercial Grounds"
     ]
 
     var body: some View {
@@ -2084,56 +2073,137 @@ struct EditGalleryPhotoSheet: View {
             ZStack {
                 Brand.background.ignoresSafeArea()
 
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Título del Trabajo")
-                        .font(.caption.bold()).foregroundStyle(.gray)
-                    TextField("Título", text: $title)
-                        .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Image Replacement / Preview
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("FOTO DEL TRABAJO")
+                                .font(.caption.bold()).foregroundStyle(.gray)
 
-                    Text("Categoría")
-                        .font(.caption.bold()).foregroundStyle(.gray)
-                    Picker("Categoría", selection: $category) {
-                        ForEach(categories, id: \.self) { cat in
-                            Text(cat).tag(cat)
+                            if let img = selectedImage {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 180)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            } else {
+                                AsyncImage(url: URL(string: store.fullMediaURL(photo.url))) { phase in
+                                    if let img = phase.image {
+                                        img.resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 180)
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    } else {
+                                        ZStack {
+                                            Brand.cardLight
+                                            Image(systemName: "photo")
+                                                .font(.largeTitle)
+                                                .foregroundStyle(.gray)
+                                        }
+                                        .frame(height: 180)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    }
+                                }
+                            }
+
+                            Button {
+                                showPhotoPicker = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "arrow.triangle.2.circlepath.camera")
+                                    Text(selectedImage == nil ? "📷 Reemplazar Foto desde iPhone" : "Cambiar Foto Seleccionada")
+                                }
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(12)
+                                .background(Brand.cardLight)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Brand.primary.opacity(0.6), lineWidth: 1)
+                                )
+                            }
                         }
-                    }
-                    .pickerStyle(.menu)
-                    .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10))
 
-                    Text("Ubicación")
-                        .font(.caption.bold()).foregroundStyle(.gray)
-                    TextField("Ubicación", text: $location)
-                        .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
-
-                    Text("URL de la Imagen (o Ruta ./assets/gallery/...)")
-                        .font(.caption.bold()).foregroundStyle(.gray)
-                    TextField("URL de la Imagen", text: $imageURL)
-                        .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
-
-                    Spacer()
-
-                    Button {
-                        Task {
-                            await store.updateGalleryPhoto(
-                                id: photo.id,
-                                title: title,
-                                category: category,
-                                urlString: imageURL,
-                                location: location
-                            )
-                            dismiss()
+                        // Title
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Título del Trabajo")
+                                .font(.caption.bold()).foregroundStyle(.gray)
+                            TextField("Título", text: $title)
+                                .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
                         }
-                    } label: {
-                        Text("Guardar Cambios en la Web")
+
+                        // Category
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Categoría")
+                                .font(.caption.bold()).foregroundStyle(.gray)
+                            Picker("Categoría", selection: $category) {
+                                ForEach(categories, id: \.self) { cat in
+                                    Text(cat).tag(cat)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+
+                        // Location
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Ubicación")
+                                .font(.caption.bold()).foregroundStyle(.gray)
+                            TextField("Ubicación", text: $location)
+                                .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+                        }
+
+                        // URL (Optional)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("URL de la Imagen (Opcional)")
+                                .font(.caption.bold()).foregroundStyle(.gray)
+                            TextField("URL de la Imagen", text: $imageURL)
+                                .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+                        }
+
+                        Spacer().frame(height: 10)
+
+                        Button {
+                            isSaving = true
+                            var base64String: String? = nil
+                            if let img = selectedImage, let data = img.jpegData(compressionQuality: 0.8) {
+                                base64String = data.base64EncodedString()
+                            }
+                            Task {
+                                await store.updateGalleryPhoto(
+                                    id: photo.id,
+                                    title: title,
+                                    category: category,
+                                    urlString: imageURL,
+                                    location: location,
+                                    imageBase64: base64String
+                                )
+                                isSaving = false
+                                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                                dismiss()
+                            }
+                        } label: {
+                            HStack {
+                                if isSaving {
+                                    ProgressView().tint(.black).padding(.trailing, 4)
+                                }
+                                Text(isSaving ? "Guardando en la Web..." : "Guardar Cambios en la Web")
+                            }
                             .font(.headline)
                             .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(Brand.primary)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .disabled(isSaving)
                     }
+                    .padding()
                 }
-                .padding()
             }
             .navigationTitle("Editar Trabajo #\(photo.id)")
             .navigationBarTitleDisplayMode(.inline)
@@ -2141,6 +2211,9 @@ struct EditGalleryPhotoSheet: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancelar") { dismiss() }
                 }
+            }
+            .sheet(isPresented: $showPhotoPicker) {
+                PhotoLibraryPicker(selectedImage: $selectedImage)
             }
             .onAppear {
                 title = photo.title
@@ -2152,6 +2225,41 @@ struct EditGalleryPhotoSheet: View {
     }
 }
 
+// MARK: - PHOTO LIBRARY PICKER (UIKIT BRIDGE)
+struct PhotoLibraryPicker: UIViewControllerRepresentable {
+    @Binding var selectedImage: UIImage?
+    @Environment(\.dismiss) var dismiss
+
+    class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let parent: PhotoLibraryPicker
+        init(_ parent: PhotoLibraryPicker) { self.parent = parent }
+
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let image = info[.originalImage] as? UIImage {
+                parent.selectedImage = image
+            }
+            parent.dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        picker.sourceType = .photoLibrary
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+}
+
 // MARK: - ADD GALLERY PHOTO SHEET
 struct AddGalleryPhotoSheet: View {
     @Environment(\.dismiss) var dismiss
@@ -2161,6 +2269,9 @@ struct AddGalleryPhotoSheet: View {
     @State private var category = "Front Yard"
     @State private var location = "Killeen & Central TX"
     @State private var imageURL = ""
+    @State private var selectedImage: UIImage? = nil
+    @State private var showPhotoPicker = false
+    @State private var isUploading = false
 
     let categories = [
         "Front Yard",
@@ -2169,9 +2280,11 @@ struct AddGalleryPhotoSheet: View {
         "Mulch",
         "Tree Care",
         "Shrubs & Bushes",
-        "Yard Cleanups",
+        "Cleanups & More",
+        "Mowing & Edging",
         "General LawnCare",
-        "Builder Duplex"
+        "Builder Duplex",
+        "Commercial Grounds"
     ]
 
     var body: some View {
@@ -2179,52 +2292,130 @@ struct AddGalleryPhotoSheet: View {
             ZStack {
                 Brand.background.ignoresSafeArea()
 
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Título del Trabajo")
-                        .font(.caption.bold()).foregroundStyle(.gray)
-                    TextField("ej. Builder Duplex / Front Yard Clean Lines", text: $title)
-                        .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        // Photo Picker Section
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("FOTO DEL TRABAJO")
+                                .font(.caption.bold()).foregroundStyle(.gray)
 
-                    Text("Categoría de Trabajo")
-                        .font(.caption.bold()).foregroundStyle(.gray)
-                    Picker("Categoría", selection: $category) {
-                        ForEach(categories, id: \.self) { cat in
-                            Text(cat).tag(cat)
+                            if let img = selectedImage {
+                                ZStack(alignment: .topTrailing) {
+                                    Image(uiImage: img)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 180)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                                    Button {
+                                        selectedImage = nil
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.title2)
+                                            .foregroundStyle(.white, .red)
+                                            .padding(8)
+                                    }
+                                }
+                            }
+
+                            Button {
+                                showPhotoPicker = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: "photo.on.rectangle.angled")
+                                    Text(selectedImage == nil ? "📷 Elegir Foto de la Galería del iPhone" : "Cambiar Foto Seleccionada")
+                                }
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Brand.cardLight)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Brand.primary.opacity(0.6), lineWidth: 1)
+                                )
+                            }
                         }
-                    }
-                    .pickerStyle(.menu)
-                    .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10))
 
-                    Text("Ubicación")
-                        .font(.caption.bold()).foregroundStyle(.gray)
-                    TextField("Killeen & Central TX", text: $location)
-                        .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
-
-                    Text("URL o Enlace de la Imagen")
-                        .font(.caption.bold()).foregroundStyle(.gray)
-                    TextField("https://... o ./assets/gallery/work_X.jpg", text: $imageURL)
-                        .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
-
-                    Spacer()
-
-                    Button {
-                        guard !title.isEmpty else { return }
-                        let finalURL = imageURL.isEmpty ? "./assets/gallery/work_8.jpg" : imageURL
-                        Task {
-                            await store.addGalleryPhoto(title: title, category: category, urlString: finalURL, location: location)
-                            dismiss()
+                        // Title
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("TÍTULO DEL TRABAJO")
+                                .font(.caption.bold()).foregroundStyle(.gray)
+                            TextField("ej. Builder Duplex / Front Yard Clean Lines", text: $title)
+                                .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
                         }
-                    } label: {
-                        Text("Publicar Trabajo en la Web")
+
+                        // Category
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("CATEGORÍA DE TRABAJO")
+                                .font(.caption.bold()).foregroundStyle(.gray)
+                            Picker("Categoría", selection: $category) {
+                                ForEach(categories, id: \.self) { cat in
+                                    Text(cat).tag(cat)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .padding(10).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+
+                        // Location
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("UBICACIÓN")
+                                .font(.caption.bold()).foregroundStyle(.gray)
+                            TextField("Killeen & Central TX", text: $location)
+                                .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+                        }
+
+                        // URL (Optional)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("URL O ENLACE (OPCIONAL SI ELIGES FOTO DE LA GALERÍA)")
+                                .font(.caption.bold()).foregroundStyle(.gray)
+                            TextField("./assets/gallery/work_X.jpg o enlace web", text: $imageURL)
+                                .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
+                        }
+
+                        Spacer().frame(height: 10)
+
+                        Button {
+                            guard !title.isEmpty else { return }
+                            isUploading = true
+                            var base64String: String? = nil
+                            if let img = selectedImage, let data = img.jpegData(compressionQuality: 0.8) {
+                                base64String = data.base64EncodedString()
+                            }
+                            let finalURL = imageURL.isEmpty ? "./assets/gallery/work_8.jpg" : imageURL
+                            Task {
+                                await store.addGalleryPhoto(
+                                    title: title,
+                                    category: category,
+                                    urlString: finalURL,
+                                    location: location,
+                                    imageBase64: base64String
+                                )
+                                isUploading = false
+                                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                                dismiss()
+                            }
+                        } label: {
+                            HStack {
+                                if isUploading {
+                                    ProgressView().tint(.black).padding(.trailing, 4)
+                                }
+                                Text(isUploading ? "Publicando en la Web..." : "Publicar Trabajo en la Web")
+                            }
                             .font(.headline)
                             .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Brand.primary)
+                            .background(title.isEmpty ? Color.gray : Brand.primary)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .disabled(title.isEmpty || isUploading)
                     }
+                    .padding()
                 }
-                .padding()
             }
             .navigationTitle("Nuevo Trabajo Web")
             .navigationBarTitleDisplayMode(.inline)
@@ -2232,6 +2423,9 @@ struct AddGalleryPhotoSheet: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancelar") { dismiss() }
                 }
+            }
+            .sheet(isPresented: $showPhotoPicker) {
+                PhotoLibraryPicker(selectedImage: $selectedImage)
             }
         }
     }
@@ -2243,7 +2437,7 @@ struct CloudLiveAdminView: View {
     @State private var reloadTrigger = false
 
     var adminURL: URL {
-        URL(string: "\(store.cleanURL)/admin") ?? URL(string: "https://rodriguezlawncarenuevaa-production.up.railway.app/admin")!
+        URL(string: "\(store.cleanURL)/admin") ?? URL(string: "https://web-production-b6891b.up.railway.app/admin")!
     }
 
     var body: some View {
@@ -2459,13 +2653,13 @@ struct WebAdminView: View {
                             }
 
                             HStack(spacing: 12) {
-                                AnalyticsMetricBox(title: "Visitas Web", value: "\(store.stats?.total_visits ?? 1420)", icon: "eye.fill", color: .blue)
-                                AnalyticsMetricBox(title: "Visitas Hoy", value: "+\(store.stats?.visits_today ?? 42)", icon: "flame.fill", color: .orange)
+                                AnalyticsMetricBox(title: "Visitas Web", value: "\(store.stats?.total_visits ?? 0)", icon: "eye.fill", color: .blue)
+                                AnalyticsMetricBox(title: "Visitas Hoy", value: (store.stats != nil && store.stats!.visits_today > 0 ? "+\(store.stats!.visits_today)" : "0"), icon: "flame.fill", color: .orange)
                             }
 
                             HStack(spacing: 12) {
                                 AnalyticsMetricBox(title: "Citas Recibidas", value: "\(store.stats?.total_leads ?? store.leads.count)", icon: "bell.fill", color: Brand.primary)
-                                AnalyticsMetricBox(title: "Conversión", value: store.stats?.conversion_rate ?? "8.4%", icon: "percent", color: .purple)
+                                AnalyticsMetricBox(title: "Conversión", value: store.stats?.conversion_rate ?? "0.0%", icon: "percent", color: .purple)
                             }
                         }
                         .padding()
@@ -2571,23 +2765,44 @@ struct WebAdminView: View {
                         // 5. Server URL Settings
                         VStack(alignment: .leading, spacing: 10) {
                             Text("URL DEL SERVIDOR WEB").font(.caption.bold()).foregroundStyle(.gray)
-                            TextField("https://tu-servidor.up.railway.app", text: $serverInput)
+                            TextField("https://web-production-b6891b.up.railway.app", text: $serverInput)
                                 .padding(12).background(Brand.card).clipShape(RoundedRectangle(cornerRadius: 10)).foregroundStyle(.white)
 
-                            Button {
-                                store.serverURL = serverInput
-                                Task {
-                                    await store.refreshAll()
-                                    showSavedAlert = true
-                                }
-                            } label: {
-                                Text("Guardar y Conectar")
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(.black)
-                                    .frame(maxWidth: .infinity)
+                            HStack(spacing: 8) {
+                                Button {
+                                    serverInput = "https://web-production-b6891b.up.railway.app"
+                                    store.serverURL = serverInput
+                                    Task {
+                                        await store.refreshAll()
+                                        showSavedAlert = true
+                                    }
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "arrow.counterclockwise")
+                                        Text("Oficial")
+                                    }
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
                                     .padding(12)
-                                    .background(Brand.primary)
+                                    .background(Brand.cardLight)
                                     .clipShape(RoundedRectangle(cornerRadius: 10))
+                                }
+
+                                Button {
+                                    store.serverURL = serverInput
+                                    Task {
+                                        await store.refreshAll()
+                                        showSavedAlert = true
+                                    }
+                                } label: {
+                                    Text("Guardar y Conectar")
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.black)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(12)
+                                        .background(Brand.primary)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                }
                             }
                         }
 

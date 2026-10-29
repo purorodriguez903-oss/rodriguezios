@@ -225,6 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initMobileMenu();
   initHeroVideo();
   initLiveHeroSettings();
+  setInterval(initLiveHeroSettings, 6000);
   pingVisitorAnalytics();
 });
 
@@ -253,6 +254,7 @@ async function initLiveHeroSettings() {
     } else if (s.hero_type === 'video') {
       if (video) {
         video.style.display = 'block';
+        if (fallbackImg) fallbackImg.style.display = 'none';
         if (s.hero_poster_url) video.setAttribute('poster', s.hero_poster_url);
         const source = video.querySelector('source');
         if (source && s.hero_video_url && !source.src.endsWith(s.hero_video_url.replace('./', ''))) {

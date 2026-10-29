@@ -123,6 +123,24 @@
     updateCategoryCounts(items);
     renderGalleryCards(grid, items, currentFilter);
     setupLightbox();
+
+    // Real-time auto-refresh: polls gallery.json every 8 seconds so uploads from iOS App appear immediately!
+    if (!window._galleryIntervalSet) {
+      window._galleryIntervalSet = true;
+      setInterval(async () => {
+        try {
+          const res = await fetch('./gallery.json?t=' + Date.now());
+          if (!res.ok) return;
+          const fresh = await res.json();
+          if (Array.isArray(fresh) && fresh.length > 0) {
+            fresh.sort((a, b) => (b.id || 0) - (a.id || 0));
+            currentItems = fresh;
+            updateCategoryCounts(fresh);
+            renderGalleryCards(grid, fresh, currentFilter);
+          }
+        } catch(e) {}
+      }, 8000);
+    }
   }
 
   function updateCategoryCounts(items) {
