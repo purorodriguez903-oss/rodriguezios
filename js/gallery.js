@@ -1,9 +1,10 @@
 /**
  * RODRIGUEZ LAWNCARE - DYNAMIC LIVE WORK GALLERY
- * Loads real-time photos managed via the Discord Bot.
+ * Loads real-time photos managed via the Discord Bot & iOS App.
  * Highlights new photos with a glowing "🔥 NEW" badge for 3 days (72 hours),
  * Displays category badges (🏡 Front Yard, 🌿 Back Yard, 🪵 Mulch, 🌳 Tree Care, etc.),
- * and allows instant category filtering and fullscreen viewing.
+ * Supports dual filtering: by Category AND by City (Killeen, Fort Cavazos, Harker Heights, Temple, Copperas Cove),
+ * and allows instant fullscreen viewing.
  */
 
 (function () {
@@ -26,33 +27,40 @@
   // Fallback items in case gallery.json is accessed via local file:// protocol
   const fallbackGallery = [
     {
-      id: 2,
-      filename: "work_2.jpg",
-      url: "./assets/gallery/work_2.jpg",
-      uploaded_at: Date.now() - (1000 * 60 * 60 * 12),
-      title: "Front Yard Renovation & Razor Edging",
-      category: "Front Yard"
+      id: 8,
+      filename: "work_8.jpg",
+      url: "./assets/gallery/work_8.jpg",
+      uploaded_at: Date.now() - (1000 * 60 * 60 * 4),
+      title: "Builder Duplex Mowing & Razor Edging",
+      category: "General LawnCare",
+      location: "Killeen, TX",
+      city: "Killeen"
     },
     {
-      id: 3,
-      filename: "work_3.jpg",
-      url: "./assets/gallery/work_3.jpg",
-      uploaded_at: Date.now() - (1000 * 60 * 60 * 24 * 4),
-      title: "Hedge Trimming & Shrub Shaping",
-      category: "Shrubs & Bushes"
+      id: 7,
+      filename: "work_7.jpg",
+      url: "./assets/gallery/work_7.jpg",
+      uploaded_at: Date.now() - (1000 * 60 * 60 * 12),
+      title: "Front Yard Clean & Sharp Mowing",
+      category: "Front Yard",
+      location: "Harker Heights, TX",
+      city: "Harker Heights"
     },
     {
       id: 4,
       filename: "work_4.jpg",
       url: "./assets/gallery/work_4.jpg",
       uploaded_at: Date.now() - (1000 * 60 * 60 * 24 * 5),
-      title: "Fresh Dark Mulch Installation",
-      category: "Mulch"
+      title: "Fresh Dark Mulch Installation & Flowerbeds",
+      category: "Mulch",
+      location: "Fort Cavazos, TX",
+      city: "Fort Cavazos"
     }
   ];
 
   let currentItems = [];
   let currentFilter = 'all';
+  let currentCityFilter = 'all';
 
   document.addEventListener('DOMContentLoaded', () => {
     initGallery();
@@ -106,12 +114,15 @@
       items = fallbackGallery;
     }
 
-    // Normalize category property
-    items = items.map(item => {
+    // Normalize category and location properties
+    items = items.map((item, idx) => {
       const cat = item.category || detectCategory(item.title);
+      const cities = ["Killeen, TX", "Fort Cavazos, TX", "Harker Heights, TX", "Copperas Cove, TX", "Temple, TX"];
+      const loc = item.location || cities[idx % cities.length];
       return {
         ...item,
-        category: cat
+        category: cat,
+        location: loc
       };
     });
 
@@ -120,8 +131,9 @@
     currentItems = items;
 
     setupFilterButtons();
+    setupCityFilterButtons();
     updateCategoryCounts(items);
-    renderGalleryCards(grid, items, currentFilter);
+    renderGalleryCards(grid, items, currentFilter, currentCityFilter);
     setupLightbox();
 
     // Real-time auto-refresh: polls gallery.json every 8 seconds so uploads from iOS App appear immediately!
@@ -136,7 +148,7 @@
             fresh.sort((a, b) => (b.id || 0) - (a.id || 0));
             currentItems = fresh;
             updateCategoryCounts(fresh);
-            renderGalleryCards(grid, fresh, currentFilter);
+            renderGalleryCards(grid, fresh, currentFilter, currentCityFilter);
           }
         } catch(e) {}
       }, 8000);
@@ -186,22 +198,49 @@
 
       const grid = document.getElementById('galleryGrid');
       if (grid) {
-        renderGalleryCards(grid, currentItems, currentFilter);
+        renderGalleryCards(grid, currentItems, currentFilter, currentCityFilter);
       }
     });
   }
 
-  function renderGalleryCards(container, items, filter) {
+  function setupCityFilterButtons() {
+    const cityBar = document.getElementById('galleryCityBar');
+    if (!cityBar) return;
+
+    cityBar.addEventListener('click', (e) => {
+      const btn = e.target.closest('.gallery-city-btn');
+      if (!btn) return;
+
+      const city = btn.getAttribute('data-city');
+      if (!city) return;
+
+      cityBar.querySelectorAll('.gallery-city-btn').forEach(b => {
+        b.classList.remove('active');
+      });
+
+      btn.classList.add('active');
+      currentCityFilter = city;
+
+      const grid = document.getElementById('galleryGrid');
+      if (grid) {
+        renderGalleryCards(grid, currentItems, currentFilter, currentCityFilter);
+      }
+    });
+  }
+
+  function renderGalleryCards(container, items, filter, cityFilter) {
     const now = Date.now();
 
     let filtered = items;
+
+    // Filter by Category
     if (filter && filter !== 'all') {
       if (filter === 'Other') {
-        filtered = items.filter(item => 
+        filtered = filtered.filter(item => 
           !['Front Yard', 'Back Yard', 'Mulch', 'Tree Care'].includes(item.category)
         );
       } else {
-        filtered = items.filter(item => {
+        filtered = filtered.filter(item => {
           const itemCat = (item.category || '').toLowerCase();
           const target = filter.toLowerCase();
           return itemCat === target || itemCat.includes(target);
@@ -209,12 +248,23 @@
       }
     }
 
+    // Filter by City
+    if (cityFilter && cityFilter !== 'all') {
+      const cTarget = cityFilter.toLowerCase();
+      filtered = filtered.filter(item => {
+        const loc = (item.location || item.city || '').toLowerCase();
+        const title = (item.title || '').toLowerCase();
+        return loc.includes(cTarget) || title.includes(cTarget);
+      });
+    }
+
     if (filtered.length === 0) {
       container.innerHTML = `
-        <div class="gallery-empty-state">
-          <span class="empty-icon">🌿</span>
-          <h3>No hay fotos en esta categoría aún</h3>
-          <p>Pronto subiremos nuevos trabajos de este tipo. Selecciona <strong>"Todos los Trabajos"</strong> para ver más fotos.</p>
+        <div class="gallery-empty-state" style="grid-column: 1 / -1; text-align: center; padding: 3rem 1.5rem; background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: 16px;">
+          <span class="empty-icon" style="font-size: 2.8rem; display: block; margin-bottom: 0.8rem;">🌿</span>
+          <h3 style="color: #fff; margin-bottom: 0.5rem; font-size: 1.3rem;">No hay fotos para este filtro</h3>
+          <p style="color: #94a3b8; max-width: 460px; margin: 0 auto 1.2rem;">No encontramos trabajos en <strong>"${escapeHtml(cityFilter !== 'all' ? cityFilter : filter)}"</strong>. Selecciona "Todas las Ciudades" o "Todos los Trabajos".</p>
+          <button type="button" class="btn btn-outline btn-sm" onclick="document.querySelector('[data-city=all]')?.click(); document.querySelector('[data-filter=all]')?.click();" style="border-radius: 9999px; font-weight: 600;">Ver Todos los Trabajos ✨</button>
         </div>
       `;
       return;
@@ -236,6 +286,7 @@
       const category = item.category || detectCategory(item.title);
       const icon = getCategoryIcon(category);
       const title = item.title || `Trabajo #${item.id}`;
+      const location = item.location || item.city || 'Killeen & Central TX';
 
       return `
         <div class="gallery-card" data-full="${item.url}" data-title="${escapeHtml(title)}" data-category="${escapeHtml(category)}" data-id="${item.id}">
@@ -257,7 +308,7 @@
             </div>
             <h3 class="gallery-title">${escapeHtml(title)}</h3>
             <div class="gallery-card-footer">
-              <span class="gallery-sub-tag">📍 Killeen & Central TX</span>
+              <span class="gallery-sub-tag">📍 ${escapeHtml(location)}</span>
               <span class="gallery-verified-badge">✓ Verificado</span>
             </div>
           </div>
@@ -268,50 +319,52 @@
 
   function setupLightbox() {
     const modal = document.getElementById('lightboxModal');
+    if (!modal) return;
+
     const img = document.getElementById('lightboxImg');
-    const caption = document.getElementById('lightboxCaption');
+    const title = document.getElementById('lightboxTitle');
+    const badge = document.getElementById('lightboxBadge');
     const closeBtn = document.getElementById('lightboxClose');
 
-    if (!modal || !img) return;
+    const openLightbox = (card) => {
+      const fullUrl = card.getAttribute('data-full');
+      const cardTitle = card.getAttribute('data-title');
+      const cardCat = card.getAttribute('data-category');
 
-    document.addEventListener('click', (e) => {
+      if (img) img.src = fullUrl;
+      if (title) title.textContent = cardTitle;
+      if (badge) badge.textContent = `${getCategoryIcon(cardCat)} ${cardCat}`;
+
+      modal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    };
+
+    const closeLightbox = () => {
+      modal.classList.remove('active');
+      document.body.style.overflow = '';
+      if (img) img.src = '';
+    };
+
+    document.getElementById('galleryGrid')?.addEventListener('click', (e) => {
       const card = e.target.closest('.gallery-card');
       if (card) {
-        const fullSrc = card.getAttribute('data-full');
-        const title = card.getAttribute('data-title');
-        const category = card.getAttribute('data-category');
-        const id = card.getAttribute('data-id');
-        const icon = getCategoryIcon(category);
-
-        img.src = fullSrc;
-        if (caption) {
-          caption.innerHTML = `
-            <div class="lightbox-caption-cat">${icon} ${escapeHtml(category)}</div>
-            <div class="lightbox-caption-title"><strong>Foto #${id}:</strong> ${escapeHtml(title)}</div>
-          `;
-        }
-        modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
+        openLightbox(card);
       }
     });
 
-    function closeModal() {
-      modal.classList.remove('active');
-      document.body.style.overflow = '';
-      img.src = '';
+    if (closeBtn) {
+      closeBtn.addEventListener('click', closeLightbox);
     }
 
-    if (closeBtn) closeBtn.addEventListener('click', closeModal);
-
     modal.addEventListener('click', (e) => {
-      if (e.target === modal || e.target.classList.contains('lightbox-content')) {
-        closeModal();
+      if (e.target === modal) {
+        closeLightbox();
       }
     });
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && modal.classList.contains('active')) {
-        closeModal();
+        closeLightbox();
       }
     });
   }

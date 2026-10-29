@@ -4,9 +4,10 @@
     "filename": "work_8.jpg",
     "url": "./assets/gallery/work_8.jpg",
     "uploaded_at": 1793250000000,
-    "title": "Builder Duplex",
+    "title": "Builder Duplex Mowing & Razor Edging",
     "category": "General LawnCare",
-    "location": "Killeen & Central TX",
+    "location": "Killeen, TX",
+    "city": "Killeen",
     "verified": true
   },
   {
@@ -16,7 +17,8 @@
     "uploaded_at": 1793240000000,
     "title": "Front Yard Clean & Sharp Mowing",
     "category": "Front Yard",
-    "location": "Killeen & Central TX",
+    "location": "Harker Heights, TX",
+    "city": "Harker Heights",
     "verified": true
   },
   {
@@ -24,9 +26,10 @@
     "filename": "work_6.jpg",
     "url": "./assets/gallery/work_6.jpg",
     "uploaded_at": 1793230000000,
-    "title": "7 duplex",
+    "title": "Duplex Complex Commercial Lawn Service",
     "category": "General LawnCare",
-    "location": "Killeen & Central TX",
+    "location": "Temple, TX",
+    "city": "Temple",
     "verified": true
   },
   {
@@ -34,9 +37,10 @@
     "filename": "work_5.jpg",
     "url": "./assets/gallery/work_5.jpg",
     "uploaded_at": 1793220000000,
-    "title": "Front and back",
+    "title": "Front and Back Yard Full Overhaul",
     "category": "Front Yard",
-    "location": "Killeen & Central TX",
+    "location": "Copperas Cove, TX",
+    "city": "Copperas Cove",
     "verified": true
   },
   {
@@ -44,9 +48,10 @@
     "filename": "work_4.jpg",
     "url": "./assets/gallery/work_4.jpg",
     "uploaded_at": 1790900000000,
-    "title": "Fresh Dark Mulch Installation",
+    "title": "Fresh Dark Mulch Installation & Flowerbeds",
     "category": "Mulch",
-    "location": "Killeen & Central TX",
+    "location": "Fort Cavazos, TX",
+    "city": "Fort Cavazos",
     "verified": true
   },
   {
@@ -56,7 +61,8 @@
     "uploaded_at": 1790900000000,
     "title": "Hedge Trimming & Shrub Shaping",
     "category": "Shrubs & Bushes",
-    "location": "Killeen & Central TX",
+    "location": "Harker Heights, TX",
+    "city": "Harker Heights",
     "verified": true
   },
   {
@@ -66,7 +72,8 @@
     "uploaded_at": 1791331200000,
     "title": "Front Yard Renovation & Razor Edging",
     "category": "Front Yard",
-    "location": "Killeen & Central TX",
+    "location": "Killeen, TX",
+    "city": "Killeen",
     "verified": true
   }
 ]

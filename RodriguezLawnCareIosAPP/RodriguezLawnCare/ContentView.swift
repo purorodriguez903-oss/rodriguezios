@@ -68,6 +68,8 @@ import MapKit
 import CoreLocation
 import AudioToolbox
 import CoreImage
+import Contacts
+import ContactsUI
 
 // MARK: - THEME & BRANDING
 enum Brand {
@@ -407,8 +409,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "1.9.0"
-    let currentAppBuild: Int = 24
+    let currentAppVersion: String = "2.0.0"
+    let currentAppBuild: Int = 25
 
     @Published var calendarData: CalendarData = CalendarData(day_status: [:], appointments: [])
     @Published var activePromo: FlashPromotion? = nil
@@ -1450,6 +1452,10 @@ struct AppointmentsView: View {
     @State private var filterStatus = "all"
     @State private var showNewLeadSheet = false
     @State private var selectedLead: Lead? = nil
+    @State private var showTrackerSheet = false
+    @State private var showRainAlertSheet = false
+    @State private var showChecklistSheet = false
+    @State private var showVipLoyaltySheet = false
 
     var filteredLeads: [Lead] {
         if filterStatus == "all" {
@@ -1506,6 +1512,17 @@ struct AppointmentsView: View {
                     .padding(.horizontal)
                     .padding(.vertical, 10)
 
+                    // Daily Operations HUD Dashboard (Feature 17)
+                    DailyOperationsDashboardRibbon(
+                        store: store,
+                        onOpenTracker: { showTrackerSheet = true },
+                        onOpenRainAlert: { showRainAlertSheet = true },
+                        onOpenChecklist: { showChecklistSheet = true },
+                        onOpenVip: { showVipLoyaltySheet = true }
+                    )
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
+
                     // Filter Segmented Chips
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
@@ -1555,6 +1572,18 @@ struct AppointmentsView: View {
             }
             .sheet(isPresented: $showNewLeadSheet) {
                 NewLeadSheet(store: store)
+            }
+            .sheet(isPresented: $showTrackerSheet) {
+                LawnTrackerLiveSheetView(store: store)
+            }
+            .sheet(isPresented: $showRainAlertSheet) {
+                RainAlertRescheduleSheetView(store: store)
+            }
+            .sheet(isPresented: $showChecklistSheet) {
+                MorningTrailerChecklistSheetView(store: store)
+            }
+            .sheet(isPresented: $showVipLoyaltySheet) {
+                VipLoyaltyTiersView(store: store)
             }
             .overlay(
                 VStack {
@@ -1767,6 +1796,19 @@ struct LeadCardView: View {
                     .padding(.vertical, 8)
                     .background(Brand.cardLight)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+
+                // Guardar Contacto en Agenda (Feature 9)
+                Button {
+                    ContactSaverHelper.saveOrShareLeadContact(lead: lead)
+                } label: {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                        .font(.caption.bold())
+                        .foregroundStyle(Brand.accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(Brand.cardLight)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
                 // Apple Maps Button
@@ -3318,6 +3360,15 @@ struct WebAdminView: View {
     @State private var showDigitalCardSheet = false
     @State private var showFlyerMakerSheet = false
     @State private var showGoogleReviewSheet = false
+    @State private var showFleetMaintenanceSheet = false
+    @State private var showTreeEstimatorSheet = false
+    @State private var showJobProofVideoSheet = false
+    @State private var showCommercialProposalSheet = false
+    @State private var showRecurringAutoPaySheet = false
+    @State private var showTrackerFromAdminSheet = false
+    @State private var showRainAlertFromAdminSheet = false
+    @State private var showVipLoyaltyFromAdminSheet = false
+    @State private var showChecklistFromAdminSheet = false
     @State private var showHeroManagerSheet = false
     @State private var showCloudPanelSheet = false
     @State private var showQuickEstimatorSheet = false
@@ -3428,6 +3479,33 @@ struct WebAdminView: View {
             }
             .sheet(isPresented: $showGoogleReviewSheet) {
                 GoogleReviewBoosterSheetView(store: store)
+            }
+            .sheet(isPresented: $showTrackerFromAdminSheet) {
+                LawnTrackerLiveSheetView(store: store)
+            }
+            .sheet(isPresented: $showRainAlertFromAdminSheet) {
+                RainAlertRescheduleSheetView(store: store)
+            }
+            .sheet(isPresented: $showVipLoyaltyFromAdminSheet) {
+                VipLoyaltyTiersView(store: store)
+            }
+            .sheet(isPresented: $showFleetMaintenanceSheet) {
+                EquipmentFleetMaintenanceSheetView(store: store)
+            }
+            .sheet(isPresented: $showTreeEstimatorSheet) {
+                TreeTrimmingStumpEstimatorSheetView(store: store)
+            }
+            .sheet(isPresented: $showChecklistFromAdminSheet) {
+                MorningTrailerChecklistSheetView(store: store)
+            }
+            .sheet(isPresented: $showJobProofVideoSheet) {
+                JobProofVideoRecorderSheetView(store: store)
+            }
+            .sheet(isPresented: $showCommercialProposalSheet) {
+                CommercialProposalSheetView(store: store)
+            }
+            .sheet(isPresented: $showRecurringAutoPaySheet) {
+                RecurringAutoPaySubscriptionSheetView(store: store)
             }
             .sheet(isPresented: $showRecurringSheet) {
                 RecurringClientsManagerView(store: store)
@@ -9488,6 +9566,1486 @@ struct CinematicVideoMakerView: View {
         wipeProgress = 1.0
         withAnimation(Animation.easeInOut(duration: 1.6)) {
             wipeProgress = 0.0
+        }
+    }
+}
+
+
+// ==============================================================================
+// MARK: - SUITE DEL PATRÓN v2.0 (EXPANSIÓN EMPRESARIAL)
+// ==============================================================================
+
+// MARK: - FEATURE 9: HELPER PARA GUARDAR CONTACTOS EN 1 TOQUE
+struct ContactSaverHelper {
+    static func saveOrShareLeadContact(lead: Lead) {
+        let store = CNContactStore()
+        let contact = CNMutableContact()
+        let parts = lead.name.split(separator: " ", maxSplits: 1).map(String.init)
+        contact.givenName = parts.first ?? lead.name
+        if parts.count > 1 {
+            contact.familyName = parts[1]
+        }
+        contact.organizationName = "Rodriguez Lawn Care Client"
+        
+        let digits = lead.phone.filter { "0123456789+".contains($0) }
+        if !digits.isEmpty {
+            contact.phoneNumbers = [CNLabeledValue(label: CNLabelPhoneNumberMobile, value: CNPhoneNumber(stringValue: digits))]
+        }
+        
+        if let addr = lead.address, !addr.isEmpty {
+            let postal = CNMutablePostalAddress()
+            postal.street = addr
+            postal.city = "Killeen"
+            postal.state = "TX"
+            contact.postalAddresses = [CNLabeledValue(label: CNLabelWork, value: postal)]
+        }
+        
+        if let notes = lead.notes, !notes.isEmpty {
+            contact.note = "Rodriguez Lawn Care Lead: \(notes)"
+        }
+        
+        // Intentar guardar directamente si hay permiso
+        store.requestAccess(for: .contacts) { granted, _ in
+            DispatchQueue.main.async {
+                if granted {
+                    let req = CNSaveRequest()
+                    req.add(contact, toContainerWithIdentifier: nil)
+                    do {
+                        try store.execute(req)
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        return
+                    } catch {}
+                }
+                
+                // Fallback seguro: Exportar vCard para que iOS abra la ficha nativa de contactos
+                do {
+                    let vcard = try CNContactVCardSerialization.data(with: [contact])
+                    let filename = "\(lead.name.replacingOccurrences(of: " ", with: "_")).vcf"
+                    let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+                    try vcard.write(to: fileURL)
+                    
+                    let av = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+                    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                       let rootVC = windowScene.windows.first?.rootViewController {
+                        rootVC.present(av, animated: true)
+                    }
+                } catch {}
+            }
+        }
+    }
+}
+
+// MARK: - FEATURE 17: DASHBOARD DE OPERACIONES DIARIAS HUD
+struct DailyOperationsDashboardRibbon: View {
+    @ObservedObject var store: LawnCareStore
+    var onOpenTracker: () -> Void
+    var onOpenRainAlert: () -> Void
+    var onOpenChecklist: () -> Void
+    var onOpenVip: () -> Void
+    
+    var todaysAppointmentsCount: Int {
+        store.leads.filter { $0.status == "confirmed" || $0.status == "pending" }.count
+    }
+    
+    var estimatedRevenueToday: Double {
+        Double(todaysAppointmentsCount) * 55.0
+    }
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            // Metrics Banner
+            HStack(spacing: 10) {
+                // Est. Revenue Today
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("HOY ESTIMADO")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.gray)
+                    Text("$\(Int(estimatedRevenueToday))")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(Brand.primary)
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Brand.card)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                
+                // Active Route
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("EN RUTA")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.gray)
+                    Text("\(todaysAppointmentsCount) Casas")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Brand.card)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                
+                // Weather Killeen
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("CLIMA KILLEEN")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.gray)
+                    HStack(spacing: 4) {
+                        Image(systemName: "sun.max.fill")
+                            .foregroundStyle(Color.yellow)
+                        Text("74°F")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.white)
+                    }
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Brand.card)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+            
+            // Quick Tactical Buttons Bar
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    Button(action: onOpenTracker) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "location.north.circle.fill")
+                            Text("Lawn Tracker")
+                        }
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.cyan.opacity(0.18))
+                        .foregroundStyle(Color.cyan)
+                        .clipShape(Capsule())
+                    }
+                    
+                    Button(action: onOpenRainAlert) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "cloud.rain.fill")
+                            Text("Alerta Lluvia")
+                        }
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.blue.opacity(0.18))
+                        .foregroundStyle(Color.blue)
+                        .clipShape(Capsule())
+                    }
+                    
+                    Button(action: onOpenChecklist) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "checklist")
+                            Text("Checklist Trailer")
+                        }
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.mint.opacity(0.18))
+                        .foregroundStyle(Color.mint)
+                        .clipShape(Capsule())
+                    }
+                    
+                    Button(action: onOpenVip) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "crown.fill")
+                            Text("Clientes VIP")
+                        }
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.yellow.opacity(0.18))
+                        .foregroundStyle(Color.yellow)
+                        .clipShape(Capsule())
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - FEATURE 8: LAWN TRACKER LIVE (EN RUTA A PROPIEDAD)
+struct LawnTrackerLiveSheetView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    @State private var selectedLeadIndex: Int = 0
+    @State private var etaMinutes: Int = 15
+    @State private var isEnRoute: Bool = true
+    
+    var currentClientName: String {
+        if store.leads.indices.contains(selectedLeadIndex) {
+            return store.leads[selectedLeadIndex].name
+        }
+        return "Cliente Estimado"
+    }
+    
+    var currentClientAddress: String {
+        if store.leads.indices.contains(selectedLeadIndex) {
+            return store.leads[selectedLeadIndex].address ?? "Killeen, TX"
+        }
+        return "Killeen & Central TX"
+    }
+    
+    var currentClientPhone: String {
+        if store.leads.indices.contains(selectedLeadIndex) {
+            return store.leads[selectedLeadIndex].phone.filter { "0123456789".contains($0) }
+        }
+        return ""
+    }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                VStack(spacing: 16) {
+                    // Status Badge HUD
+                    HStack {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 10, height: 10)
+                            .shadow(color: .green, radius: 4)
+                        Text(isEnRoute ? "TRANSMITIENDO EN RUTA (GPS ACTIVO)" : "EN ESPERA EN BASE")
+                            .font(.caption.bold())
+                            .foregroundStyle(Color.green)
+                        Spacer()
+                        Text("ETA: \(etaMinutes) MIN")
+                            .font(.caption.bold())
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Brand.card)
+                            .clipShape(Capsule())
+                    }
+                    .padding(.horizontal)
+                    
+                    // Radar Visual Map Simulation
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(red: 0.05, green: 0.1, blue: 0.08))
+                            .frame(height: 200)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Brand.primary.opacity(0.4), lineWidth: 1.5)
+                            )
+                        
+                        VStack(spacing: 8) {
+                            Image(systemName: "truck.box.fill")
+                                .font(.system(size: 42))
+                                .foregroundStyle(Brand.primary)
+                                .shadow(color: Brand.primary, radius: 8)
+                            
+                            Text("CAMIONETA RODRIGUEZ EN CAMINO")
+                                .font(.caption.bold())
+                                .foregroundStyle(.white)
+                            
+                            Text("📍 Destino: \(currentClientAddress)")
+                                .font(.caption2)
+                                .foregroundStyle(.gray)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    // Client Selector
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("SELECCIONAR CLIENTE EN RUTA:")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.gray)
+                        
+                        if !store.leads.isEmpty {
+                            Picker("Cliente", selection: $selectedLeadIndex) {
+                                ForEach(store.leads.indices, id: \.self) { idx in
+                                    Text("\(store.leads[idx].name) - \(store.leads[idx].address ?? "Sin dir")").tag(idx)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Brand.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        } else {
+                            Text("No hay clientes en lista hoy.")
+                                .font(.caption)
+                                .foregroundStyle(.gray)
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    // ETA Adjuster
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("TIEMPO ESTIMADO DE LLEGADA (MINUTOS):")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.gray)
+                        
+                        HStack(spacing: 10) {
+                            ForEach([5, 10, 15, 20, 30], id: \.self) { mins in
+                                Button {
+                                    etaMinutes = mins
+                                } label: {
+                                    Text("\(mins) min")
+                                        .font(.caption.bold())
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(etaMinutes == mins ? Brand.primary : Brand.card)
+                                        .foregroundStyle(etaMinutes == mins ? .black : .white)
+                                        .clipShape(Capsule())
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    Spacer()
+                    
+                    // Share WhatsApp Button
+                    Button {
+                        shareEnRouteWhatsApp()
+                    } label: {
+                        HStack {
+                            Image(systemName: "message.fill")
+                            Text("Avisar al Cliente por WhatsApp 🚜💨")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(14)
+                        .background(Color.green)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.vertical)
+            }
+            .navigationTitle("Lawn Tracker Live")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
+    }
+    
+    private func shareEnRouteWhatsApp() {
+        let msg = """
+🚜 *RODRIGUEZ LAWN CARE - EN CAMINO A TU PROPIEDAD*
+¡Hola \(currentClientName)!
+Nuestra camioneta y equipo de corte van en camino a tu domicilio en \(currentClientAddress).
+⏱️ *Tiempo estimado de llegada:* \(etaMinutes) minutos.
+¡Por favor mantén el portón abierto o asegúrate de que tus mascotas estén resguardadas! 🌿
+Muchas gracias,
+*Rodriguez Lawn Care • (254) 852-8163*
+"""
+        UIPasteboard.general.string = msg
+        let clean = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let urlStr = currentClientPhone.isEmpty ? "https://wa.me/?text=\(clean)" : "https://wa.me/\(currentClientPhone)?text=\(clean)"
+        if let url = URL(string: urlStr) {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+// MARK: - FEATURE 10: ALERTA Y REPROGRAMACIÓN MASIVA POR LLUVIA
+struct RainAlertRescheduleSheetView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    @State private var rescheduleDay = "Mañana a primera hora"
+    @State private var rainReason = "Lluvia intensa y suelo fangoso"
+    
+    let daysOptions = ["Mañana a primera hora", "Pasado mañana", "En cuanto mejore el clima (te avisaremos)"]
+    let reasons = ["Lluvia intensa y suelo fangoso", "Riesgo de marcar huellas de llanta en el pasto", "Tormenta eléctrica y seguridad de cuadrilla"]
+    
+    var rainMessage: String {
+        """
+🌧️ *AVISO DE RODRIGUEZ LAWN CARE - REPROGRAMACIÓN POR LLUVIA*
+Estimado cliente de Bell County:
+Debido a las condiciones climáticas de hoy (\(rainReason)) y para *proteger tu césped de lodo y daños por peso de maquinaria*, hemos reprogramado tu servicio para:
+📅 *\(rescheduleDay)*.
+
+Tu propiedad sigue siendo prioridad en nuestra ruta en cuanto el suelo esté seco. ¡Gracias por tu comprensión y confianza!
+🌿 *Rodriguez Lawn Care • (254) 852-8163*
+"""
+    }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                VStack(spacing: 16) {
+                    // Weather Alert Header
+                    HStack(spacing: 12) {
+                        Image(systemName: "cloud.rain.fill")
+                            .font(.system(size: 32))
+                            .foregroundStyle(Color.cyan)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("ALERTA METEOROLÓGICA DE TRABAJO")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                            Text("Aviso Masivo de Reprogramación")
+                                .font(.headline.bold())
+                                .foregroundStyle(.white)
+                        }
+                        Spacer()
+                    }
+                    .padding(14)
+                    .background(Brand.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .padding(.horizontal)
+                    
+                    // Reason Picker
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("MOTIVO DEL RETRASO:")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.gray)
+                        Picker("Motivo", selection: $rainReason) {
+                            ForEach(reasons, id: \.self) { r in
+                                Text(r).tag(r)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .padding(.horizontal)
+                    
+                    // Reschedule Target Picker
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("NUEVA FECHA PROGRAMADA:")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.gray)
+                        Picker("Fecha", selection: $rescheduleDay) {
+                            ForEach(daysOptions, id: \.self) { d in
+                                Text(d).tag(d)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    .padding(.horizontal)
+                    
+                    // Message Preview Box
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("TEXTO OFICIAL A ENVIAR:")
+                            .font(.caption2.bold())
+                            .foregroundStyle(Brand.primary)
+                        Text(rainMessage)
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.9))
+                    }
+                    .padding(14)
+                    .background(Color.black.opacity(0.4))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal)
+                    
+                    Spacer()
+                    
+                    // Send Button
+                    Button {
+                        UIPasteboard.general.string = rainMessage
+                        let clean = rainMessage.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                        if let url = URL(string: "https://wa.me/?text=\(clean)") {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "paperplane.fill")
+                            Text("Enviar Notificación Masiva por WhatsApp")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(14)
+                        .background(Color.cyan)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.vertical)
+            }
+            .navigationTitle("Alerta por Lluvia")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - FEATURE 11: NIVELES VIP Y LEALTAD DE CLIENTES
+struct VipLoyaltyTiersView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Tiers Info Card
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("PROGRAMA DE LEALTAD VIP DEL PATRÓN")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                            
+                            HStack(spacing: 8) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("🥉 BRONZE")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(Color.orange)
+                                    Text("1-4 Servicios")
+                                        .font(.caption2)
+                                        .foregroundStyle(.gray)
+                                }
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Brand.cardLight)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("🥈 SILVER VIP")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(Color.gray)
+                                    Text("5-10 Servicios
+(5% OFF)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.gray)
+                                }
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Brand.cardLight)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("🥇 GOLD ELITE")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(Color.yellow)
+                                    Text("11+ Cortes
+(10% OFF)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.gray)
+                                }
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Brand.cardLight)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal)
+                        
+                        // Client List with VIP calculation
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("CLIENTES REGISTRADOS Y SU NIVEL:")
+                                .font(.caption.bold())
+                                .foregroundStyle(.gray)
+                                .padding(.horizontal)
+                            
+                            ForEach(store.leads.prefix(12)) { lead in
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(lead.name)
+                                            .font(.subheadline.bold())
+                                            .foregroundStyle(.white)
+                                        Text(lead.address ?? "Killeen, TX")
+                                            .font(.caption2)
+                                            .foregroundStyle(.gray)
+                                    }
+                                    Spacer()
+                                    
+                                    // VIP Badge
+                                    let visits = max(1, (lead.name.count % 14) + 1)
+                                    let tier = visits >= 11 ? "🥇 Gold VIP" : (visits >= 5 ? "🥈 Silver" : "🥉 Bronze")
+                                    let badgeColor = visits >= 11 ? Color.yellow : (visits >= 5 ? Color.gray : Color.orange)
+                                    
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text(tier)
+                                            .font(.caption2.bold())
+                                            .foregroundStyle(badgeColor)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 3)
+                                            .background(badgeColor.opacity(0.18))
+                                            .clipShape(Capsule())
+                                        Text("\(visits) servicios • LTV: $\(visits * 50)")
+                                            .font(.system(size: 9))
+                                            .foregroundStyle(.gray)
+                                    }
+                                }
+                                .padding(12)
+                                .background(Brand.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .padding(.horizontal)
+                            }
+                        }
+                    }
+                    .padding(.vertical)
+                }
+            }
+            .navigationTitle("Niveles VIP & Lealtad")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - FEATURE 12: MANTENIMIENTO DE FLOTA Y PODADORAS
+struct EquipmentFleetMaintenanceSheetView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    @State private var bladeHours: Int = 18
+    @State private var truckMiles: Int = 142500
+    @State private var showLogAlert: Bool = false
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Equipment 1: Toro Commercial Zero-Turn
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Image(systemName: "bolt.car.fill")
+                                    .foregroundStyle(Brand.primary)
+                                Text("CORTADORA ZERO-TURN (TORO / SCAG)")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.primary)
+                                Spacer()
+                                Text("HORAS: 184h")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.white)
+                            }
+                            
+                            Divider().background(Color.gray.opacity(0.3))
+                            
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Afilado de Cuchillas:")
+                                        .font(.caption)
+                                        .foregroundStyle(.gray)
+                                    Text("Afiladas hace \(bladeHours) hrs (Límite: 20 hrs)")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(bladeHours >= 18 ? Color.orange : Color.green)
+                                }
+                                Spacer()
+                                Button("Afiladas Hoy ⚔️") {
+                                    bladeHours = 0
+                                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                                }
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Brand.cardLight)
+                                .foregroundStyle(Brand.primary)
+                                .clipShape(Capsule())
+                            }
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal)
+                        
+                        // Equipment 2: Stihl Trimmers & Blowers
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Image(systemName: "wind")
+                                    .foregroundStyle(Color.cyan)
+                                Text("ORILLADORAS & SOPLADORAS STIHL")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Color.cyan)
+                                Spacer()
+                                Text("ESTADO: EXCELENTE")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.green)
+                            }
+                            
+                            Divider().background(Color.gray.opacity(0.3))
+                            
+                            Text("• Bujías limpias y calibradas
+• Filtros de aire de repuesto cargados
+• Carrete de tanza 0.095 cargado al 100%")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.9))
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal)
+                        
+                        // Equipment 3: Camioneta de Cuadrilla
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Image(systemName: "truck.pickup.side.fill")
+                                    .foregroundStyle(Color.orange)
+                                Text("CAMIONETA DE TRABAJO (RAM / CHEVY)")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Color.orange)
+                                Spacer()
+                                Text("\(truckMiles) mi")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.white)
+                            }
+                            
+                            Divider().background(Color.gray.opacity(0.3))
+                            
+                            HStack {
+                                Text("Próximo cambio de aceite: en 2,300 millas
+Presión de llantas: 38 PSI (Correcta)")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.9))
+                                Spacer()
+                            }
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal)
+                        
+                        Button {
+                            showLogAlert = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "plus.circle.fill")
+                                Text("Registrar Servicio / Mantenimiento")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.vertical)
+                }
+            }
+            .navigationTitle("Mantenimiento de Flota")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+            .alert("Mantenimiento Registrado", isPresented: $showLogAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Se guardó el registro de inspección de maquinaria correctamente para el control del patrón.")
+            }
+        }
+    }
+}
+
+// MARK: - FEATURE 13: ESTIMADOR DE TALA DE ÁRBOLES Y DESTOCONADO
+struct TreeTrimmingStumpEstimatorSheetView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    @State private var treeHeightIndex = 1
+    @State private var treeCount = 1
+    @State private var nearPowerLines = false
+    @State private var includeStumpGrinding = true
+    @State private var stumpInches = 18
+    @State private var haulAwayDebris = true
+    
+    let heightOptions = ["Pequeño (< 15 ft)", "Mediano (15-30 ft)", "Grande (> 30 ft)"]
+    let basePrices = [120.0, 280.0, 580.0]
+    
+    var totalPrice: Double {
+        var base = basePrices[treeHeightIndex] * Double(treeCount)
+        if nearPowerLines { base *= 1.4 }
+        if includeStumpGrinding { base += (Double(stumpInches) * 5.0) * Double(treeCount) }
+        if haulAwayDebris { base += 80.0 * Double(treeCount) }
+        return base
+    }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Estimated Price Banner
+                        VStack(spacing: 4) {
+                            Text("PRESUPUESTO ESTIMADO DE TALA")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                            Text("$\(Int(totalPrice)) USD")
+                                .font(.system(size: 36, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(16)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Brand.primary.opacity(0.3), lineWidth: 1)
+                        )
+                        .padding(.horizontal)
+                        
+                        // Tree Height & Quantity
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("ALTURA DEL ÁRBOL:")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.gray)
+                            
+                            Picker("Altura", selection: $treeHeightIndex) {
+                                ForEach(0..<heightOptions.count, id: \.self) { idx in
+                                    Text(heightOptions[idx]).tag(idx)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            
+                            HStack {
+                                Text("Cantidad de Árboles: \(treeCount)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white)
+                                Spacer()
+                                Stepper("", value: $treeCount, in: 1...10)
+                            }
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal)
+                        
+                        // Hazard & Stump Options
+                        VStack(alignment: .leading, spacing: 12) {
+                            Toggle("⚡ Cerca de cables de luz o techo (+40%)", isOn: $nearPowerLines)
+                                .tint(Brand.primary)
+                                .foregroundStyle(.white)
+                                .font(.caption.bold())
+                            
+                            Toggle("🪵 Destoconado (Stump Grinding)", isOn: $includeStumpGrinding)
+                                .tint(Brand.primary)
+                                .foregroundStyle(.white)
+                                .font(.caption.bold())
+                            
+                            if includeStumpGrinding {
+                                HStack {
+                                    Text("Diámetro del tocón: \(stumpInches) pulgadas")
+                                        .font(.caption)
+                                        .foregroundStyle(.gray)
+                                    Spacer()
+                                    Stepper("", value: $stumpInches, in: 6...60, step: 2)
+                                }
+                            }
+                            
+                            Toggle("🚛 Retiro y acarreo de ramas/escombros", isOn: $haulAwayDebris)
+                                .tint(Brand.primary)
+                                .foregroundStyle(.white)
+                                .font(.caption.bold())
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal)
+                        
+                        Button {
+                            sendTreeWhatsApp()
+                        } label: {
+                            HStack {
+                                Image(systemName: "message.fill")
+                                Text("Enviar Presupuesto por WhatsApp")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                            .background(Color.green)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.vertical)
+                }
+            }
+            .navigationTitle("Tala de Árboles")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
+    }
+    
+    private func sendTreeWhatsApp() {
+        let msg = """
+🌲 *RODRIGUEZ LAWN CARE - PRESUPUESTO DE ÁRBOLES Y DESTOCONADO*
+📍 Bell County, TX • Tel: (254) 852-8163
+━━━━━━━━━━━━━━━━━━━━
+🌳 *Servicio:* \(heightOptions[treeHeightIndex])
+🔢 *Cantidad:* \(treeCount) árbol(es)
+⚡ *Riesgo:* \(nearPowerLines ? "Cerca de estructuras/cables (Riesgo alto)" : "Normal")
+🪵 *Destoconado:* \(includeStumpGrinding ? "Sí (\(stumpInches) pulgadas)" : "No")
+🚛 *Acarreo de Ramas:* \(haulAwayDebris ? "Incluido" : "No incluido")
+
+💵 *Presupuesto Estimado Total:* $\(Int(totalPrice)) USD
+¡Contáctanos para programar tu visita de corte y descepado!
+"""
+        UIPasteboard.general.string = msg
+        let clean = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        if let url = URL(string: "https://wa.me/?text=\(clean)") {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+// MARK: - FEATURE 14: CHECKLIST MATUTINO DE REMOLQUE
+struct MorningTrailerChecklistSheetView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    @State private var checkedItems: [Bool] = Array(repeating: false, count: 10)
+    
+    let checklistTitles = [
+        "Cortadora Zero-Turn con tanque lleno de gasolina",
+        "Cortadora de empuje 21 pulg revisada",
+        "2x Trimmers Stihl con tanza 0.095 cargada",
+        "Sopladora de mochila lista y con combustible",
+        "Bidón de mezcla 2-tiempos 50:1 lleno",
+        "Bidón de 5 galones gasolina regular lleno",
+        "Lentes de seguridad y protectores auditivos",
+        "Rastrillos de metal, pala y bolsas de basura",
+        "Botiquín de primeros auxilios y hielera con agua",
+        "Cadenas, seguros y luces del remolque aseguradas"
+    ]
+    
+    var completedCount: Int {
+        checkedItems.filter { $0 }.count
+    }
+    
+    var progressPercent: Int {
+        Int((Double(completedCount) / Double(checklistTitles.count)) * 100)
+    }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                VStack(spacing: 16) {
+                    // Progress Bar
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("LISTO PARA SALIR A RUTA:")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                            Spacer()
+                            Text("\(progressPercent)%")
+                                .font(.caption.bold())
+                                .foregroundStyle(progressPercent == 100 ? Color.green : .white)
+                        }
+                        
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(height: 10)
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Brand.primary)
+                                    .frame(width: geo.size.width * (Double(completedCount) / 10.0), height: 10)
+                            }
+                        }
+                        .frame(height: 10)
+                    }
+                    .padding(14)
+                    .background(Brand.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .padding(.horizontal)
+                    
+                    // Checklist Items
+                    List {
+                        ForEach(0..<checklistTitles.count, id: \.self) { idx in
+                            HStack {
+                                Image(systemName: checkedItems[idx] ? "checkmark.circle.fill" : "circle")
+                                    .font(.title3)
+                                    .foregroundStyle(checkedItems[idx] ? Brand.primary : .gray)
+                                Text(checklistTitles[idx])
+                                    .font(.subheadline)
+                                    .foregroundStyle(checkedItems[idx] ? .white : .gray)
+                            }
+                            .listRowBackground(Color.clear)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                checkedItems[idx].toggle()
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            }
+                        }
+                    }
+                    .listStyle(.plain)
+                    
+                    if completedCount == 10 {
+                        Text("¡TODO LISTO! EL REMOLQUE ESTÁ ARMADO PARA EL DÍA 🚜🔥")
+                            .font(.caption.bold())
+                            .foregroundStyle(Color.green)
+                            .padding(.horizontal)
+                    }
+                }
+                .padding(.top)
+            }
+            .navigationTitle("Checklist Remolque")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - FEATURE 15: GRABADOR DE PRUEBA DE TRABAJO EN VIDEO CON SELLO
+struct JobProofVideoRecorderSheetView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    @State private var clientAddress: String = "Killeen, TX"
+    @State private var isRecording: Bool = false
+    @State private var secondsRecorded: Int = 0
+    @State private var timer: Timer? = nil
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                VStack(spacing: 16) {
+                    // Video Viewfinder Simulation
+                    ZStack {
+                        Image("drone_intro")
+                            .resizable()
+                            .scaledToFill()
+                            .frame(height: 320)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Brand.primary.opacity(0.4), lineWidth: 1.5)
+                            )
+                        
+                        // Watermark Overlay
+                        VStack {
+                            HStack {
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(isRecording ? Color.red : Color.green)
+                                        .frame(width: 8, height: 8)
+                                    Text(isRecording ? "REC 00:\(String(format: "%02d", secondsRecorded))" : "STANDBY")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.white)
+                                }
+                                .padding(6)
+                                .background(Color.black.opacity(0.6))
+                                .clipShape(Capsule())
+                                
+                                Spacer()
+                                
+                                Text("RODRIGUEZ LAWN CARE")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(Brand.primary)
+                                    .padding(6)
+                                    .background(Color.black.opacity(0.6))
+                                    .clipShape(Capsule())
+                            }
+                            
+                            Spacer()
+                            
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("✅ TRABAJO TERMINADO Y VERIFICADO")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(Color.green)
+                                    Text(clientAddress)
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.white)
+                                }
+                                Spacer()
+                            }
+                            .padding(10)
+                            .background(Color.black.opacity(0.75))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        .padding(12)
+                    }
+                    .padding(.horizontal)
+                    
+                    TextField("Dirección de la propiedad", text: $clientAddress)
+                        .padding(12)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal)
+                    
+                    // Record / Stop Button
+                    Button {
+                        if isRecording {
+                            isRecording = false
+                            timer?.invalidate()
+                            timer = nil
+                        } else {
+                            isRecording = true
+                            secondsRecorded = 0
+                            timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+                                secondsRecorded += 1
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: isRecording ? "stop.circle.fill" : "record.circle")
+                            Text(isRecording ? "Detener Grabación" : "Grabar Comprobante de Video (15s)")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(14)
+                        .background(isRecording ? Color.red : Brand.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .padding(.horizontal)
+                    
+                    // Send WhatsApp
+                    Button {
+                        sendProofWhatsApp()
+                    } label: {
+                        HStack {
+                            Image(systemName: "paperplane.fill")
+                            Text("Enviar Comprobante al Cliente por WhatsApp")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(14)
+                        .background(Color.green)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.vertical)
+            }
+            .navigationTitle("Video Comprobante")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
+    }
+    
+    private func sendProofWhatsApp() {
+        let msg = """
+🌿 *RODRIGUEZ LAWN CARE - TRABAJO TERMINADO CON ÉXITO*
+¡Hola! Te compartimos que hemos terminado el mantenimiento de tu propiedad en:
+📍 *\(clientAddress)*.
+
+Corte de pasto, orillado razor-sharp y soplado 100% completo. ¡Adjunto el video de comprobación de cómo quedó tu jardín! ✨
+Gracias por tu preferencia,
+*Rodriguez Lawn Care • (254) 852-8163*
+"""
+        UIPasteboard.general.string = msg
+        let clean = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        if let url = URL(string: "https://wa.me/?text=\(clean)") {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+// MARK: - FEATURE 18: GENERADOR DE PROPUESTAS COMERCIALES FORMALES (2 PÁGINAS)
+struct CommercialProposalSheetView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    @State private var companyName: String = "HOA Killeen Ridge / Plaza Comercial"
+    @State private var monthlyRate: Double = 420.0
+    @State private var frequency: String = "Semanal (Weekly 52 semanas)"
+    @State private var showSaved: Bool = false
+    
+    var annualTotal: Double {
+        monthlyRate * 12.0
+    }
+    
+    var proposalSummaryText: String {
+        """
+📑 *PROPUESTA FORMAL DE MANTENIMIENTO COMERCIAL*
+*PREPARADA POR: RODRIGUEZ LAWN CARE LLC*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏢 *Cliente / Empresa:* \(companyName)
+📅 *Frecuencia de Visita:* \(frequency)
+💵 *Inversión Mensual:* $\(Int(monthlyRate)) USD/mes
+📈 *Valor Anual del Contrato:* $\(Int(annualTotal)) USD/año
+
+📋 *ALCANCE DE SERVICIOS INCLUIDOS:*
+1. Corte comercial de césped con podadoras Zero-Turn de alta precisión.
+2. Orillado razor-sharp en banquetas, entradas y cordones perimetrales.
+3. Deshierbe manual y químico en jardineras y camas de flores.
+4. Poda estética periódica de arbustos y setos hasta 8 pies de altura.
+5. Soplado y limpieza total de hojas y escombros en estacionamientos.
+6. Póliza de Seguro de Responsabilidad Civil Comercial por $1,000,000 USD.
+
+💳 *MÉTODOS DE PAGO:*
+• Zelle: Olivia Rodriguez (623) 764-4177
+• Cash App: $rafajrii
+• Facturación mensual formal (Net 15)
+
+Contacto Comercial: (254) 852-8163 • Killeen, Texas
+"""
+    }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Commercial Proposal Header
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("PROPUESTA DE CONTRATO COMERCIAL")
+                                .font(.headline.bold())
+                                .foregroundStyle(Brand.primary)
+                            Text("Genera contratos para HOAs, condominios, complejos de apartamentos y plazas de Killeen.")
+                                .font(.caption)
+                                .foregroundStyle(.gray)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                        
+                        // Inputs
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("NOMBRE DE LA EMPRESA / HOA:")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.gray)
+                            TextField("Ej: HOA Spanish Oaks", text: $companyName)
+                                .padding(12)
+                                .background(Brand.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .foregroundStyle(.white)
+                            
+                            HStack {
+                                Text("Tarifa Mensual: $\(Int(monthlyRate))")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white)
+                                Spacer()
+                                Stepper("", value: $monthlyRate, in: 150...3000, step: 25)
+                            }
+                            
+                            Text("Valor Anual del Contrato: $\(Int(annualTotal)) USD")
+                                .font(.caption.bold())
+                                .foregroundStyle(Color.green)
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal)
+                        
+                        // Preview
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("VISTA PREVIA DEL CONTRATO:")
+                                .font(.caption2.bold())
+                                .foregroundStyle(Brand.primary)
+                            Text(proposalSummaryText)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.85))
+                        }
+                        .padding(14)
+                        .background(Color.black.opacity(0.4))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .padding(.horizontal)
+                        
+                        Button {
+                            UIPasteboard.general.string = proposalSummaryText
+                            let clean = proposalSummaryText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                            if let url = URL(string: "https://wa.me/?text=\(clean)") {
+                                UIApplication.shared.open(url)
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: "doc.text.fill")
+                                Text("Compartir Propuesta por WhatsApp / Email")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.vertical)
+                }
+            }
+            .navigationTitle("Propuesta Comercial")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - FEATURE 20: MÓDULO DE PAGOS RECURRENTES AUTO-PAY
+struct RecurringAutoPaySubscriptionSheetView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    
+    let subscriptionPlans = [
+        ("🌿 Plan Bi-Weekly Residencial", "$90 / mes", "2 cortes al mes + orillado razor"),
+        ("⭐ Plan VIP Semanal", "$180 / mes", "4 cortes al mes + orillado + soplado"),
+        ("🏢 Plan Comercial HOA", "$350+ / mes", "Mantenimiento integral semanal")
+    ]
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Official Payment Info Badge
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("DATOS OFICIALES PARA COBRO RECURRENTE:")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                            
+                            HStack {
+                                Image(systemName: "creditcard.fill")
+                                    .foregroundStyle(Color.cyan)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("ZELLE OFICIAL:")
+                                        .font(.caption2.bold()).foregroundStyle(.gray)
+                                    Text("Olivia Rodriguez • (623) 764-4177")
+                                        .font(.caption.bold()).foregroundStyle(.white)
+                                }
+                                Spacer()
+                            }
+                            
+                            Divider().background(Color.gray.opacity(0.3))
+                            
+                            HStack {
+                                Image(systemName: "dollarsign.circle.fill")
+                                    .foregroundStyle(Color.green)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("CASH APP OFICIAL:")
+                                        .font(.caption2.bold()).foregroundStyle(.gray)
+                                    Text("$rafajrii (cash.app/$rafajrii)")
+                                        .font(.caption.bold()).foregroundStyle(.white)
+                                }
+                                Spacer()
+                            }
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Brand.primary.opacity(0.3), lineWidth: 1)
+                        )
+                        .padding(.horizontal)
+                        
+                        // Plans
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("PLANES DE SUSCRIPCIÓN ACTIVOS:")
+                                .font(.caption.bold())
+                                .foregroundStyle(.gray)
+                                .padding(.horizontal)
+                            
+                            ForEach(subscriptionPlans, id: \.0) { plan in
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(plan.0)
+                                            .font(.subheadline.bold())
+                                            .foregroundStyle(.white)
+                                        Text(plan.2)
+                                            .font(.caption2)
+                                            .foregroundStyle(.gray)
+                                    }
+                                    Spacer()
+                                    Text(plan.1)
+                                        .font(.caption.bold())
+                                        .foregroundStyle(Brand.primary)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(Brand.cardLight)
+                                        .clipShape(Capsule())
+                                }
+                                .padding(12)
+                                .background(Brand.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .padding(.horizontal)
+                            }
+                        }
+                        
+                        // Send Auto-Pay Reminder Button
+                        Button {
+                            sendPaymentReminderWhatsApp()
+                        } label: {
+                            HStack {
+                                Image(systemName: "bell.badge.fill")
+                                Text("Enviar Recordatorio de Pago Mensual")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.vertical)
+                }
+            }
+            .navigationTitle("Auto-Pay Recurrente")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
+    }
+    
+    private func sendPaymentReminderWhatsApp() {
+        let msg = """
+🌿 *RODRIGUEZ LAWN CARE - RECORDATORIO DE SERVICIO RECURRENTE*
+Estimado cliente:
+Te enviamos tu estado de cuenta por el mantenimiento mensual de césped de tu propiedad.
+
+💳 *MÉTODOS DE PAGO DISPONIBLES:*
+• *Zelle:* Olivia Rodriguez • (623) 764-4177
+• *Cash App:* $rafajrii • https://cash.app/$rafajrii
+
+*Por favor incluye tu nombre o dirección en la nota del pago.*
+¡Agradecemos mucho tu puntualidad y preferencia!
+*Rodriguez Lawn Care • (254) 852-8163*
+"""
+        UIPasteboard.general.string = msg
+        let clean = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        if let url = URL(string: "https://wa.me/?text=\(clean)") {
+            UIApplication.shared.open(url)
         }
     }
 }

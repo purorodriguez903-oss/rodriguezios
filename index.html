@@ -356,6 +356,19 @@
         </div>
       </div>
 
+      <!-- Gallery City Filters -->
+      <div class="gallery-city-filter-wrap">
+        <span class="city-filter-title">📍 <span data-i18n="filter_by_city">Filtrar por Ciudad:</span></span>
+        <div class="gallery-city-bar" id="galleryCityBar">
+          <button class="gallery-city-btn active" data-city="all">🌟 Todas las Ciudades</button>
+          <button class="gallery-city-btn" data-city="Killeen">🏛️ Killeen</button>
+          <button class="gallery-city-btn" data-city="Fort Cavazos">🪖 Fort Cavazos</button>
+          <button class="gallery-city-btn" data-city="Harker Heights">🌲 Harker Heights</button>
+          <button class="gallery-city-btn" data-city="Temple">🏥 Temple</button>
+          <button class="gallery-city-btn" data-city="Copperas Cove">🌄 Copperas Cove</button>
+        </div>
+      </div>
+
       <!-- Gallery Grid Container (populated dynamically from gallery.json) -->
       <div class="gallery-grid" id="galleryGrid">
         <!-- Dynamic Cards Inserted Here by js/gallery.js -->
@@ -1033,7 +1046,35 @@
 
             <div class="form-group">
               <label for="formAddress" class="form-label" data-i18n="form_lbl_address">📍 Full Property Address</label>
-              <input type="text" id="formAddress" class="form-control" placeholder="Street, Number, City or ZIP Code" required>
+              <div class="address-input-action-wrap">
+                <input type="text" id="formAddress" class="form-control" placeholder="Street, Number, City or ZIP Code" required>
+                <button type="button" id="btnScanSatelliteLot" class="btn-scan-satellite-trigger" title="Escanear patio con satélite">
+                  🛰️ Escanear Lote Satelital 3D
+                </button>
+              </div>
+
+              <!-- Satellite Lot Scan HUD Viewer -->
+              <div id="satelliteLotContainer" class="satellite-lot-container" style="display: none;">
+                <div class="satellite-hud-header">
+                  <div class="hud-status">
+                    <span class="hud-pulse-dot"></span>
+                    <span class="hud-title">RODRIGUEZ SATELLITE 3D LOT SCANNER</span>
+                  </div>
+                  <span class="hud-coords" id="satelliteCoordsLabel">31.1171° N, 97.7278° W • Killeen, TX</span>
+                </div>
+                <div class="satellite-map-frame-wrap">
+                  <iframe id="satelliteIframe" class="satellite-iframe" loading="lazy" src="about:blank" title="Vista Satelital del Lote"></iframe>
+                  <div class="satellite-crosshair"></div>
+                  <div class="satellite-badge-overlay">
+                    <div class="badge-item"><span>📐 Est. Superficie:</span> <strong id="lotAreaEstimate">0.22 Acres (~9,500 sq ft)</strong></div>
+                    <div class="badge-item"><span>✂️ Perímetro Orillado:</span> <strong id="lotPerimeterEstimate">~390 Linear Ft</strong></div>
+                    <div class="badge-item"><span>🎯 Zona de Servicio:</span> <strong id="lotCityDetected">Killeen / Central Texas</strong></div>
+                  </div>
+                </div>
+                <div class="satellite-hud-footer">
+                  <span>✅ Vista satelital en alta resolución sincronizada para cálculo exacto de mano de obra y corte</span>
+                </div>
+              </div>
             </div>
 
             <div class="form-row">
@@ -1261,9 +1302,56 @@
     </div>
   </footer>
 
+  <!-- ==================== 🤖 RODRIGUEZ AI CHATBOT ASSISTANT ==================== -->
+  <div id="rodriguezAiWidget" class="ai-widget-wrapper">
+    <!-- Trigger Button -->
+    <button id="aiWidgetToggleBtn" class="ai-widget-toggle" aria-label="Open Rodriguez AI Assistant">
+      <div class="ai-avatar-pulse">
+        <span class="ai-icon">🤖</span>
+        <span class="ai-online-beacon"></span>
+      </div>
+      <div class="ai-toggle-text">
+        <strong>Rodriguez AI</strong>
+        <span>Online 24/7 • Cotizar</span>
+      </div>
+    </button>
+
+    <!-- Chat Window -->
+    <div id="aiChatWindow" class="ai-chat-window" style="display: none;">
+      <div class="ai-chat-header">
+        <div class="ai-header-info">
+          <div class="ai-header-avatar">🌿</div>
+          <div>
+            <h4>Rodriguez AI Assistant</h4>
+            <span class="ai-status-text"><span class="status-dot"></span> Killeen & Central TX • Online</span>
+          </div>
+        </div>
+        <div class="ai-header-controls">
+          <button id="aiLangToggle" class="ai-header-btn" title="Switch English/Español">🌐 EN / ES</button>
+          <button id="aiChatClose" class="ai-header-btn" aria-label="Close Chat">✕</button>
+        </div>
+      </div>
+      
+      <div class="ai-chat-body" id="aiChatMessages"></div>
+
+      <!-- Quick action pills -->
+      <div class="ai-quick-pills" id="aiQuickPills"></div>
+
+      <!-- Input Box -->
+      <form id="aiChatForm" class="ai-chat-input-box">
+        <input type="text" id="aiUserInput" placeholder="Pregunta lo que sea sobre tu pasto..." autocomplete="off">
+        <button type="submit" id="aiSendBtn" aria-label="Send Message">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        </button>
+      </form>
+    </div>
+  </div>
+
   <!-- Scripts & Military-Grade Security Shield -->
   <script src="./js/main.js?v=4.2"></script>
-  <script src="./js/gallery.js?v=3.2"></script>
+  <script src="./js/gallery.js?v=4.0"></script>
+  <script src="./js/satellite-scanner.js?v=1.0"></script>
+  <script src="./js/ai-assistant.js?v=1.0"></script>
   <script src="./security/anti-bot.js" data-security-allow="true"></script>
   <script src="./security/web-shield.js" data-security-allow="true"></script>
 </body>
