@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "name": "Michael Ramirez",
+    "role": "Weekly Residential Service",
+    "badge": "Verified Homeowner",
+    "rating": 5,
+    "text": "We've been using Rodriguez LawnCare for two years now, and the difference from our previous gardeners is night and day. They arrive on time every Thursday, leave the driveways spotless, and always double-check the gates for our dogs.",
+    "initials": "MR",
+    "date": "2026-10-20"
+  },
+  {
+    "id": 2,
+    "name": "Sarah Campbell",
+    "role": "Landscape Renovation Client",
+    "badge": "Verified Homeowner",
+    "rating": 5,
+    "text": "They installed dark mulch throughout our front beds and trimmed several massive overgrown bushes that other companies refused to touch. Our yard looks straight out of an architectural magazine! Fair, courteous, and honest. 100% recommended!",
+    "initials": "SC",
+    "date": "2026-10-22"
+  },
+  {
+    "id": 3,
+    "name": "Arthur Gomez",
+    "role": "Commercial Property Manager",
+    "badge": "Verified Client",
+    "rating": 5,
+    "text": "Outstanding service for our commercial retail plaza. They are prompt, have all their insurance in order, and send digital invoices immediately. It's rare to find contractors this dependable nowadays.",
+    "initials": "AG",
+    "date": "2026-10-25"
+  }
+]

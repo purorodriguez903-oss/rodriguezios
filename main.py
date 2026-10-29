@@ -59,6 +59,7 @@ CLOUD_CONFIG_JSON_PATH = os.path.join(BASE_DIR, "cloud_config.json")
 CALENDAR_JSON_PATH = os.path.join(BASE_DIR, "calendar.json")
 PROMOTIONS_JSON_PATH = os.path.join(BASE_DIR, "promotions.json")
 IPA_DELIVERY_JSON_PATH = os.path.join(BASE_DIR, "ipa_delivery.json")
+REVIEWS_JSON_PATH = os.path.join(BASE_DIR, "reviews.json")
 UPLOADS_LEADS_FOLDER = os.path.join(BASE_DIR, "assets", "uploads", "leads")
 os.makedirs(UPLOADS_LEADS_FOLDER, exist_ok=True)
 
@@ -85,6 +86,25 @@ def save_gallery(data):
         return True
     except Exception as e:
         print(f"[Error] Guardando gallery.json: {e}")
+        return False
+
+def load_reviews():
+    if not os.path.exists(REVIEWS_JSON_PATH):
+        return []
+    try:
+        with open(REVIEWS_JSON_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"[Error] Cargando reviews.json: {e}")
+        return []
+
+def save_reviews(data):
+    try:
+        with open(REVIEWS_JSON_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"[Error] Guardando reviews.json: {e}")
         return False
 
 def load_leads():
@@ -1383,7 +1403,7 @@ async def handle_gallery_json(request):
     gallery = load_gallery()
     return cors_json_response(gallery)
 
-async def forward_lead_to_discord(name, phone, services, address, date_val, time_val, frequency, description, source):
+async def forward_lead_to_discord(name, phone, services, address, date_val, time_val, frequency, description, source, saved_photos=None):
     """Sends notification to Discord channel if bot is ready."""
     global bot_global
     if not bot_global:
@@ -1442,10 +1462,19 @@ async def forward_lead_to_discord(name, phone, services, address, date_val, time
                 wa_url = f"https://wa.me/{phone_dial}?text=Hola%20{name.replace(' ', '%20')},%20te%20escribimos%20de%20Rodriguez%20LawnCare%20sobre%20tu%20solicitud%20de%20cotizacion."
                 view.add_item(discord.ui.Button(label="Abrir WhatsApp del Cliente", style=discord.ButtonStyle.link, url=wa_url, emoji="💬"))
 
+            discord_files = []
+            if saved_photos and isinstance(saved_photos, list):
+                for sp in saved_photos:
+                    clean_rel = sp.replace("./", "")
+                    full_p = os.path.join(BASE_DIR, clean_rel)
+                    if os.path.exists(full_p) and os.path.getsize(full_p) > 0:
+                        discord_files.append(discord.File(full_p))
+
             await channel.send(
                 content=f"🔔 **¡Nuevo Lead en Rodriguez LawnCare!** (`{name}` • `{formatted_phone}`)",
                 embed=embed,
-                view=view if clean_digits else None
+                view=view if clean_digits else None,
+                files=discord_files if discord_files else None
             )
             print(f"✅ Lead enviado a Discord (#{channel.name})")
     except Exception as e:
@@ -1503,7 +1532,7 @@ async def handle_lead_submission(request):
         save_analytics(analytics)
 
         # Notify Discord asynchronously
-        asyncio.create_task(forward_lead_to_discord(name, phone, services, address, date_val, time_val, frequency, description, source))
+        asyncio.create_task(forward_lead_to_discord(name, phone, services, address, date_val, time_val, frequency, description, source, saved_photos=saved_photos))
 
         return cors_json_response({"success": True, "message": "Lead received and saved", "lead": new_lead})
     except Exception as e:
@@ -1539,7 +1568,10 @@ async def handle_api_create_lead(request):
 
         leads = load_leads()
         lead_id = int(time.time() * 1000)
+        photos_raw = data.get("photos", [])
+        saved_photos = save_lead_photos(photos_raw, lead_id)
         new_lead = {
+            "photos": saved_photos,
             "id": lead_id,
             "created_at": int(time.time()),
             "date_str": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
@@ -2789,6 +2821,77 @@ async def handle_cloud_admin_page(request):
 
 
 # ----------------- CALENDAR & SCHEDULE API -----------------
+async def handle_api_get_reviews(request):
+    """Returns list of client reviews for website and iOS app."""
+    return cors_json_response(load_reviews())
+
+async def handle_api_add_review(request):
+    """Adds or updates a client review."""
+    try:
+        data = await request.json()
+        name = data.get("name", "").strip() or "Verified Customer"
+        role = data.get("role", "").strip() or "Residential Service"
+        badge = data.get("badge", "").strip() or "Verified Homeowner"
+        rating = int(data.get("rating", 5) or 5)
+        text = data.get("text", "").strip()
+        if not text:
+            return cors_json_response({"success": False, "error": "El texto de la reseña es requerido"}, status=400)
+
+        parts = name.split()
+        initials = (parts[0][0] + (parts[-1][0] if len(parts) > 1 else "")).upper() if parts else "VC"
+
+        reviews = load_reviews()
+        review_id = int(data.get("id", int(time.time() * 1000)))
+
+        existing = next((r for r in reviews if r.get("id") == review_id), None)
+        if existing:
+            existing.update({
+                "name": name,
+                "role": role,
+                "badge": badge,
+                "rating": rating,
+                "text": text,
+                "initials": initials
+            })
+        else:
+            new_review = {
+                "id": review_id,
+                "name": name,
+                "role": role,
+                "badge": badge,
+                "rating": rating,
+                "text": text,
+                "initials": initials,
+                "date": time.strftime("%Y-%m-%d", time.localtime())
+            }
+            reviews.insert(0, new_review)
+
+        save_reviews(reviews)
+        return cors_json_response({"success": True, "reviews": reviews})
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+async def handle_api_delete_review(request):
+    """Deletes a client review by id."""
+    try:
+        review_id = None
+        if request.method == "POST":
+            data = await request.json()
+            review_id = data.get("id")
+        else:
+            review_id = request.match_info.get("id")
+
+        if review_id is not None:
+            review_id = int(review_id)
+            reviews = load_reviews()
+            reviews = [r for r in reviews if r.get("id") != review_id]
+            save_reviews(reviews)
+            return cors_json_response({"success": True, "reviews": reviews})
+        return cors_json_response({"success": False, "error": "ID no proporcionado"}, status=400)
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+
 async def handle_api_get_calendar(request):
     """Returns calendar days status and booked appointments."""
     cal = load_calendar()
@@ -2983,6 +3086,12 @@ def create_web_app():
     app.router.add_post('/api/ai/estimate', handle_api_ai_estimate)
 
     # Calendar & Availability API
+    # Reviews API
+    app.router.add_get('/api/reviews', handle_api_get_reviews)
+    app.router.add_post('/api/reviews', handle_api_add_review)
+    app.router.add_post('/api/reviews/delete', handle_api_delete_review)
+    app.router.add_delete('/api/reviews/{id}', handle_api_delete_review)
+
     app.router.add_get('/api/calendar', handle_api_get_calendar)
     app.router.add_post('/api/calendar/day', handle_api_save_calendar_day)
     app.router.add_post('/api/calendar/appointment', handle_api_save_calendar_appointment)

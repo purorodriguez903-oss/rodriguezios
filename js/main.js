@@ -220,10 +220,11 @@ document.addEventListener('DOMContentLoaded', () => {
   initPriceCalculator();
   initAreaChecker();
   initFaqAccordion();
-  initBookingForms();
-  initFlashPromotions();
-  initCalendarLiveCheckers();
+  initReviews();
   initPhotoUploaders();
+  initCalendarLiveCheckers();
+  initFlashPromotions();
+  initBookingForms();
   initNavbarScroll();
   initMobileMenu();
   initHeroVideo();
@@ -727,6 +728,265 @@ function initFaqAccordion() {
 
 // --- 6. BOOKING FORMS & MODAL ---
 let activeWhatsAppUrl = 'https://wa.me/12546121399';
+
+
+// ==================== REVIEWS / TESTIMONIALS ENGINE ====================
+async function initReviews() {
+  const container = document.getElementById('testimonialsGrid');
+  if (!container) return;
+  try {
+    const res = await fetch('/api/reviews');
+    if (!res.ok) return;
+    const reviews = await res.json();
+    if (!Array.isArray(reviews) || reviews.length === 0) return;
+
+    container.innerHTML = reviews.map(r => {
+      const starCount = Math.max(1, Math.min(5, parseInt(r.rating || 5, 10)));
+      const stars = '★'.repeat(starCount);
+      const initials = r.initials || (r.name ? r.name.substring(0, 2).toUpperCase() : 'RC');
+      const badgeText = r.badge || 'Verified Client';
+      return `
+        <div class="review-card" data-review-id="${r.id}">
+          <div>
+            <div class="review-stars" style="color: #f59e0b; margin-bottom: 0.75rem; font-size: 1.15rem; letter-spacing: 2px;">${stars}</div>
+            <p class="review-text" style="color: #334155; line-height: 1.6; font-size: 0.96rem; margin-bottom: 1.25rem;">"${r.text}"</p>
+          </div>
+          <div class="review-author-wrap" style="display: flex; align-items: center; gap: 12px; border-top: 1px solid #f1f5f9; padding-top: 1rem;">
+            <div class="author-avatar" style="width: 44px; height: 44px; border-radius: 50%; background: #dcfce7; color: #166534; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 0.95rem;">${initials}</div>
+            <div class="author-info">
+              <h4 style="font-size: 0.98rem; font-weight: 700; color: #0f172a; margin-bottom: 2px;">${r.name} <span class="verified-badge" style="background: #ecfdf5; color: #059669; font-size: 0.75rem; padding: 2px 7px; border-radius: 9999px; font-weight: 600; margin-left: 4px;">✓ ${badgeText}</span></h4>
+              <span style="font-size: 0.82rem; color: #64748b;">${r.role || 'Residential Service'}</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    console.warn('Dynamic reviews load error:', e);
+  }
+}
+
+// ==================== PHOTO UPLOAD ENGINE FOR ESTIMATES ====================
+let heroUploadedPhotos = [];
+let bookingUploadedPhotos = [];
+
+function compressImageFile(file, maxWidth = 1000, quality = 0.82) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth || height > maxWidth) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxWidth) / height);
+            height = maxWidth;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => resolve(e.target.result);
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderThumbnails(containerId, photosArray, labelSelector, defaultText) {
+  const container = document.getElementById(containerId);
+  const labelEl = document.querySelector(labelSelector);
+  if (!container) return;
+  container.innerHTML = '';
+  photosArray.forEach((photoUrl, idx) => {
+    const thumbWrap = document.createElement('div');
+    thumbWrap.style.cssText = 'position: relative; display: inline-block; margin: 4px;';
+
+    const img = document.createElement('img');
+    img.src = photoUrl;
+    img.className = 'photo-thumb-item';
+    img.style.cssText = 'width: 58px; height: 58px; object-fit: cover; border-radius: 8px; border: 2px solid #22c55e; display: block;';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.innerHTML = '&times;';
+    removeBtn.style.cssText = 'position: absolute; top: -6px; right: -6px; background: #ef4444; color: #fff; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 13px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.3);';
+    removeBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      photosArray.splice(idx, 1);
+      renderThumbnails(containerId, photosArray, labelSelector, defaultText);
+    };
+
+    thumbWrap.appendChild(img);
+    thumbWrap.appendChild(removeBtn);
+    container.appendChild(thumbWrap);
+  });
+
+  if (labelEl) {
+    if (photosArray.length > 0) {
+      labelEl.innerHTML = `📷 <strong>${photosArray.length} foto(s) lista(s)</strong> • Toca para agregar más`;
+    } else {
+      labelEl.innerHTML = defaultText;
+    }
+  }
+}
+
+function initPhotoUploaders() {
+  const heroInput = document.getElementById('heroPhotoInput');
+  const bookingInput = document.getElementById('bookingPhotoInput');
+
+  if (heroInput) {
+    heroInput.addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files || []);
+      for (const f of files) {
+        if (f.type.startsWith('image/')) {
+          const b64 = await compressImageFile(f);
+          if (b64) heroUploadedPhotos.push(b64);
+        }
+      }
+      renderThumbnails('heroPhotoThumbnails', heroUploadedPhotos, 'label[for="heroPhotoInput"] .btn-file-label', '📷 Attach Yard Photos (Subir Fotos)');
+      heroInput.value = '';
+    });
+  }
+
+  if (bookingInput) {
+    bookingInput.addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files || []);
+      for (const f of files) {
+        if (f.type.startsWith('image/')) {
+          const b64 = await compressImageFile(f);
+          if (b64) bookingUploadedPhotos.push(b64);
+        }
+      }
+      renderThumbnails('bookingPhotoThumbnails', bookingUploadedPhotos, 'label[for="bookingPhotoInput"] .btn-file-label', '📷 Attach Yard Photos (Subir Fotos de tu Jardín)');
+      bookingInput.value = '';
+    });
+  }
+}
+
+// ==================== CALENDAR LIVE AVAILABILITY CHECKER ====================
+async function checkCalendarDate(dateVal, noticeElementId, timeSelectId, submitBtnSelector) {
+  const noticeEl = document.getElementById(noticeElementId);
+  const timeSelect = document.getElementById(timeSelectId);
+  if (!dateVal) return;
+  try {
+    const res = await fetch(`/api/calendar/availability?date=${encodeURIComponent(dateVal)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.available) {
+      if (noticeEl) {
+        noticeEl.style.display = 'block';
+        noticeEl.innerHTML = `⚠️ <strong>Team Fully Booked:</strong> Este día tenemos todos los horarios ocupados. Por favor selecciona otra fecha disponible.`;
+      }
+      const btn = document.querySelector(submitBtnSelector);
+      if (btn) btn.disabled = true;
+    } else {
+      if (noticeEl) noticeEl.style.display = 'none';
+      const btn = document.querySelector(submitBtnSelector);
+      if (btn) btn.disabled = false;
+
+      if (timeSelect && Array.isArray(data.booked_times)) {
+        Array.from(timeSelect.options).forEach(opt => {
+          const isBooked = data.booked_times.some(bt => opt.value.includes(bt) || bt.includes(opt.value));
+          if (isBooked) {
+            opt.disabled = true;
+            if (!opt.text.includes('(Team working)')) {
+              opt.text = `${opt.value} (Team working, pick other time)`;
+            }
+          } else {
+            opt.disabled = false;
+            opt.text = opt.value;
+          }
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Calendar availability check error:', e);
+  }
+}
+
+function initCalendarLiveCheckers() {
+  const heroDate = document.getElementById('heroDate');
+  const formDate = document.getElementById('formDate');
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  if (heroDate) {
+    heroDate.min = todayStr;
+    heroDate.value = todayStr;
+    heroDate.addEventListener('change', () => {
+      checkCalendarDate(heroDate.value, 'heroAvailabilityNotice', 'heroTime', '#heroQuickForm button[type="submit"]');
+    });
+    checkCalendarDate(todayStr, 'heroAvailabilityNotice', 'heroTime', '#heroQuickForm button[type="submit"]');
+  }
+
+  if (formDate) {
+    formDate.min = todayStr;
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomStr = tomorrow.toISOString().split('T')[0];
+    formDate.value = tomStr;
+    formDate.addEventListener('change', () => {
+      checkCalendarDate(formDate.value, 'bookingAvailabilityNotice', 'formTime', '#bookingForm button[type="submit"]');
+    });
+    checkCalendarDate(tomStr, 'bookingAvailabilityNotice', 'formTime', '#bookingForm button[type="submit"]');
+  }
+}
+
+// ==================== FLASH PROMOTIONS ENGINE ====================
+let promoCountdownInterval = null;
+async function initFlashPromotions() {
+  const section = document.getElementById('promoSection');
+  if (!section) return;
+  try {
+    const res = await fetch('/api/promo');
+    if (!res.ok) return;
+    const promo = await res.json();
+    if (!promo || !promo.active) {
+      section.style.display = 'none';
+      return;
+    }
+
+    const titleEl = document.getElementById('promoTitle');
+    const msgEl = document.getElementById('promoMessage');
+    const timerEl = document.getElementById('promoTimer');
+
+    if (titleEl) titleEl.textContent = promo.title || '🔥 Promoción Especial';
+    if (msgEl) msgEl.textContent = promo.message || '';
+    section.style.display = 'block';
+
+    if (promoCountdownInterval) clearInterval(promoCountdownInterval);
+
+    function updateTimer() {
+      const now = Math.floor(Date.now() / 1000);
+      const remaining = (promo.expires_at || 0) - now;
+      if (remaining <= 0) {
+        section.style.display = 'none';
+        clearInterval(promoCountdownInterval);
+        return;
+      }
+      const hrs = Math.floor(remaining / 3600);
+      const mins = Math.floor((remaining % 3600) / 60);
+      const secs = remaining % 60;
+      if (timerEl) {
+        timerEl.textContent = `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      }
+    }
+    updateTimer();
+    promoCountdownInterval = setInterval(updateTimer, 1000);
+  } catch (e) {
+    console.warn('Promo init notice:', e);
+  }
+}
 
 function initBookingForms() {
   const mainForm = document.getElementById('bookingForm');

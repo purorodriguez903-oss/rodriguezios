@@ -1611,16 +1611,19 @@ button, input, select, textarea {
   display: grid;
   grid-template-columns: 1fr 1.25fr;
   gap: 3.5rem;
+  align-items: start;
 }
 
 .contact-info-card {
   background: linear-gradient(135deg, var(--gray-900) 0%, #0d281e 100%);
   color: var(--white);
   border-radius: var(--radius-lg);
-  padding: 2.75rem 2.25rem;
+  padding: 2.25rem 2rem;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  align-self: start;
+  height: fit-content;
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.35);
 }
 
 .contact-info-title {
@@ -1640,8 +1643,8 @@ button, input, select, textarea {
 .contact-methods {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  margin-bottom: 2.5rem;
+  gap: 1.15rem;
+  margin-bottom: 1.5rem;
 }
 
 .contact-method-item {
