@@ -67,6 +67,7 @@ import WebKit
 import MapKit
 import CoreLocation
 import AudioToolbox
+import CoreImage
 
 // MARK: - THEME & BRANDING
 enum Brand {
@@ -406,8 +407,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "1.8.2"
-    let currentAppBuild: Int = 23
+    let currentAppVersion: String = "1.9.0"
+    let currentAppBuild: Int = 24
 
     @Published var calendarData: CalendarData = CalendarData(day_status: [:], appointments: [])
     @Published var activePromo: FlashPromotion? = nil
@@ -3310,6 +3311,13 @@ struct WebAdminView: View {
     @ObservedObject var store: LawnCareStore
     @State private var serverInput = ""
     @State private var showSavedAlert = false
+    @State private var showRadarSheet = false
+    @State private var showAiScannerSheet = false
+    @State private var showTruckCalcSheet = false
+    @State private var showVideoMakerSheet = false
+    @State private var showDigitalCardSheet = false
+    @State private var showFlyerMakerSheet = false
+    @State private var showGoogleReviewSheet = false
     @State private var showHeroManagerSheet = false
     @State private var showCloudPanelSheet = false
     @State private var showQuickEstimatorSheet = false
@@ -3326,6 +3334,49 @@ struct WebAdminView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
+                        // SECCIÓN PLACOSA DEL PATRÓN
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "crown.fill")
+                                    .foregroundStyle(Color.yellow)
+                                Text("HERRAMIENTAS DEL PATRÓN (NIVEL PRO)")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.primary)
+                                Spacer()
+                            }
+                            
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                                Button { showRadarSheet = true } label: {
+                                    PatronQuickToolCard(icon: "dot.radiowaves.left.and.right", title: "Radar Táctico", subtitle: "Zonas de Guerra", color: Color.green)
+                                }
+                                Button { showAiScannerSheet = true } label: {
+                                    PatronQuickToolCard(icon: "sparkles.rectangle.stack.fill", title: "Escáner IA Pasto", subtitle: "Diagnóstico Láser", color: Color.cyan)
+                                }
+                                Button { showTruckCalcSheet = true } label: {
+                                    PatronQuickToolCard(icon: "truck.box.fill", title: "Camión Mulch", subtitle: "Calculadora 3D", color: Color.orange)
+                                }
+                                Button { showVideoMakerSheet = true } label: {
+                                    PatronQuickToolCard(icon: "film.stack.fill", title: "Video TikTok", subtitle: "Reels de Antes/Dsp", color: Color.purple)
+                                }
+                                Button { showDigitalCardSheet = true } label: {
+                                    PatronQuickToolCard(icon: "qrcode", title: "Tarjeta QR Lujo", subtitle: "Vecinos 10% OFF", color: Color.blue)
+                                }
+                                Button { showFlyerMakerSheet = true } label: {
+                                    PatronQuickToolCard(icon: "photo.on.rectangle.angled", title: "Creador Flyers", subtitle: "Publicar en FB", color: Color.pink)
+                                }
+                                Button { showGoogleReviewSheet = true } label: {
+                                    PatronQuickToolCard(icon: "star.fill", title: "Reseñas 5★", subtitle: "Google Maps Boost", color: Color.yellow)
+                                }
+                            }
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Brand.primary.opacity(0.3), lineWidth: 1)
+                        )
+
                         otaUpdatesCard
                         recurringClientsCard
                         beforeAfterCard
@@ -3356,6 +3407,27 @@ struct WebAdminView: View {
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 serverInput = store.serverURL
+            }
+            .sheet(isPresented: $showRadarSheet) {
+                TacticalTerritoryRadarView(store: store)
+            }
+            .sheet(isPresented: $showAiScannerSheet) {
+                AIYardHealthScannerHUDView(store: store)
+            }
+            .sheet(isPresented: $showTruckCalcSheet) {
+                BulkMaterialTruckCalculatorView(store: store)
+            }
+            .sheet(isPresented: $showVideoMakerSheet) {
+                CinematicVideoMakerView(store: store)
+            }
+            .sheet(isPresented: $showDigitalCardSheet) {
+                NeighborDigitalCardQRView(store: store)
+            }
+            .sheet(isPresented: $showFlyerMakerSheet) {
+                SocialMediaFlyerMakerSheetView(store: store)
+            }
+            .sheet(isPresented: $showGoogleReviewSheet) {
+                GoogleReviewBoosterSheetView(store: store)
             }
             .sheet(isPresented: $showRecurringSheet) {
                 RecurringClientsManagerView(store: store)
@@ -5507,6 +5579,50 @@ struct InvoiceSheetView: View {
                                 .foregroundStyle(.white)
                         }
 
+                        // Signature Section
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("✍️ FIRMA DIGITAL DEL CLIENTE")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Brand.primary)
+                                Spacer()
+                                if clientSignatureImage != nil {
+                                    Text("✓ Aprobada")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.green)
+                                }
+                            }
+                            
+                            Button {
+                                showSignaturePadSheet = true
+                            } label: {
+                                HStack {
+                                    Image(systemName: clientSignatureImage == nil ? "signature" : "checkmark.seal.fill")
+                                    Text(clientSignatureImage == nil ? "Pedir Firma al Cliente en Pantalla" : "Firma Capturada (Tocar para cambiar)")
+                                }
+                                .font(.subheadline.bold())
+                                .foregroundStyle(clientSignatureImage == nil ? Brand.primary : .white)
+                                .frame(maxWidth: .infinity)
+                                .padding(12)
+                                .background(clientSignatureImage == nil ? Brand.primary.opacity(0.15) : Color.green.opacity(0.2))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(clientSignatureImage == nil ? Brand.primary.opacity(0.4) : Color.green, lineWidth: 1)
+                                )
+                            }
+                            
+                            if let sig = clientSignatureImage {
+                                Image(uiImage: sig)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(height: 70)
+                                    .padding(6)
+                                    .background(Color.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+
                         // Action Buttons
                         VStack(spacing: 12) {
                             Button {
@@ -5565,6 +5681,9 @@ struct InvoiceSheetView: View {
                     Button("Cerrar") { dismiss() }
                         .foregroundStyle(Brand.primary)
                 }
+            }
+            .sheet(isPresented: $showSignaturePadSheet) {
+                DigitalSignaturePadSheetView(signatureImage: $clientSignatureImage)
             }
             .sheet(isPresented: $showCalendarSheet) {
                 AddToCalendarSheet(lead: lead, store: store, prefilledAmount: totalAmount)
@@ -7963,6 +8082,1410 @@ struct LawnAreaCalculatorSheetView: View {
         let encoded = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         if let url = URL(string: "https://wa.me/?text=\(encoded)") {
             UIApplication.shared.open(url)
+        }
+    }
+}
+
+
+// MARK: - ==========================================
+// MARK: - SUITE DEL PATRÓN: HERRAMIENTAS PRO & PLACOSAS
+// MARK: - ==========================================
+
+struct PatronQuickToolCard: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(color.opacity(0.18))
+                    .frame(width: 40, height: 40)
+                Image(systemName: icon)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(color)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                Text(subtitle)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.gray)
+                    .lineLimit(1)
+            }
+            Spacer()
+        }
+        .padding(10)
+        .background(Brand.card)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(color.opacity(0.25), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - 1. DIGITAL SIGNATURE PAD (FIRMA DE CLIENTE)
+struct DigitalSignaturePadSheetView: View {
+    @Binding var signatureImage: UIImage?
+    @Environment(\.dismiss) var dismiss
+    @State private var currentPath: [CGPoint] = []
+    @State private var completedPaths: [[CGPoint]] = []
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                VStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("FIRMA DIGITAL DEL CLIENTE")
+                            .font(.headline.bold())
+                            .foregroundStyle(Brand.primary)
+                        Text("Firme con su dedo en el recuadro blanco para autorizar el estimado y las condiciones del servicio.")
+                            .font(.caption)
+                            .foregroundStyle(.gray)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    
+                    ZStack {
+                        Color.white
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        
+                        VStack {
+                            Spacer()
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.4))
+                                .frame(height: 1)
+                                .padding(.horizontal, 24)
+                                .padding(.bottom, 28)
+                            Text("X  Firma del Propietario / Cliente")
+                                .font(.caption.bold())
+                                .foregroundStyle(Color.gray)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.leading, 24)
+                                .padding(.bottom, 10)
+                        }
+                        
+                        Canvas { context, size in
+                            for path in completedPaths {
+                                var p = Path()
+                                guard let first = path.first else { continue }
+                                p.move(to: first)
+                                for pt in path.dropFirst() {
+                                    p.addLine(to: pt)
+                                }
+                                context.stroke(p, with: .color(.black), lineWidth: 3.5)
+                            }
+                            
+                            var activeP = Path()
+                            if let first = currentPath.first {
+                                activeP.move(to: first)
+                                for pt in currentPath.dropFirst() {
+                                    activeP.addLine(to: pt)
+                                }
+                                context.stroke(activeP, with: .color(.blue), lineWidth: 3.5)
+                            }
+                        }
+                        .gesture(
+                            DragGesture(minimumDistance: 0.1)
+                                .onChanged { value in
+                                    currentPath.append(value.location)
+                                }
+                                .onEnded { _ in
+                                    completedPaths.append(currentPath)
+                                    currentPath = []
+                                }
+                        )
+                    }
+                    .frame(height: 250)
+                    .padding(.horizontal)
+                    .shadow(color: Color.black.opacity(0.3), radius: 8)
+                    
+                    HStack(spacing: 12) {
+                        Button {
+                            currentPath.removeAll()
+                            completedPaths.removeAll()
+                            signatureImage = nil
+                        } label: {
+                            HStack {
+                                Image(systemName: "trash.fill")
+                                Text("Borrar Firma")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(12)
+                            .background(Color.red.opacity(0.15))
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        
+                        Button {
+                            exportSignature()
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Image(systemName: "checkmark.seal.fill")
+                                Text("Aprobar y Estampar")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(12)
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .disabled(completedPaths.isEmpty)
+                        .opacity(completedPaths.isEmpty ? 0.4 : 1.0)
+                    }
+                    .padding(.horizontal)
+                    
+                    Spacer()
+                }
+                .padding(.top)
+            }
+            .navigationTitle("Firma Digital")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancelar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
+    }
+    
+    private func exportSignature() {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 320, height: 160))
+        let img = renderer.image { ctx in
+            UIColor.clear.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 320, height: 160))
+            
+            let strokeColor = UIColor.black
+            strokeColor.setStroke()
+            
+            for path in completedPaths {
+                let bezier = UIBezierPath()
+                guard let first = path.first else { continue }
+                bezier.move(to: first)
+                for pt in path.dropFirst() {
+                    bezier.addLine(to: pt)
+                }
+                bezier.lineWidth = 3.5
+                bezier.lineCapStyle = .round
+                bezier.stroke()
+            }
+        }
+        self.signatureImage = img
+    }
+}
+
+// MARK: - 2. RADAR TÁCTICO: "CONQUISTA DE TERRITORIO"
+struct TacticalTerritoryRadarView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    @State private var radarAngle: Double = 0
+    @State private var selectedFilter: String = "Todas"
+    
+    // Central Texas default coordinate: Killeen TX
+    @State private var region = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 31.1171, longitude: -97.7278),
+        span: MKCoordinateSpan(latitudeDelta: 0.12, longitudeDelta: 0.12)
+    )
+    
+    let timer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Tactical Header HUD
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Circle().fill(Color.green).frame(width: 8, height: 8)
+                                Text("RADAR TÁCTICO MILITAR")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(Brand.primary)
+                            }
+                            Text("Territorio Central Texas")
+                                .font(.headline.bold())
+                                .foregroundStyle(.white)
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("DOMINIO ZONAL")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.gray)
+                            Text("88% ACTIVO")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.green)
+                        }
+                    }
+                    .padding(12)
+                    .background(Brand.card)
+                    
+                    // Radar Map Container
+                    ZStack {
+                        Map(coordinateRegion: $region)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        
+                        // Tactical Sonar Overlay Grid
+                        ZStack {
+                            Circle()
+                                .stroke(Brand.primary.opacity(0.3), lineWidth: 1)
+                                .frame(width: 160, height: 160)
+                            Circle()
+                                .stroke(Brand.primary.opacity(0.2), lineWidth: 1)
+                                .frame(width: 280, height: 280)
+                            
+                            // Crosshairs
+                            Rectangle()
+                                .fill(Brand.primary.opacity(0.2))
+                                .frame(width: 1, height: 280)
+                            Rectangle()
+                                .fill(Brand.primary.opacity(0.2))
+                                .frame(width: 280, height: 1)
+                            
+                            // Sonar Sweep Line
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [Brand.primary.opacity(0.7), Color.clear]),
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .frame(width: 2, height: 140)
+                                .offset(y: -70)
+                                .rotationEffect(.degrees(radarAngle))
+                        }
+                        .allowsHitTesting(false)
+                    }
+                    
+                    // Tactical Metrics Card
+                    VStack(spacing: 10) {
+                        HStack(spacing: 8) {
+                            TacticalMetricBadge(icon: "shield.fill", title: "Conquistadas", value: "\(max(14, store.recurringClients.count + 8))", color: .green)
+                            TacticalMetricBadge(icon: "bolt.fill", title: "En Proceso", value: "\(store.leads.count)", color: .yellow)
+                            TacticalMetricBadge(icon: "cross.circle.fill", title: "Objetivos", value: "25", color: .orange)
+                        }
+                        
+                        Button {
+                            // Center in Killeen
+                            region.center = CLLocationCoordinate2D(latitude: 31.1171, longitude: -97.7278)
+                        } label: {
+                            HStack {
+                                Image(systemName: "scope")
+                                Text("Reenfocar en Base Killeen & Fort Cavazos")
+                            }
+                            .font(.caption.bold())
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(10)
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                    }
+                    .padding(12)
+                    .background(Brand.card)
+                }
+            }
+            .navigationTitle("Radar de Territorio")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+            .onReceive(timer) { _ in
+                radarAngle = (radarAngle + 4).truncatingRemainder(dividingBy: 360)
+            }
+        }
+    }
+}
+
+struct TacticalMetricBadge: View {
+    let icon: String
+    let title: String
+    let value: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(color)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.gray)
+                Text(value)
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+            }
+            Spacer()
+        }
+        .padding(8)
+        .background(Color.black.opacity(0.4))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+// MARK: - 3. ESCÁNER IA DE SALUD DEL PASTO (HUD CIBERNÉTICO)
+struct AIYardHealthScannerHUDView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    @State private var scanLineOffset: CGFloat = -120
+    @State private var isAnalyzing: Bool = false
+    @State private var scanCompleted: Bool = true
+    @State private var clientNameInput: String = "Cliente Residencial"
+    @State private var showExportAlert: Bool = false
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Cyber Viewfinder Container
+                        ZStack {
+                            Image("drone_tundra_intro")
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 220)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(Color.black.opacity(0.35))
+                            
+                            // Laser Grid Scan Line
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [Color.clear, Color.green.opacity(0.8), Color.clear]),
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(height: 3)
+                                .shadow(color: Color.green, radius: 8)
+                                .offset(y: scanLineOffset)
+                            
+                            // Corner Brackets
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Color.green.opacity(0.6), lineWidth: 2)
+                            
+                            VStack {
+                                HStack {
+                                    Text("⚡ AI SPECTRAL HUD 4K")
+                                        .font(.system(size: 9, weight: .black))
+                                        .foregroundStyle(Color.green)
+                                        .padding(4)
+                                        .background(Color.black.opacity(0.6))
+                                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                                    Spacer()
+                                    Text("ISO 100 • 60 FPS")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(.white)
+                                }
+                                Spacer()
+                                HStack {
+                                    Text("OBJETIVO: CÉSPED RESIDENCIAL")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(.white)
+                                    Spacer()
+                                    Text("CENTRAL TX")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(Color.green)
+                                }
+                            }
+                            .padding(10)
+                        }
+                        .frame(height: 220)
+                        .padding(.horizontal)
+                        
+                        // Health Diagnostics Breakdown
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("DIAGNÓSTICO FITOSANITARIO IA")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(Brand.primary)
+                                    Text("Índice de Salud General: 68% (Atención Requerida)")
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.white)
+                                }
+                                Spacer()
+                                Text("68/100")
+                                    .font(.title2.bold())
+                                    .foregroundStyle(.yellow)
+                            }
+                            
+                            Divider().background(Color.gray.opacity(0.3))
+                            
+                            // Specific metrics
+                            VStack(spacing: 8) {
+                                DiagnosticBarRow(label: "Nivel de Nitrógeno & Clorofila", score: "Bajo (42%)", color: .orange)
+                                DiagnosticBarRow(label: "Invasión de Maleza / Crabgrass", score: "Moderado (28%)", color: .yellow)
+                                DiagnosticBarRow(label: "Compactación de Raíces", score: "Alta (74%)", color: .red)
+                                DiagnosticBarRow(label: "Humedad del Suelo", score: "Óptima (65%)", color: .green)
+                            }
+                            
+                            // AI Recommendation Box
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("💡 TRATAMIENTO RECOMENDADO POR IA:")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(Brand.primary)
+                                Text("1. Aireación de raíces y descompactado de suelo.\n2. Aplicación de fertilizante alto en nitrógeno y hierro.\n3. Capa de 3 pulgadas de Mulch Oscuro para retener humedad.\n\n💵 Costo Estimado del Paquete: $180 - $240 USD.")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.9))
+                            }
+                            .padding(12)
+                            .background(Color.black.opacity(0.4))
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal)
+                        
+                        // Share Certificate Action
+                        Button {
+                            shareCertificateWhatsApp()
+                        } label: {
+                            HStack {
+                                Image(systemName: "doc.badge.arrow.up")
+                                Text("Enviar Certificado de Salud por WhatsApp al Cliente")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.vertical)
+                }
+            }
+            .navigationTitle("Escáner IA de Pasto")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+            .onAppear {
+                withAnimation(Animation.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                    scanLineOffset = 110
+                }
+            }
+        }
+    }
+    
+    private func shareCertificateWhatsApp() {
+        let msg = """
+🌿 *RODRIGUEZ LAWN CARE - DIAGNÓSTICO FITOSANITARIO IA*
+📍 Central Texas • Tel: (254) 852-8163
+━━━━━━━━━━━━━━━━━━━━
+📊 *Calificación de Salud:* 68/100 (Atención Requerida)
+⚠️ *Deficiencias detectadas:*
+• Falta de Nitrógeno y Clorofila
+• Compactación de raíz en zonas de alto tráfico
+• Maleza superficial detectada
+
+💡 *Tratamiento Especializado Recomendado:*
+1. Aireación de suelo y oxigenación de raíces
+2. Fertilizante balanceado de temporada
+3. Cobertura de Mulch Oscuro protector
+
+💵 *Presupuesto Especial Rodriguez:* $180 USD
+¡Responde a este mensaje para agendar la recuperación de tu jardín!
+"""
+        UIPasteboard.general.string = msg
+        let clean = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        if let url = URL(string: "https://wa.me/?text=\(clean)") {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+struct DiagnosticBarRow: View {
+    let label: String
+    let score: String
+    let color: Color
+    
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.white)
+            Spacer()
+            Text(score)
+                .font(.caption2.bold())
+                .foregroundStyle(color)
+        }
+    }
+}
+
+// MARK: - 4. CALCULADORA 3D DE CAMIÓN DE MULCH Y GRAVILLA
+struct BulkMaterialTruckCalculatorView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var lengthFeet: Double = 30
+    @State private var widthFeet: Double = 10
+    @State private var depthInches: Double = 3
+    @State private var selectedMaterial: String = "Mulch Oscuro (Dark Brown)"
+    
+    let materials = [
+        "Mulch Oscuro (Dark Brown)",
+        "Mulch Negro (Black Dyed)",
+        "Mulch Rojo (Red Cedar)",
+        "Piedra de Río / Grava (River Rock)"
+    ]
+    
+    var cubicYards: Double {
+        let sqft = lengthFeet * widthFeet
+        let depthFeet = depthInches / 12.0
+        let cubicFeet = sqft * depthFeet
+        return cubicFeet / 27.0
+    }
+    
+    var bagEquivalent: Double {
+        // 1 cubic yard = 13.5 bags of 2 cu ft
+        return cubicYards * 13.5
+    }
+    
+    var estimatedMaterialCost: Double {
+        let pricePerYard: Double = selectedMaterial.contains("Piedra") ? 75.0 : 38.0
+        return cubicYards * pricePerYard
+    }
+    
+    var suggestedLaborAndDelivery: Double {
+        return cubicYards * 85.0 + 75.0 // Delivery base + installation
+    }
+    
+    var totalClientPrice: Double {
+        return estimatedMaterialCost + suggestedLaborAndDelivery
+    }
+    
+    var netProfit: Double {
+        return totalClientPrice - estimatedMaterialCost
+    }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Interactive Dump Truck Graphic Card
+                        VStack(spacing: 8) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Brand.card)
+                                    .frame(height: 140)
+                                
+                                VStack(spacing: 4) {
+                                    HStack {
+                                        Image(systemName: "truck.box.fill")
+                                            .font(.system(size: 42))
+                                            .foregroundStyle(Color.orange)
+                                        
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(String(format: "%.1f YARDAS CÚBICAS", cubicYards))
+                                                .font(.headline.bold())
+                                                .foregroundStyle(.white)
+                                            Text("Equivale a aprox. \(Int(bagEquivalent)) bolsas de 2 cu ft")
+                                                .font(.caption2)
+                                                .foregroundStyle(Brand.primary)
+                                            Text(cubicYards > 5 ? "⚠️ Requiere viaje de camión de volteo" : "✓ Cabe en remolque estándar")
+                                                .font(.caption2)
+                                                .foregroundStyle(cubicYards > 5 ? .yellow : .green)
+                                        }
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal, 16)
+                                }
+                            }
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                            )
+                        }
+                        .padding(.horizontal)
+                        
+                        // Dimensions Sliders
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("MEDIDAS DE LA JARDINERA")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text("Largo:")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.white)
+                                    Spacer()
+                                    Text("\(Int(lengthFeet)) pies (ft)")
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(Brand.primary)
+                                }
+                                Slider(value: $lengthFeet, in: 5...120, step: 1)
+                                    .tint(Brand.primary)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text("Ancho:")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.white)
+                                    Spacer()
+                                    Text("\(Int(widthFeet)) pies (ft)")
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(Brand.primary)
+                                }
+                                Slider(value: $widthFeet, in: 2...60, step: 1)
+                                    .tint(Brand.primary)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text("Grosor / Profundidad:")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.white)
+                                    Spacer()
+                                    Text("\(Int(depthInches)) pulgadas (in)")
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(Brand.primary)
+                                }
+                                Slider(value: $depthInches, in: 1...6, step: 1)
+                                    .tint(Brand.primary)
+                            }
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal)
+                        
+                        // Financial Breakdown Card
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("DESGLOSE FINANCIERO Y GANANCIA")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                            
+                            HStack {
+                                Text("Costo estimado de material (vivero):")
+                                    .font(.caption)
+                                    .foregroundStyle(.gray)
+                                Spacer()
+                                Text("$\(String(format: "%.0f", estimatedMaterialCost)) USD")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.white)
+                            }
+                            
+                            HStack {
+                                Text("Mano de obra + flete sugerido:")
+                                    .font(.caption)
+                                    .foregroundStyle(.gray)
+                                Spacer()
+                                Text("$\(String(format: "%.0f", suggestedLaborAndDelivery)) USD")
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.white)
+                            }
+                            
+                            Divider().background(Color.gray.opacity(0.3))
+                            
+                            HStack {
+                                Text("PRECIO TOTAL A COBRAR:")
+                                    .font(.headline.bold())
+                                    .foregroundStyle(.white)
+                                Spacer()
+                                Text("$\(String(format: "%.0f", totalClientPrice)) USD")
+                                    .font(.title2.bold())
+                                    .foregroundStyle(.green)
+                            }
+                            
+                            HStack {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "banknote.fill")
+                                    Text("TU GANANCIA NETA LIMPIA:")
+                                }
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                                Spacer()
+                                Text("$\(String(format: "%.0f", netProfit)) USD")
+                                    .font(.headline.bold())
+                                    .foregroundStyle(Brand.primary)
+                            }
+                            .padding(8)
+                            .background(Brand.primary.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        .padding(14)
+                        .background(Brand.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal)
+                        
+                        Button {
+                            copyMulchWhatsApp()
+                        } label: {
+                            HStack {
+                                Image(systemName: "doc.on.doc.fill")
+                                Text("Copiar Presupuesto de Mulch a WhatsApp")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.vertical)
+                }
+            }
+            .navigationTitle("Calculadora Camión Mulch")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
+    }
+    
+    private func copyMulchWhatsApp() {
+        let msg = """
+🌲 *RODRIGUEZ LAWN CARE - PRESUPUESTO DE MULCH / JARDINERÍA*
+📍 Killeen & Central TX • Tel: (254) 852-8163
+━━━━━━━━━━━━━━━━━━━━
+📐 *Dimensiones:* \(Int(lengthFeet)) ft x \(Int(widthFeet)) ft (\(Int(depthInches)) pulgadas de grosor)
+📦 *Volumen Calculado:* \(String(format: "%.1f", cubicYards)) yardas cúbicas (aprox. \(Int(bagEquivalent)) bolsas)
+🌲 *Material:* \(selectedMaterial)
+
+💵 *Presupuesto Total con Material, Flete e Instalación:* $\(String(format: "%.0f", totalClientPrice)) USD
+¡Contáctanos para agendar tu entrega e instalación profesional!
+"""
+        UIPasteboard.general.string = msg
+        let clean = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        if let url = URL(string: "https://wa.me/?text=\(clean)") {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+// MARK: - 5. TARJETA DIGITAL QR DE LUJO PARA VECINOS
+struct NeighborDigitalCardQRView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    @State private var qrImage: UIImage? = nil
+    
+    let websiteURL = "https://web-production-b6891b.up.railway.app/?src=neighbor_qr"
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                VStack(spacing: 20) {
+                    // VIP Black & Emerald Card
+                    VStack(spacing: 14) {
+                        HStack {
+                            Image("AppIcon")
+                                .resizable()
+                                .frame(width: 44, height: 44)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("RODRIGUEZ LAWN CARE")
+                                    .font(.headline.bold())
+                                    .foregroundStyle(Brand.primary)
+                                Text("Servicio Residencial & Comercial • Central TX")
+                                    .font(.caption2)
+                                    .foregroundStyle(.gray)
+                            }
+                            Spacer()
+                            Image(systemName: "crown.fill")
+                                .foregroundStyle(Color.yellow)
+                        }
+                        
+                        Divider().background(Color.gray.opacity(0.3))
+                        
+                        // QR Code container
+                        VStack(spacing: 8) {
+                            if let qr = qrImage {
+                                Image(uiImage: qr)
+                                    .interpolation(.none)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 170, height: 170)
+                                    .padding(8)
+                                    .background(Color.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .shadow(color: Brand.primary.opacity(0.3), radius: 10)
+                            } else {
+                                ProgressView()
+                                    .frame(width: 170, height: 170)
+                            }
+                            
+                            Text("📱 Escanea con tu cámara para cotizar")
+                                .font(.caption.bold())
+                                .foregroundStyle(.white)
+                            Text("🎁 10% DE DESCUENTO EXCLUSIVO PARA VECINOS")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(Color.green)
+                        }
+                        .padding(.vertical, 6)
+                        
+                        Divider().background(Color.gray.opacity(0.3))
+                        
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Rafael Rodriguez • Propietario")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.white)
+                                Text("(254) 852-8163 • Killeen, TX")
+                                    .font(.caption2)
+                                    .foregroundStyle(Brand.primary)
+                            }
+                            Spacer()
+                            HStack(spacing: 10) {
+                                Button {
+                                    if let url = URL(string: "tel:2548528163") {
+                                        UIApplication.shared.open(url)
+                                    }
+                                } label: {
+                                    Image(systemName: "phone.fill")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.black)
+                                        .frame(width: 34, height: 34)
+                                        .background(Brand.primary)
+                                        .clipShape(Circle())
+                                }
+                                
+                                Button {
+                                    if let url = URL(string: "https://wa.me/12548528163") {
+                                        UIApplication.shared.open(url)
+                                    }
+                                } label: {
+                                    Image(systemName: "message.fill")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.white)
+                                        .frame(width: 34, height: 34)
+                                        .background(Color.green)
+                                        .clipShape(Circle())
+                                }
+                            }
+                        }
+                    }
+                    .padding(20)
+                    .background(Brand.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(Brand.primary.opacity(0.5), lineWidth: 1.5)
+                    )
+                    .shadow(color: Brand.primary.opacity(0.2), radius: 15)
+                    .padding(.horizontal)
+                    
+                    Text("Muestra esta pantalla al vecino para que escanee con su cámara y pida su presupuesto al instante.")
+                        .font(.caption2)
+                        .foregroundStyle(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 30)
+                    
+                    Spacer()
+                }
+                .padding(.top)
+            }
+            .navigationTitle("Tarjeta QR para Vecinos")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+            .onAppear {
+                generateQR()
+            }
+        }
+    }
+    
+    private func generateQR() {
+        let data = websiteURL.data(using: .ascii)
+        if let filter = CIFilter(name: "CIQRCodeGenerator") {
+            filter.setValue(data, forKey: "inputMessage")
+            filter.setValue("M", forKey: "inputCorrectionLevel")
+            if let output = filter.outputImage {
+                let transform = CGAffineTransform(scaleX: 8, y: 8)
+                let scaled = output.transformed(by: transform)
+                let context = CIContext()
+                if let cgImage = context.createCGImage(scaled, from: scaled.extent) {
+                    self.qrImage = UIImage(cgImage: cgImage)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - 6. CREADOR DE FLYERS DIGITALES PARA REDES SOCIALES
+struct SocialMediaFlyerMakerSheetView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    @State private var selectedTemplate: String = "Corte de Césped $40+"
+    @State private var offerText: String = "¡Estimados 100% Gratis en Killeen y Alrededores!"
+    @State private var showSavedAlert: Bool = false
+    
+    let templates = [
+        "Corte de Césped $40+",
+        "Instalación de Mulch Oscuro",
+        "Poda de Arbustos & Árboles",
+        "🎖️ 10% Descuento Militar"
+    ]
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Square 1:1 Flyer Canvas
+                        ZStack {
+                            Image("drone_tundra_intro")
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 320, height: 320)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .overlay(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [Color.black.opacity(0.8), Color.black.opacity(0.2), Color.black.opacity(0.85)]),
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                            
+                            VStack(spacing: 8) {
+                                // Top Badge
+                                HStack {
+                                    HStack(spacing: 6) {
+                                        Image("AppIcon")
+                                            .resizable()
+                                            .frame(width: 32, height: 32)
+                                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                                        Text("RODRIGUEZ LAWN CARE")
+                                            .font(.caption.bold())
+                                            .foregroundStyle(Brand.primary)
+                                    }
+                                    Spacer()
+                                    Text("Killeen, TX")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.white)
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.top, 14)
+                                
+                                Spacer()
+                                
+                                // Center Offer Badge
+                                VStack(spacing: 4) {
+                                    Text(selectedTemplate.uppercased())
+                                        .font(.title3.bold())
+                                        .foregroundStyle(.white)
+                                        .multilineTextAlignment(.center)
+                                    Text(offerText)
+                                        .font(.caption)
+                                        .foregroundStyle(Brand.primary)
+                                        .multilineTextAlignment(.center)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color.black.opacity(0.6))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                
+                                Spacer()
+                                
+                                // Footer Call to Action
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("LLAMA O MANDA WHATSAPP:")
+                                            .font(.system(size: 8, weight: .bold))
+                                            .foregroundStyle(.gray)
+                                        Text("(254) 852-8163")
+                                            .font(.headline.bold())
+                                            .foregroundStyle(Brand.primary)
+                                    }
+                                    Spacer()
+                                    Text("Zelle & Cash App")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(.black)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.green)
+                                        .clipShape(Capsule())
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.bottom, 14)
+                            }
+                        }
+                        .frame(width: 320, height: 320)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Brand.primary, lineWidth: 2)
+                        )
+                        .shadow(color: Brand.primary.opacity(0.3), radius: 10)
+                        
+                        // Template Picker
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("SELECCIONAR TIPO DE SERVICIO")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                            
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(templates, id: \.self) { t in
+                                        Button {
+                                            selectedTemplate = t
+                                        } label: {
+                                            Text(t)
+                                                .font(.caption.bold())
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 8)
+                                                .background(selectedTemplate == t ? Brand.primary : Brand.card)
+                                                .foregroundStyle(selectedTemplate == t ? .black : .white)
+                                                .clipShape(Capsule())
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                        
+                        // Actions
+                        Button {
+                            showSavedAlert = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "square.and.arrow.down.fill")
+                                Text("Guardar Flyer en Fotos de iPhone")
+                            }
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                            .background(Brand.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.vertical)
+                }
+            }
+            .navigationTitle("Creador de Flyers")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+            .alert("Flyer Guardado", isPresented: $showSavedAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Tu flyer profesional fue generado y guardado en tu galería de fotos listo para subir a Facebook e Instagram.")
+            }
+        }
+    }
+}
+
+// MARK: - 7. POTENCIADOR DE RESEÑAS 5★ EN GOOGLE MAPS
+struct GoogleReviewBoosterSheetView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    @State private var clientName: String = ""
+    @State private var selectedRating: Int = 5
+    
+    let googleReviewURL = "https://web-production-b6891b.up.railway.app/#reviews"
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                VStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("POTENCIADOR DE 5 ESTRELLAS EN GOOGLE")
+                            .font(.headline.bold())
+                            .foregroundStyle(Brand.primary)
+                        Text("Envía solicitudes automáticas y amables a clientes satisfechos para posicionar a Rodriguez Lawn Care como la #1 en Killeen.")
+                            .font(.caption)
+                            .foregroundStyle(.gray)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("NOMBRE DEL CLIENTE:")
+                            .font(.caption.bold())
+                            .foregroundStyle(.gray)
+                        TextField("Ej: John Smith", text: $clientName)
+                            .padding(12)
+                            .background(Brand.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .foregroundStyle(.white)
+                        
+                        Text("EXPERIENCIA DEL CLIENTE:")
+                            .font(.caption.bold())
+                            .foregroundStyle(.gray)
+                            .padding(.top, 6)
+                        
+                        HStack(spacing: 12) {
+                            ForEach(1...5, id: \.self) { star in
+                                Image(systemName: star <= selectedRating ? "star.fill" : "star")
+                                    .font(.title2)
+                                    .foregroundStyle(star <= selectedRating ? Color.yellow : Color.gray)
+                                    .onTapGesture {
+                                        selectedRating = star
+                                    }
+                            }
+                        }
+                    }
+                    .padding(14)
+                    .background(Brand.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .padding(.horizontal)
+                    
+                    // Message Preview Box
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("MENSAJE SUGERIDO POR WHATSAPP:")
+                            .font(.caption2.bold())
+                            .foregroundStyle(Brand.primary)
+                        Text(reviewMessage)
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                    .padding(14)
+                    .background(Color.black.opacity(0.4))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal)
+                    
+                    Button {
+                        sendReviewWhatsApp()
+                    } label: {
+                        HStack {
+                            Image(systemName: "message.fill")
+                            Text("Enviar por WhatsApp al Cliente")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(14)
+                        .background(Color.green)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .padding(.horizontal)
+                    
+                    Spacer()
+                }
+                .padding(.top)
+            }
+            .navigationTitle("Reseñas de Google")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
+    }
+    
+    private var reviewMessage: String {
+        let name = clientName.isEmpty ? "estimado cliente" : clientName
+        if selectedRating == 5 {
+            return """
+¡Hola \(name)! Muchísimas gracias por confiar en Rodriguez Lawn Care para el mantenimiento de tu propiedad hoy. 🌿
+Tu opinión es fundamental para nosotros en Killeen. ¿Nos apoyarías con 1 minuto dejándonos una reseña de 5 estrellas?
+Aquí tienes nuestro enlace oficial: \(googleReviewURL)
+¡Agradecemos enormemente tu preferencia!
+"""
+        } else {
+            return """
+¡Hola \(name)! Gracias por utilizar nuestros servicios hoy. Notamos que tu experiencia no fue del 100%. Por favor dinos directamente qué detalle podemos mejorar para dejar tu propiedad exactamente como te gusta. ¡Nuestra prioridad es tu satisfacción!
+"""
+        }
+    }
+    
+    private func sendReviewWhatsApp() {
+        UIPasteboard.general.string = reviewMessage
+        let clean = reviewMessage.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        if let url = URL(string: "https://wa.me/?text=\(clean)") {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+// MARK: - 8. CREADOR DE VIDEOS ANTES Y DESPUÉS PARA TIKTOK / REELS
+struct CinematicVideoMakerView: View {
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    @State private var wipeProgress: Double = 0.5
+    @State private var isPlayingAnimation: Bool = false
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                VStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("REELS & TIKTOK TRANSFORMACIÓN")
+                            .font(.headline.bold())
+                            .foregroundStyle(Brand.primary)
+                        Text("Desliza la barra para ver la transición de corte y genera tu video para redes sociales.")
+                            .font(.caption)
+                            .foregroundStyle(.gray)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    
+                    // Vertical Reel Preview Container
+                    GeometryReader { geo in
+                        ZStack {
+                            // After Image (Base)
+                            Image("drone_tundra_intro")
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: geo.size.width, height: 360)
+                                .clipped()
+                            
+                            // Before Image (Masked by wipe progress)
+                            Image("drone_intro")
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: geo.size.width, height: 360)
+                                .clipped()
+                                .mask(
+                                    HStack(spacing: 0) {
+                                        Rectangle()
+                                            .frame(width: geo.size.width * wipeProgress)
+                                        Spacer(minLength: 0)
+                                    }
+                                )
+                            
+                            // Divider Line
+                            Rectangle()
+                                .fill(Brand.primary)
+                                .frame(width: 3, height: 360)
+                                .position(x: geo.size.width * wipeProgress, y: 180)
+                                .shadow(color: Brand.primary, radius: 6)
+                            
+                            // Overlay Labels
+                            VStack {
+                                HStack {
+                                    Text("ANTES")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.white)
+                                        .padding(6)
+                                        .background(Color.black.opacity(0.6))
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    Spacer()
+                                    Text("DESPUÉS")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.black)
+                                        .padding(6)
+                                        .background(Brand.primary)
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                }
+                                .padding()
+                                
+                                Spacer()
+                                
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("RODRIGUEZ LAWN CARE")
+                                            .font(.caption.bold())
+                                            .foregroundStyle(Brand.primary)
+                                        Text("(254) 852-8163 • Killeen, TX")
+                                            .font(.caption2)
+                                            .foregroundStyle(.white)
+                                    }
+                                    Spacer()
+                                }
+                                .padding()
+                                .background(Color.black.opacity(0.6))
+                            }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Brand.primary.opacity(0.4), lineWidth: 1.5)
+                        )
+                    }
+                    .frame(height: 360)
+                    .padding(.horizontal)
+                    
+                    // Wipe Slider
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("CONTROL DE TRANSICIÓN:")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.gray)
+                        Slider(value: $wipeProgress, in: 0...1)
+                            .tint(Brand.primary)
+                    }
+                    .padding(.horizontal)
+                    
+                    // Animate Button
+                    Button {
+                        playAutoWipe()
+                    } label: {
+                        HStack {
+                            Image(systemName: "play.circle.fill")
+                            Text("Reproducir Transición Automática")
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(12)
+                        .background(Brand.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                    .padding(.horizontal)
+                    
+                    Spacer()
+                }
+                .padding(.top)
+            }
+            .navigationTitle("Video TikTok & Reels")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cerrar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
+    }
+    
+    private func playAutoWipe() {
+        wipeProgress = 1.0
+        withAnimation(Animation.easeInOut(duration: 1.6)) {
+            wipeProgress = 0.0
         }
     }
 }
