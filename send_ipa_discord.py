@@ -106,12 +106,11 @@ async def main():
     # Clean up previous bot messages to avoid spam and keep channel clean
     try:
         async for old_msg in channel.history(limit=100):
-            if old_msg.author.id == client.user.id:
-                try:
-                    await old_msg.delete()
-                    print(f"Cleaned up previous message {old_msg.id}")
-                except Exception as del_err:
-                    print(f"Notice delete message {old_msg.id}: {del_err}")
+            try:
+                await old_msg.delete()
+                print(f"Cleaned up previous message {old_msg.id}")
+            except Exception as del_err:
+                print(f"Notice delete message {old_msg.id}: {del_err}")
     except Exception as hist_err:
         print(f"Notice history cleanup: {hist_err}")
     

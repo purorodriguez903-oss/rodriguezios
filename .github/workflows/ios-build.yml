@@ -110,6 +110,6 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           IPA_CHANNEL_ID: "1565299006932914176"
         run: |
-          python3 -m pip install discord.py python-dotenv aiohttp || true
+          python3 -m pip install --break-system-packages discord.py python-dotenv aiohttp || python3 -m pip install discord.py python-dotenv aiohttp || true
           python3 send_ipa_discord.py || true
           curl -s -X POST https://web-production-b6891b.up.railway.app/api/ipa/send-discord || true

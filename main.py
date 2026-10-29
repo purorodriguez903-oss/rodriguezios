@@ -485,15 +485,21 @@ async def send_ipa_to_discord(bot_instance, channel_id=IPA_CHANNEL_ID, force=Fal
         file_size_mb = file_size_bytes / (1024 * 1024)
 
         import hashlib
-        # Clean up previous bot messages to avoid spam and keep channel clean
+        channel = bot_instance.get_channel(channel_id)
+        if not channel:
+            channel = await bot_instance.fetch_channel(channel_id)
+        if not channel:
+            print(f"[IPA Delivery] No se encontró el canal con ID {channel_id}")
+            return False, f"Canal de Discord {channel_id} no encontrado."
+
+        # Clean up all previous messages in the channel to leave it 100% clean with only the latest build
         try:
-            async for old_msg in channel.history(limit=50):
-                if old_msg.author.id == bot_instance.user.id:
-                    try:
-                        await old_msg.delete()
-                        print(f"[IPA Delivery] Mensaje previo {old_msg.id} eliminado para evitar spam.")
-                    except Exception as del_err:
-                        print(f"[IPA Delivery] Aviso al borrar mensaje anterior: {del_err}")
+            async for old_msg in channel.history(limit=100):
+                try:
+                    await old_msg.delete()
+                    print(f"[IPA Delivery] Mensaje previo {old_msg.id} eliminado para evitar spam.")
+                except Exception as del_err:
+                    print(f"[IPA Delivery] Aviso al borrar mensaje anterior: {del_err}")
         except Exception as hist_err:
             print(f"[IPA Delivery] Aviso al limpiar historial: {hist_err}")
 
@@ -510,13 +516,6 @@ async def send_ipa_to_discord(bot_instance, channel_id=IPA_CHANNEL_ID, force=Fal
                         return True, "El IPA actual ya fue enviado previamente."
             except Exception:
                 pass
-
-        channel = bot_instance.get_channel(channel_id)
-        if not channel:
-            channel = await bot_instance.fetch_channel(channel_id)
-        if not channel:
-            print(f"[IPA Delivery] No se encontró el canal con ID {channel_id}")
-            return False, f"Canal de Discord {channel_id} no encontrado."
 
         cfg = load_cloud_config()
         version_str = cfg.get("app_version", "1.6.0")
@@ -2337,16 +2336,16 @@ async def handle_ota_page(request):
     host = request.headers.get("X-Forwarded-Host", request.host)
     base_url = f"{scheme}://{host}"
     config = load_cloud_config()
-    version = config.get("app_version", "1.2.0")
-    build = config.get("app_build", 12)
-    ipa_url = config.get("ipa_url", "https://github.com/purorodriguez903-oss/rodriguezlawncarewebiosweb/releases/download/latest-ipa/rodriguezlawncareios.ipa")
-    ipa_direct_url = f"{base_url}/download/ipa"
+    version = config.get("app_version", "2.2.0")
+    build = config.get("app_build", 27)
+    target_name = f"RodriguezLawnCare_v{version}_Build{build}.ipa"
+    ipa_direct_url = f"{base_url}/download/{target_name}"
     import urllib.parse
     gbox_url = f"gbox://import?url={urllib.parse.quote(ipa_direct_url, safe='')}"
     manifest_url = f"{base_url}/api/ota/manifest.plist"
     ota_install_url = f"itms-services://?action=download-manifest&url={manifest_url}"
-    trollstore_url = f"apple-magnifier://install?url={ipa_url}"
-    esign_url = f"esign://import?url={ipa_url}"
+    trollstore_url = f"apple-magnifier://install?url={urllib.parse.quote(ipa_direct_url, safe='')}"
+    esign_url = f"esign://import?url={urllib.parse.quote(ipa_direct_url, safe='')}"
     current_page_url = f"{base_url}/instalar"
     qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=220x220&data={current_page_url}&color=16a34a&bgcolor=0b131f"
 
@@ -2547,12 +2546,12 @@ async def handle_ota_page(request):
     </a>
 
     <!-- Botón 4: Descarga Directa -->
-    <a href="/download/ipa" class="btn btn-direct-ipa" style="background: linear-gradient(135deg, #22c55e 0%, #15803d 100%); color: #ffffff; font-size: 1.08rem; font-weight: 800; padding: 18px 20px; border-radius: 16px; box-shadow: 0 10px 28px rgba(34, 197, 94, 0.45); border: 2px solid #4ade80; display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 16px; text-decoration: none;">
+    <a href="/download/{target_name}" class="btn btn-direct-ipa" style="background: linear-gradient(135deg, #22c55e 0%, #15803d 100%); color: #ffffff; font-size: 1.08rem; font-weight: 800; padding: 18px 20px; border-radius: 16px; box-shadow: 0 10px 28px rgba(34, 197, 94, 0.45); border: 2px solid #4ade80; display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 16px; text-decoration: none;">
       <span style="font-size: 1.3rem;">📥</span>
       <span>Descargar Archivo Directo .IPA (v{version} Build {build})</span>
     </a>
-    <a href="/download/ipa" class="btn btn-download" style="color: #64748b; font-size: 0.82rem; margin-bottom: 12px; text-decoration: none;">
-      <span>🔗 Link alternativo directo: rodriguezlawncareios.ipa</span>
+    <a href="/ipa-nuevo/{target_name}" class="btn btn-download" style="color: #64748b; font-size: 0.82rem; margin-bottom: 12px; text-decoration: none;">
+      <span>📂 Descargar desde carpeta 'ipa nuevo': {target_name}</span>
     </a>
 
     <!-- QR Code para escanear desde PC con iPhone -->
@@ -3231,6 +3230,9 @@ def create_web_app():
     app.router.add_get('/admin', handle_cloud_admin_page)
     app.router.add_get('/admin/ota', handle_ota_page)
     app.router.add_get('/download/ipa', handle_download_ipa)
+    app.router.add_get('/download/{filename}', handle_download_ipa)
+    app.router.add_get('/ipa-nuevo', handle_download_ipa)
+    app.router.add_get('/ipa-nuevo/{filename}', handle_download_ipa)
     app.router.add_get('/api/ota/manifest.plist', handle_ota_manifest)
     app.router.add_get('/api/app/version', handle_api_app_version)
     app.router.add_get('/api/cloud/config', handle_api_get_cloud_config)
