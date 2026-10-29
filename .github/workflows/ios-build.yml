@@ -49,21 +49,18 @@ jobs:
         run: |
           mkdir -p "ipa online"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa online/rodriguezlawncareios.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa online/RodriguezLawnCare_v2.2.0_Build27.ipa"
           mkdir -p "RodriguezLawnCareIosAPP/ipa online"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa online/rodriguezlawncareios.ipa"
           mkdir -p "ipa here"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare_Actualizado.ipa"
-          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare_v1.9.0_Build24.ipa
-            ipa here/RodriguezLawnCare_v2.2.0_Build27.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare_v2.2.0_Build27.ipa"
           mkdir -p "RodriguezLawnCareIosAPP/ipa here"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_Actualizado.ipa"
-          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_v1.9.0_Build24.ipa
-            ipa here/RodriguezLawnCare_v2.2.0_Build27.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_v2.2.0_Build27.ipa"
           ls -la "ipa online"
 
