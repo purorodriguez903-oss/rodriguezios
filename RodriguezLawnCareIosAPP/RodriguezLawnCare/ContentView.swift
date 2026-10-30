@@ -439,8 +439,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "2.4.1"
-    let currentAppBuild: Int = 30
+    let currentAppVersion: String = "2.5.0"
+    let currentAppBuild: Int = 31
 
     @Published var geocodedCache: [String: [Double]] = [:]
 
