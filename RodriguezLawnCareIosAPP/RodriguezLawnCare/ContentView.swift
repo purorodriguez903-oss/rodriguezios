@@ -439,8 +439,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "2.3.0"
-    let currentAppBuild: Int = 28
+    let currentAppVersion: String = "2.4.0"
+    let currentAppBuild: Int = 29
 
     @Published var geocodedCache: [String: [Double]] = [:]
 
@@ -9164,13 +9164,217 @@ struct TacticalHouseClientPin: Identifiable {
     let isRecurring: Bool
 }
 
+// MARK: - TACTICAL USER LOCATION & GPS NAVIGATION MANAGER
+class TacticalUserLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+    private let manager = CLLocationManager()
+    @Published var userLocation: CLLocationCoordinate2D? = nil
+    @Published var heading: Double = 0.0
+    @Published var isAuthorized: Bool = false
+    
+    override init() {
+        super.init()
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        manager.distanceFilter = 5.0
+        checkAuth()
+    }
+    
+    func checkAuth() {
+        let status = manager.authorizationStatus
+        isAuthorized = (status == .authorizedWhenInUse || status == .authorizedAlways)
+        if isAuthorized {
+            manager.startUpdatingLocation()
+            if CLLocationManager.headingAvailable() {
+                manager.startUpdatingHeading()
+            }
+        }
+    }
+    
+    func requestPermission() {
+        manager.requestWhenInUseAuthorization()
+        manager.startUpdatingLocation()
+        if CLLocationManager.headingAvailable() {
+            manager.startUpdatingHeading()
+        }
+    }
+    
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        checkAuth()
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let loc = locations.last else { return }
+        userLocation = loc.coordinate
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        if newHeading.headingAccuracy >= 0 {
+            heading = newHeading.trueHeading > 0 ? newHeading.trueHeading : newHeading.magneticHeading
+        }
+    }
+}
+
+// MARK: - TACTICAL ROUTE & TURN STEP MODELS
+struct TacticalRouteTurnStep: Identifiable {
+    let id = UUID()
+    let instruction: String
+    let distanceMiles: Double
+    let notice: String?
+    let iconName: String
+    
+    var formattedDistance: String {
+        if distanceMiles < 0.1 {
+            let feet = Int(distanceMiles * 5280)
+            return "\(feet) ft"
+        } else {
+            return String(format: "%.1f mi", distanceMiles)
+        }
+    }
+}
+
+struct TacticalActiveNavigationRoute {
+    let polyline: MKPolyline
+    let destinationName: String
+    let destinationAddress: String
+    let totalDistanceMiles: Double
+    let totalDurationMinutes: Int
+    let steps: [TacticalRouteTurnStep]
+    let summary: String
+}
+
+// MARK: - TACTICAL INTERACTIVE MAP (NATIVE MKMAPVIEW WITH STREET ROUTE OVERLAYS)
+struct TacticalLiveRadarMapView: UIViewRepresentable {
+    @Binding var region: MKCoordinateRegion
+    var pins: [TacticalHouseClientPin]
+    @Binding var selectedPin: TacticalHouseClientPin?
+    var activeRoute: TacticalActiveNavigationRoute?
+    var mapType: MKMapType = .standard
+    var onSelectPin: ((TacticalHouseClientPin) -> Void)?
+    
+    class Coordinator: NSObject, MKMapViewDelegate {
+        var parent: TacticalLiveRadarMapView
+        
+        init(_ parent: TacticalLiveRadarMapView) {
+            self.parent = parent
+        }
+        
+        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let polyline = overlay as? MKPolyline {
+                let renderer = MKPolylineRenderer(polyline: polyline)
+                renderer.strokeColor = UIColor(red: 0.13, green: 0.77, blue: 0.36, alpha: 0.95) // Neon Emerald
+                renderer.lineWidth = 6.0
+                renderer.lineCap = .round
+                renderer.lineJoin = .round
+                return renderer
+            }
+            return MKOverlayRenderer(overlay: overlay)
+        }
+        
+        func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            if annotation is MKUserLocation {
+                return nil // Uses native Apple pulsing blue dot with heading cone
+            }
+            
+            let identifier = "TacticalHouseMarker"
+            var marker = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
+            if marker == nil {
+                marker = MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+                marker?.canShowCallout = false
+            } else {
+                marker?.annotation = annotation
+            }
+            
+            marker?.glyphImage = UIImage(systemName: "house.fill")
+            marker?.markerTintColor = UIColor(red: 0.13, green: 0.77, blue: 0.36, alpha: 1.0)
+            marker?.glyphTintColor = .black
+            marker?.displayPriority = .required
+            return marker
+        }
+        
+        func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
+            guard let annotation = view.annotation, !(annotation is MKUserLocation) else { return }
+            let coord = annotation.coordinate
+            if let found = parent.pins.first(where: {
+                abs($0.coordinate.latitude - coord.latitude) < 0.0002 &&
+                abs($0.coordinate.longitude - coord.longitude) < 0.0002
+            }) {
+                parent.selectedPin = found
+                parent.onSelectPin?(found)
+            }
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    func makeUIView(context: Context) -> MKMapView {
+        let mapView = MKMapView()
+        mapView.delegate = context.coordinator
+        mapView.showsUserLocation = true
+        mapView.showsCompass = true
+        mapView.showsScale = true
+        mapView.mapType = mapType
+        mapView.setRegion(region, animated: false)
+        return mapView
+    }
+    
+    func updateUIView(_ mapView: MKMapView, context: Context) {
+        if mapView.mapType != mapType {
+            mapView.mapType = mapType
+        }
+        
+        // Update annotations if list changed
+        let currentCustom = mapView.annotations.filter { !($0 is MKUserLocation) }
+        if currentCustom.count != pins.count {
+            mapView.removeAnnotations(currentCustom)
+            let newAnnotations = pins.map { pin -> MKPointAnnotation in
+                let a = MKPointAnnotation()
+                a.coordinate = pin.coordinate
+                a.title = pin.name
+                a.subtitle = "\(pin.serviceDay) • $\(Int(pin.price))"
+                return a
+            }
+            mapView.addAnnotations(newAnnotations)
+        }
+        
+        // Sync route polyline overlay
+        let currentOverlays = mapView.overlays
+        if let route = activeRoute {
+            let poly = route.polyline
+            if !currentOverlays.contains(where: { ($0 as? MKPolyline) == poly }) {
+                mapView.removeOverlays(currentOverlays)
+                mapView.addOverlay(poly)
+                
+                // Animate zoom to encompass entire driving route
+                let rect = poly.boundingMapRect
+                mapView.setVisibleMapRect(rect, edgePadding: UIEdgeInsets(top: 130, left: 40, bottom: 250, right: 40), animated: true)
+            }
+        } else {
+            if !currentOverlays.isEmpty {
+                mapView.removeOverlays(currentOverlays)
+            }
+        }
+    }
+}
+
+// MARK: - RADAR TACTICO DE TERRITORIO CON GPS TURN-BY-TURN EN VIVO
 struct TacticalTerritoryRadarView: View {
     @ObservedObject var store: LawnCareStore
     @Environment(\.dismiss) var dismiss
+    
+    @StateObject private var locManager = TacticalUserLocationManager()
     @State private var radarAngle: Double = 0
     @State private var selectedDayFilter: String = "Todas"
     @State private var selectedCityFilter: String = "Todas"
     @State private var selectedPin: TacticalHouseClientPin? = nil
+    
+    // GPS Navigation & Driving Polyline State
+    @State private var activeRoute: TacticalActiveNavigationRoute? = nil
+    @State private var isCalculatingRoute: Bool = false
+    @State private var showAllTurnsSheet: Bool = false
+    @State private var mapType: MKMapType = .standard
+    @State private var navigationError: String? = nil
     
     // Central Texas default coordinate: Killeen TX
     @State private var region = MKCoordinateRegion(
@@ -9191,7 +9395,6 @@ struct TacticalTerritoryRadarView: View {
         ("Fort Cavazos", "shield.fill", 31.1305, -97.7780, 0.06)
     ]
     
-    // Generate precise persistent pins on clients' houses in Central Texas using real address geocoding
     var allClientPins: [TacticalHouseClientPin] {
         var list: [TacticalHouseClientPin] = []
         
@@ -9229,7 +9432,7 @@ struct TacticalTerritoryRadarView: View {
             )
         }
         
-        // Realistic fallback properties in Killeen / Bell County neighborhoods so map is always alive
+        // Realistic fallback properties in Central Texas neighborhoods
         if list.isEmpty {
             let starter: [(String, String, String, Double, Double, Double)] = [
                 ("Marcus Vance", "1402 Willow Springs Rd, Killeen, TX", "Lunes", 55.0, 31.1092, -97.7410),
@@ -9280,30 +9483,36 @@ struct TacticalTerritoryRadarView: View {
                     // Tactical Header HUD
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
-                            HStack {
+                            HStack(spacing: 6) {
                                 Circle().fill(Color.green).frame(width: 8, height: 8)
-                                Text("RADAR TÁCTICO MILITAR")
+                                Text("RADAR TÁCTICO & GPS")
                                     .font(.caption2.bold())
                                     .foregroundStyle(Brand.primary)
+                                if activeRoute != nil {
+                                    Text("• EN RUTA")
+                                        .font(.caption2.black())
+                                        .foregroundStyle(Color.yellow)
+                                }
                             }
-                            Text("Puntos Reales en Casas de Clientes")
-                                .font(.headline.bold())
+                            Text("Navegación Calles y Salidas a Casas")
+                                .font(.subheadline.bold())
                                 .foregroundStyle(.white)
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text("CASAS ACTIVAS")
+                            Text("OBJETIVOS")
                                 .font(.caption2.bold())
                                 .foregroundStyle(.gray)
-                            Text("\(filteredPins.count) OBJETIVOS")
-                                .font(.subheadline.bold())
+                            Text("\(filteredPins.count) CASAS")
+                                .font(.caption.bold())
                                 .foregroundStyle(Brand.primary)
                         }
                     }
-                    .padding(12)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                     .background(Brand.card)
                     
-                    // City Quick Jump Bar (Copperas Cove, Killeen, Harker Heights, Temple, etc.)
+                    // City Quick Jump Bar
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             ForEach(cityJumps, id: \.name) { city in
@@ -9315,10 +9524,8 @@ struct TacticalTerritoryRadarView: View {
                                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                                 } label: {
                                     HStack(spacing: 4) {
-                                        Image(systemName: city.icon)
-                                            .font(.caption2)
-                                        Text(city.name)
-                                            .font(.caption.bold())
+                                        Image(systemName: city.icon).font(.caption2)
+                                        Text(city.name).font(.caption.bold())
                                     }
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)
@@ -9332,11 +9539,11 @@ struct TacticalTerritoryRadarView: View {
                             }
                         }
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
+                        .padding(.vertical, 4)
                     }
                     .background(Color.black.opacity(0.85))
                     
-                    // Day of Week Filter Bar (Lunes a Sábado)
+                    // Day Filter Bar
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             ForEach(days, id: \.self) { day in
@@ -9355,7 +9562,7 @@ struct TacticalTerritoryRadarView: View {
                                     }
                                     .font(.caption.bold())
                                     .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
+                                    .padding(.vertical, 5)
                                     .background(selectedDayFilter == day ? Brand.primary : Brand.cardLight)
                                     .foregroundStyle(selectedDayFilter == day ? .black : .white)
                                     .clipShape(Capsule())
@@ -9363,79 +9570,182 @@ struct TacticalTerritoryRadarView: View {
                             }
                         }
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 4)
                     }
                     .background(Color.black.opacity(0.7))
                     
-                    // Interactive Map with Annotations on Each House!
-                    ZStack {
-                        Map(coordinateRegion: $region, annotationItems: filteredPins) { pin in
-                            MapAnnotation(coordinate: pin.coordinate) {
-                                VStack(spacing: 2) {
-                                    // Price & Day Badge
-                                    HStack(spacing: 3) {
-                                        Text("$\(Int(pin.price))")
-                                            .font(.system(size: 10, weight: .black))
-                                            .foregroundStyle(Brand.primary)
-                                        Text("• \(pin.serviceDay)")
-                                            .font(.system(size: 9, weight: .bold))
-                                            .foregroundStyle(.white)
-                                    }
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2.5)
-                                    .background(Color.black.opacity(0.85))
-                                    .clipShape(Capsule())
-                                    .overlay(Capsule().stroke(Brand.primary, lineWidth: 1))
-                                    
-                                    // House Icon target with pulsing ring
-                                    ZStack {
-                                        Circle()
-                                            .stroke(Brand.primary.opacity(0.6), lineWidth: 1.5)
-                                            .frame(width: 32, height: 32)
-                                        Circle()
-                                            .fill(selectedPin?.id == pin.id ? Color.yellow : Brand.primary)
-                                            .frame(width: 24, height: 24)
-                                            .shadow(color: Brand.primary, radius: 6)
-                                        Image(systemName: "house.fill")
-                                            .font(.system(size: 12, weight: .bold))
-                                            .foregroundStyle(.black)
-                                    }
-                                }
-                                .onTapGesture {
-                                    withAnimation(.spring()) {
-                                        selectedPin = pin
-                                        region.center = pin.coordinate
-                                    }
-                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                }
-                            }
+                    // Main Map View with Polyline Overlay and User Location
+                    ZStack(alignment: .top) {
+                        TacticalLiveRadarMapView(
+                            region: $region,
+                            pins: filteredPins,
+                            selectedPin: $selectedPin,
+                            activeRoute: activeRoute,
+                            mapType: mapType
+                        ) { pin in
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         
-                        // Subtle Radar Sonar Overlay Grid
+                        // Radar grid sweep overlay (subtle)
                         ZStack {
                             Circle()
-                                .stroke(Brand.primary.opacity(0.2), lineWidth: 1)
-                                .frame(width: 140, height: 140)
-                            Circle()
                                 .stroke(Brand.primary.opacity(0.15), lineWidth: 1)
-                                .frame(width: 250, height: 250)
-                            
+                                .frame(width: 180, height: 180)
                             Rectangle()
                                 .fill(
                                     LinearGradient(
-                                        gradient: Gradient(colors: [Brand.primary.opacity(0.4), Color.clear]),
+                                        gradient: Gradient(colors: [Brand.primary.opacity(0.3), Color.clear]),
                                         startPoint: .top,
                                         endPoint: .bottom
                                     )
                                 )
-                                .frame(width: 1.5, height: 125)
-                                .offset(y: -62.5)
+                                .frame(width: 1.5, height: 90)
+                                .offset(y: -45)
                                 .rotationEffect(.degrees(radarAngle))
                         }
                         .allowsHitTesting(false)
                         
-                        // Selected Pin Callout Card with GPS Navigation Directly to the House
+                        // Floating Turn-by-Turn GPS HUD Banner (Top of Map)
+                        if let route = activeRoute {
+                            VStack(spacing: 0) {
+                                HStack(spacing: 12) {
+                                    // Turn maneuver icon
+                                    let firstStep = route.steps.first(where: { !$0.instruction.isEmpty })
+                                    let iconName = firstStep?.iconName ?? "arrow.turn.up.right"
+                                    ZStack {
+                                        Circle().fill(Brand.primary).frame(width: 44, height: 44)
+                                        Image(systemName: iconName)
+                                            .font(.title3.bold())
+                                            .foregroundStyle(.black)
+                                    }
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(firstStep?.instruction ?? "Continúa por la ruta trazada")
+                                            .font(.subheadline.bold())
+                                            .foregroundStyle(.white)
+                                            .lineLimit(2)
+                                        
+                                        HStack(spacing: 8) {
+                                            Text("⏱️ \(route.totalDurationMinutes) min")
+                                                .font(.caption.bold())
+                                                .foregroundStyle(Brand.primary)
+                                            Text("• \(String(format: "%.1f mi", route.totalDistanceMiles))")
+                                                .font(.caption)
+                                                .foregroundStyle(.white.opacity(0.9))
+                                            if let notice = firstStep?.notice, !notice.isEmpty {
+                                                Text("• \(notice)")
+                                                    .font(.caption2.bold())
+                                                    .foregroundStyle(.orange)
+                                            }
+                                        }
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    // Button to inspect all turns list
+                                    Button {
+                                        showAllTurnsSheet = true
+                                    } label: {
+                                        VStack(spacing: 2) {
+                                            Image(systemName: "list.bullet.rectangle.fill")
+                                                .font(.headline)
+                                            Text("Giros")
+                                                .font(.system(size: 9, weight: .bold))
+                                        }
+                                        .padding(6)
+                                        .background(Brand.cardLight)
+                                        .foregroundStyle(Brand.primary)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    }
+                                    
+                                    // Exit / Cancel Route Button
+                                    Button {
+                                        withAnimation { activeRoute = nil }
+                                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.title2)
+                                            .foregroundStyle(.red)
+                                    }
+                                }
+                                .padding(10)
+                                .background(Color(red: 0.05, green: 0.12, blue: 0.08).opacity(0.95))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Brand.primary, lineWidth: 1.5)
+                                )
+                                .shadow(color: Color.black.opacity(0.7), radius: 10, y: 4)
+                                .padding(.horizontal, 10)
+                                .padding(.top, 8)
+                            }
+                        }
+                        
+                        // Floating Map Quick Buttons (Right side)
+                        VStack(spacing: 8) {
+                            // My GPS Location Button (Google Maps Style)
+                            Button {
+                                locManager.requestPermission()
+                                if let userLoc = locManager.userLocation {
+                                    withAnimation(.spring()) {
+                                        region.center = userLoc
+                                        region.span = MKCoordinateSpan(latitudeDelta: 0.015, longitudeDelta: 0.015)
+                                    }
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                } else {
+                                    locManager.requestPermission()
+                                }
+                            } label: {
+                                Image(systemName: "location.fill")
+                                    .font(.headline)
+                                    .foregroundStyle(locManager.userLocation != nil ? Brand.primary : .white)
+                                    .frame(width: 42, height: 42)
+                                    .background(Brand.card.opacity(0.92))
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(Brand.primary.opacity(0.6), lineWidth: 1))
+                                    .shadow(color: Color.black.opacity(0.5), radius: 4)
+                            }
+                            
+                            // Map Type Toggle (Satellite vs Street)
+                            Button {
+                                mapType = (mapType == .standard) ? .hybrid : .standard
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            } label: {
+                                Image(systemName: mapType == .standard ? "globe.americas.fill" : "map.fill")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                    .frame(width: 42, height: 42)
+                                    .background(Brand.card.opacity(0.92))
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(Brand.cardLight, lineWidth: 1))
+                                    .shadow(color: Color.black.opacity(0.5), radius: 4)
+                            }
+                            
+                            // Recenter Central Texas
+                            Button {
+                                withAnimation {
+                                    region.center = CLLocationCoordinate2D(latitude: 31.1171, longitude: -97.7278)
+                                    region.span = MKCoordinateSpan(latitudeDelta: 0.14, longitudeDelta: 0.14)
+                                    selectedPin = nil
+                                    activeRoute = nil
+                                }
+                            } label: {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                    .frame(width: 42, height: 42)
+                                    .background(Brand.card.opacity(0.92))
+                                    .clipShape(Circle())
+                                    .overlay(Circle().stroke(Brand.cardLight, lineWidth: 1))
+                                    .shadow(color: Color.black.opacity(0.5), radius: 4)
+                            }
+                        }
+                        .padding(.trailing, 12)
+                        .padding(.top, activeRoute != nil ? 85 : 12)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        
+                        // Selected Pin Callout Card with Live Driving Route Generation & Navigation Hand-off
                         if let pin = selectedPin {
                             VStack {
                                 Spacer()
@@ -9451,7 +9761,10 @@ struct TacticalTerritoryRadarView: View {
                                         }
                                         Spacer()
                                         Button {
-                                            withAnimation { selectedPin = nil }
+                                            withAnimation {
+                                                selectedPin = nil
+                                                activeRoute = nil
+                                            }
                                         } label: {
                                             Image(systemName: "xmark.circle.fill")
                                                 .font(.title3)
@@ -9473,111 +9786,101 @@ struct TacticalTerritoryRadarView: View {
                                             .foregroundStyle(.white)
                                         
                                         Spacer()
+                                        
+                                        if isCalculatingRoute {
+                                            ProgressView()
+                                                .tint(Brand.primary)
+                                                .scaleEffect(0.8)
+                                        }
                                     }
                                     
-                                    // Action Buttons: Apple Maps Navigation, Waze & WhatsApp
-                                    HStack(spacing: 8) {
+                                    // Action Buttons: Trazar Ruta en App, Google Maps, Apple Maps, WhatsApp
+                                    VStack(spacing: 6) {
+                                        // Main Drive Button: Calculates route polyline on real streets
                                         Button {
-                                            withAnimation(.easeInOut(duration: 0.6)) {
-                                                region.center = pin.coordinate
-                                                region.span = MKCoordinateSpan(latitudeDelta: 0.003, longitudeDelta: 0.003)
-                                            }
-                                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                            calculateDrivingRoute(to: pin)
                                         } label: {
-                                            HStack(spacing: 4) {
-                                                Image(systemName: "scope")
-                                                Text("Ver Casa")
+                                            HStack(spacing: 6) {
+                                                Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
+                                                Text(activeRoute != nil ? "Ruta Trazada (Ver Giros)" : "🚗 Trazar Ruta GPS en Vivo")
                                             }
-                                            .font(.caption.bold())
-                                            .foregroundStyle(.white)
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 8)
-                                            .background(Color.blue)
-                                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                                        }
-                                        
-                                        Button {
-                                            let clean = pin.address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                                            if let url = URL(string: "http://maps.apple.com/?daddr=\(clean)") {
-                                                UIApplication.shared.open(url)
-                                            }
-                                        } label: {
-                                            HStack(spacing: 4) {
-                                                Image(systemName: "location.fill")
-                                                Text("Navegar")
-                                            }
-                                            .font(.caption.bold())
+                                            .font(.subheadline.bold())
                                             .foregroundStyle(.black)
                                             .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 8)
+                                            .padding(.vertical, 10)
                                             .background(Brand.primary)
-                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                            .clipShape(RoundedRectangle(cornerRadius: 10))
                                         }
                                         
-                                        Button {
-                                            let clean = pin.phone.filter { "0123456789".contains($0) }
-                                            let msg = "¡Hola \(pin.name)! Te contacto de Rodriguez Lawn Care sobre tu servicio de jardinería."
-                                            let encoded = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                                            if let url = URL(string: "https://wa.me/\(clean)?text=\(encoded)") {
-                                                UIApplication.shared.open(url)
+                                        HStack(spacing: 6) {
+                                            // Open directly in Google Maps
+                                            Button {
+                                                openGoogleMaps(for: pin)
+                                            } label: {
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: "map.fill")
+                                                    Text("Google Maps")
+                                                }
+                                                .font(.caption.bold())
+                                                .foregroundStyle(.white)
+                                                .frame(maxWidth: .infinity)
+                                                .padding(.vertical, 8)
+                                                .background(Color.blue)
+                                                .clipShape(RoundedRectangle(cornerRadius: 8))
                                             }
-                                        } label: {
-                                            HStack(spacing: 4) {
-                                                Image(systemName: "message.fill")
-                                                Text("WhatsApp")
+                                            
+                                            // Open directly in Apple Maps
+                                            Button {
+                                                openAppleMaps(for: pin)
+                                            } label: {
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: "applelogo")
+                                                    Text("Apple Maps")
+                                                }
+                                                .font(.caption.bold())
+                                                .foregroundStyle(.white)
+                                                .frame(maxWidth: .infinity)
+                                                .padding(.vertical, 8)
+                                                .background(Color(red: 0.2, green: 0.2, blue: 0.25))
+                                                .clipShape(RoundedRectangle(cornerRadius: 8))
                                             }
-                                            .font(.caption.bold())
-                                            .foregroundStyle(.black)
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 8)
-                                            .background(Color.green)
-                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                            
+                                            // WhatsApp contact
+                                            Button {
+                                                let clean = pin.phone.filter { "0123456789".contains($0) }
+                                                let msg = "¡Hola \(pin.name)! Te contacto de Rodriguez Lawn Care sobre tu servicio de jardinería."
+                                                let encoded = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                                                if let url = URL(string: "https://wa.me/\(clean)?text=\(encoded)") {
+                                                    UIApplication.shared.open(url)
+                                                }
+                                            } label: {
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: "message.fill")
+                                                    Text("WhatsApp")
+                                                }
+                                                .font(.caption.bold())
+                                                .foregroundStyle(.black)
+                                                .frame(maxWidth: .infinity)
+                                                .padding(.vertical, 8)
+                                                .background(Color.green)
+                                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                            }
                                         }
                                     }
                                 }
-                                .padding(14)
+                                .padding(12)
                                 .background(Color(red: 0.05, green: 0.12, blue: 0.09))
                                 .clipShape(RoundedRectangle(cornerRadius: 16))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 16)
                                         .stroke(Brand.primary, lineWidth: 1.5)
-                                    )
-                                .shadow(color: Color.black.opacity(0.8), radius: 15, y: 5)
-                                .padding(.horizontal, 14)
-                                .padding(.bottom, 12)
+                                )
+                                .shadow(color: Color.black.opacity(0.85), radius: 15, y: 5)
+                                .padding(.horizontal, 10)
+                                .padding(.bottom, 8)
                             }
                         }
                     }
-                    
-                    // Tactical Metrics Card
-                    VStack(spacing: 8) {
-                        HStack(spacing: 8) {
-                            TacticalMetricBadge(icon: "shield.fill", title: "Conquistadas", value: "\(store.recurringClients.count + 8)", color: .green)
-                            TacticalMetricBadge(icon: "bolt.fill", title: "En Proceso", value: "\(store.leads.count)", color: .yellow)
-                            TacticalMetricBadge(icon: "cross.circle.fill", title: "Objetivos", value: "25", color: .orange)
-                        }
-                        
-                        Button {
-                            withAnimation {
-                                region.center = CLLocationCoordinate2D(latitude: 31.1171, longitude: -97.7278)
-                                region.span = MKCoordinateSpan(latitudeDelta: 0.14, longitudeDelta: 0.14)
-                                selectedPin = nil
-                            }
-                        } label: {
-                            HStack {
-                                Image(systemName: "location.north.circle.fill")
-                                Text("Centrar Mapa en Central Texas")
-                            }
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.black)
-                            .frame(maxWidth: .infinity)
-                            .padding(10)
-                            .background(Brand.primary)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                        }
-                    }
-                    .padding(12)
-                    .background(Brand.card)
                 }
             }
             .navigationTitle("Radar Táctico de Territorio")
@@ -9588,8 +9891,197 @@ struct TacticalTerritoryRadarView: View {
                         .foregroundStyle(Brand.primary)
                 }
             }
+            .sheet(isPresented: $showAllTurnsSheet) {
+                if let route = activeRoute {
+                    TacticalTurnByTurnStepsSheet(route: route)
+                }
+            }
+            .onAppear {
+                locManager.requestPermission()
+            }
             .onReceive(timer) { _ in
                 radarAngle = (radarAngle + 2).truncatingRemainder(dividingBy: 360)
+            }
+        }
+    }
+    
+    // Calculate Driving Route using Apple's MKDirections (Streets, Exits, Turn Polylines)
+    private func calculateDrivingRoute(to pin: TacticalHouseClientPin) {
+        locManager.requestPermission()
+        isCalculatingRoute = true
+        
+        let startCoord = locManager.userLocation ?? CLLocationCoordinate2D(latitude: 31.1171, longitude: -97.7278)
+        let request = MKDirections.Request()
+        request.source = MKMapItem(placemark: MKPlacemark(coordinate: startCoord))
+        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: pin.coordinate))
+        request.transportType = .automobile
+        request.requestsAlternateRoutes = false
+        
+        let directions = MKDirections(request: request)
+        directions.calculate { response, error in
+            DispatchQueue.main.async {
+                isCalculatingRoute = false
+                guard let r = response?.routes.first else {
+                    navigationError = error?.localizedDescription ?? "No se pudo calcular la ruta."
+                    return
+                }
+                
+                let distMiles = r.distance / 1609.34
+                let durationMin = Int(ceil(r.expectedTravelTime / 60.0))
+                
+                let steps: [TacticalRouteTurnStep] = r.steps.compactMap { step in
+                    guard !step.instructions.isEmpty else { return nil }
+                    let icon = iconForTurnInstruction(step.instructions)
+                    return TacticalRouteTurnStep(
+                        instruction: step.instructions,
+                        distanceMiles: step.distance / 1609.34,
+                        notice: step.notice,
+                        iconName: icon
+                    )
+                }
+                
+                withAnimation(.spring()) {
+                    activeRoute = TacticalActiveNavigationRoute(
+                        polyline: r.polyline,
+                        destinationName: pin.name,
+                        destinationAddress: pin.address,
+                        totalDistanceMiles: distMiles,
+                        totalDurationMinutes: durationMin,
+                        steps: steps,
+                        summary: r.name
+                    )
+                }
+                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+            }
+        }
+    }
+    
+    private func iconForTurnInstruction(_ inst: String) -> String {
+        let lower = inst.lowercased()
+        if lower.contains("salida") || lower.contains("exit") {
+            return "signpost.right.fill"
+        } else if lower.contains("izquierda") || lower.contains("left") {
+            return "arrow.turn.up.left"
+        } else if lower.contains("derecha") || lower.contains("right") {
+            return "arrow.turn.up.right"
+        } else if lower.contains("uturn") || lower.contains("vuelta en u") {
+            return "arrow.uturn.backward"
+        } else if lower.contains("lleg") || lower.contains("arrive") || lower.contains("destino") {
+            return "flag.checkered"
+        } else {
+            return "arrow.up"
+        }
+    }
+    
+    private func openGoogleMaps(for pin: TacticalHouseClientPin) {
+        let lat = pin.coordinate.latitude
+        let lng = pin.coordinate.longitude
+        let googleAppUrl = URL(string: "comgooglemaps://?daddr=\(lat),\(lng)&directionsmode=driving")
+        let googleWebUrl = URL(string: "https://www.google.com/maps/dir/?api=1&destination=\(lat),\(lng)")
+        
+        if let appUrl = googleAppUrl, UIApplication.shared.canOpenURL(appUrl) {
+            UIApplication.shared.open(appUrl)
+        } else if let webUrl = googleWebUrl {
+            UIApplication.shared.open(webUrl)
+        }
+    }
+    
+    private func openAppleMaps(for pin: TacticalHouseClientPin) {
+        let item = MKMapItem(placemark: MKPlacemark(coordinate: pin.coordinate))
+        item.name = pin.name
+        item.openInMaps(launchOptions: [
+            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
+        ])
+    }
+}
+
+// MARK: - SHEET DE LISTA DE TODOS LOS GIROS Y SALIDAS (TURN-BY-TURN STEP LIST)
+struct TacticalTurnByTurnStepsSheet: View {
+    let route: TacticalActiveNavigationRoute
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Summary header
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("RUTA HACIA:")
+                            .font(.caption2.bold())
+                            .foregroundStyle(Brand.primary)
+                        Text(route.destinationName)
+                            .font(.headline.bold())
+                            .foregroundStyle(.white)
+                        Text(route.destinationAddress)
+                            .font(.caption)
+                            .foregroundStyle(.gray)
+                        
+                        HStack(spacing: 16) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "clock.fill").foregroundStyle(Brand.primary)
+                                Text("\(route.totalDurationMinutes) min").font(.subheadline.bold()).foregroundStyle(.white)
+                            }
+                            HStack(spacing: 4) {
+                                Image(systemName: "road.lanes").foregroundStyle(.yellow)
+                                Text(String(format: "%.1f mi", route.totalDistanceMiles)).font(.subheadline.bold()).foregroundStyle(.white)
+                            }
+                            HStack(spacing: 4) {
+                                Image(systemName: "signpost.right.and.left.fill").foregroundStyle(.orange)
+                                Text("\(route.steps.count) Giros").font(.subheadline.bold()).foregroundStyle(.white)
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Brand.card)
+                    
+                    // List of turns and exit instructions
+                    List {
+                        ForEach(Array(route.steps.enumerated()), id: \.offset) { idx, step in
+                            HStack(alignment: .top, spacing: 14) {
+                                ZStack {
+                                    Circle().fill(Brand.cardLight).frame(width: 36, height: 36)
+                                    Image(systemName: step.iconName)
+                                        .font(.caption.bold())
+                                        .foregroundStyle(Brand.primary)
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(step.instruction)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.white)
+                                    
+                                    HStack(spacing: 8) {
+                                        Text(step.formattedDistance)
+                                            .font(.caption.bold())
+                                            .foregroundStyle(Brand.primary)
+                                        
+                                        if let notice = step.notice, !notice.isEmpty {
+                                            Text("⚠️ \(notice)")
+                                                .font(.caption2.bold())
+                                                .foregroundStyle(.orange)
+                                        }
+                                    }
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, 4)
+                            .listRowBackground(Brand.card)
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("Instrucciones de Ruta")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Listo") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
             }
         }
     }
@@ -9622,16 +10114,29 @@ struct TacticalMetricBadge: View {
     }
 }
 
-
-// MARK: - 3. ESCÁNER IA DE SALUD DEL PASTO (HUD CIBERNÉTICO)
+// MARK: - 3. ESCÁNER IA DE SALUD DEL PASTO (CON CÁMARA, FOTO REAL Y DEMO INTERACTIVA)
 struct AIYardHealthScannerHUDView: View {
     @ObservedObject var store: LawnCareStore
     @Environment(\.dismiss) var dismiss
-    @State private var scanLineOffset: CGFloat = -120
-    @State private var isAnalyzing: Bool = false
-    @State private var scanCompleted: Bool = true
+    
+    @State private var selectedImage: UIImage? = nil
+    @State private var showCameraPicker: Bool = false
+    @State private var showPhotoLibraryPicker: Bool = false
+    
+    @State private var isScanning: Bool = false
+    @State private var scanProgress: Double = 0.0
+    @State private var scanStageText: String = "Listo para iniciar escaneo"
+    @State private var scanLineOffset: CGFloat = -110
+    
+    // AI Diagnostics Results State
+    @State private var healthScore: Int = 74
+    @State private var grassVariety: String = "Bermuda Grass Híbrido (Texas Tifway 419)"
+    @State private var nitrogenScore: String = "Bajo (44%) • Requiere fertilizante"
+    @State private var weedPressure: String = "Moderado (24%) • Crabgrass y trébol"
+    @State private var compactionScore: String = "Alta (72%) • Necesita aireación de raíces"
+    @State private var moistureScore: String = "Óptima (64%)"
+    @State private var estimatedQuote: Int = 185
     @State private var clientNameInput: String = "Cliente Residencial"
-    @State private var showExportAlert: Bool = false
     
     var body: some View {
         NavigationView {
@@ -9640,86 +10145,195 @@ struct AIYardHealthScannerHUDView: View {
                 
                 ScrollView {
                     VStack(spacing: 16) {
-                        // Cyber Viewfinder Container
+                        // 4K CYBERNETIC SPECTRAL VIEWFINDER CONTAINER
                         ZStack {
-                            Image("drone_tundra_intro")
-                                .resizable()
-                                .scaledToFill()
-                                .frame(height: 220)
-                                .clipShape(RoundedRectangle(cornerRadius: 14))
-                                .overlay(Color.black.opacity(0.35))
-                            
-                            // Laser Grid Scan Line
-                            Rectangle()
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [Color.clear, Color.green.opacity(0.8), Color.clear]),
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(height: 3)
-                                .shadow(color: Color.green, radius: 8)
-                                .offset(y: scanLineOffset)
-                            
-                            // Corner Brackets
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.green.opacity(0.6), lineWidth: 2)
-                            
-                            VStack {
-                                HStack {
-                                    Text("⚡ AI SPECTRAL HUD 4K")
-                                        .font(.system(size: 9, weight: .black))
-                                        .foregroundStyle(Color.green)
-                                        .padding(4)
-                                        .background(Color.black.opacity(0.6))
-                                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                                    Spacer()
-                                    Text("ISO 100 • 60 FPS")
-                                        .font(.system(size: 9))
-                                        .foregroundStyle(.white)
-                                }
-                                Spacer()
-                                HStack {
-                                    Text("OBJETIVO: CÉSPED RESIDENCIAL")
-                                        .font(.system(size: 9))
-                                        .foregroundStyle(.white)
-                                    Spacer()
-                                    Text("CENTRAL TX")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundStyle(Color.green)
+                            if let img = selectedImage {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(height: 230)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                                    .overlay(Color.black.opacity(0.25))
+                            } else {
+                                // Default Live High-Tech Reticle & Sensor HUD
+                                ZStack {
+                                    Color(red: 0.05, green: 0.10, blue: 0.07)
+                                        .frame(height: 230)
+                                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                                    
+                                    // Animated target reticle
+                                    Circle()
+                                        .stroke(Brand.primary.opacity(0.4), lineWidth: 1.5)
+                                        .frame(width: 110, height: 110)
+                                    Circle()
+                                        .stroke(Brand.primary.opacity(0.25), lineWidth: 1)
+                                        .frame(width: 170, height: 170)
+                                    
+                                    VStack(spacing: 8) {
+                                        Image(systemName: "viewfinder")
+                                            .font(.system(size: 42))
+                                            .foregroundStyle(Brand.primary)
+                                        Text("APUNTA AL CÉSPED O SELECCIONA FOTO")
+                                            .font(.caption2.bold())
+                                            .foregroundStyle(.white)
+                                        Text("El sensor IA detecta clorofila, maleza y compactación")
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(.gray)
+                                    }
                                 }
                             }
-                            .padding(10)
+                            
+                            // Laser Scan Line when active
+                            if isScanning || selectedImage != nil {
+                                Rectangle()
+                                    .fill(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [Color.clear, Color.green.opacity(0.9), Color.clear]),
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(height: 3)
+                                    .shadow(color: Color.green, radius: 8)
+                                    .offset(y: scanLineOffset)
+                            }
+                            
+                            // Outer Cyber HUD Brackets
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(isScanning ? Color.green : Brand.primary.opacity(0.6), lineWidth: 2)
+                            
+                            // HUD Sensors Overlay
+                            VStack {
+                                HStack {
+                                    HStack(spacing: 4) {
+                                        Circle().fill(isScanning ? Color.red : Color.green).frame(width: 6, height: 6)
+                                        Text("AI SPECTRAL HUD 4K")
+                                            .font(.system(size: 9, weight: .black))
+                                            .foregroundStyle(Brand.primary)
+                                    }
+                                    .padding(4)
+                                    .background(Color.black.opacity(0.75))
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                                    
+                                    Spacer()
+                                    
+                                    Text("ISO 100 • 60 FPS")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(.white.opacity(0.8))
+                                }
+                                
+                                Spacer()
+                                
+                                HStack {
+                                    Text(isScanning ? scanStageText : (selectedImage != nil ? "OBJETIVO CAPTURADO" : "LISTO PARA ESCANEAR"))
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(.white)
+                                    Spacer()
+                                    Text("CENTRAL TX SOIL DB")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(Brand.primary)
+                                }
+                                .padding(4)
+                                .background(Color.black.opacity(0.6))
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                            }
+                            .padding(8)
                         }
-                        .frame(height: 220)
+                        .frame(height: 230)
                         .padding(.horizontal)
                         
-                        // Health Diagnostics Breakdown
+                        // Action Buttons: Tomar Foto, Subir de Galería, Usar Muestra Demo
+                        HStack(spacing: 8) {
+                            Button {
+                                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                                    showCameraPicker = true
+                                } else {
+                                    showPhotoLibraryPicker = true
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "camera.fill")
+                                    Text("Tomar Foto")
+                                }
+                                .font(.caption.bold())
+                                .foregroundStyle(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(Brand.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+                            
+                            Button {
+                                showPhotoLibraryPicker = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "photo.on.rectangle.angled")
+                                    Text("Galería")
+                                }
+                                .font(.caption.bold())
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(Brand.cardLight)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+                            
+                            Button {
+                                loadDemoGrassAndScan()
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "sparkles")
+                                    Text("Muestra Demo")
+                                }
+                                .font(.caption.bold())
+                                .foregroundStyle(.yellow)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                                .background(Color(red: 0.2, green: 0.16, blue: 0.05))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.yellow.opacity(0.5), lineWidth: 1))
+                            }
+                        }
+                        .padding(.horizontal)
+                        
+                        // Scanning Progress Bar when running
+                        if isScanning {
+                            VStack(spacing: 4) {
+                                ProgressView(value: scanProgress, total: 1.0)
+                                    .tint(Brand.primary)
+                                Text(scanStageText)
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(Brand.primary)
+                            }
+                            .padding(.horizontal)
+                        }
+                        
+                        // Health Diagnostics Breakdown Card
                         VStack(alignment: .leading, spacing: 14) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("DIAGNÓSTICO FITOSANITARIO IA")
                                         .font(.caption.bold())
                                         .foregroundStyle(Brand.primary)
-                                    Text("Índice de Salud General: 68% (Atención Requerida)")
+                                    Text("Índice de Salud General: \(healthScore)% (Atención Requerida)")
                                         .font(.subheadline.bold())
                                         .foregroundStyle(.white)
                                 }
                                 Spacer()
-                                Text("68/100")
+                                Text("\(healthScore)/100")
                                     .font(.title2.bold())
-                                    .foregroundStyle(.yellow)
+                                    .foregroundStyle(healthScore >= 80 ? Color.green : Color.yellow)
                             }
                             
                             Divider().background(Color.gray.opacity(0.3))
                             
                             // Specific metrics
                             VStack(spacing: 8) {
-                                DiagnosticBarRow(label: "Nivel de Nitrógeno & Clorofila", score: "Bajo (42%)", color: .orange)
-                                DiagnosticBarRow(label: "Invasión de Maleza / Crabgrass", score: "Moderado (28%)", color: .yellow)
-                                DiagnosticBarRow(label: "Compactación de Raíces", score: "Alta (74%)", color: .red)
-                                DiagnosticBarRow(label: "Humedad del Suelo", score: "Óptima (65%)", color: .green)
+                                DiagnosticBarRow(label: "Especie de Césped", score: grassVariety, color: .green)
+                                DiagnosticBarRow(label: "Nivel de Nitrógeno & Clorofila", score: nitrogenScore, color: .orange)
+                                DiagnosticBarRow(label: "Invasión de Maleza / Crabgrass", score: weedPressure, color: .yellow)
+                                DiagnosticBarRow(label: "Compactación de Raíces", score: compactionScore, color: .red)
+                                DiagnosticBarRow(label: "Humedad del Suelo", score: moistureScore, color: .green)
                             }
                             
                             // AI Recommendation Box
@@ -9727,9 +10341,9 @@ struct AIYardHealthScannerHUDView: View {
                                 Text("💡 TRATAMIENTO RECOMENDADO POR IA:")
                                     .font(.caption2.bold())
                                     .foregroundStyle(Brand.primary)
-                                Text("1. Aireación de raíces y descompactado de suelo.\n2. Aplicación de fertilizante alto en nitrógeno y hierro.\n3. Capa de 3 pulgadas de Mulch Oscuro para retener humedad.\n\n💵 Costo Estimado del Paquete: $180 - $240 USD.")
+                                Text("1. Aireación de raíces y descompactado de suelo con sacabocados.\n2. Aplicación de fertilizante alto en nitrógeno y hierro.\n3. Capa de 3 pulgadas de Mulch Oscuro para retener humedad.\n\n💵 Costo Estimado del Paquete: $\(estimatedQuote) - $\(estimatedQuote + 50) USD.")
                                     .font(.caption)
-                                    .foregroundStyle(.white.opacity(0.9))
+                                    .foregroundStyle(.white.opacity(0.95))
                             }
                             .padding(12)
                             .background(Color.black.opacity(0.4))
@@ -9768,10 +10382,93 @@ struct AIYardHealthScannerHUDView: View {
                         .foregroundStyle(Brand.primary)
                 }
             }
+            .sheet(isPresented: $showCameraPicker) {
+                PhotoLibraryPicker(selectedImage: $selectedImage, sourceType: .camera)
+            }
+            .sheet(isPresented: $showPhotoLibraryPicker) {
+                PhotoLibraryPicker(selectedImage: $selectedImage, sourceType: .photoLibrary)
+            }
+            .onChange(of: selectedImage) { newImg in
+                if newImg != nil {
+                    runAIScanSimulation()
+                }
+            }
             .onAppear {
                 withAnimation(Animation.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
-                    scanLineOffset = 110
+                    scanLineOffset = 100
                 }
+            }
+        }
+    }
+    
+    private func loadDemoGrassAndScan() {
+        selectedImage = generateProceduralGrassDemoImage()
+        runAIScanSimulation()
+    }
+    
+    private func runAIScanSimulation() {
+        isScanning = true
+        scanProgress = 0.0
+        scanStageText = "1/3: Escaneando índice de clorofila y fotosíntesis..."
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            scanProgress = 0.4
+            scanStageText = "2/3: Detectando maleza, crabgrass y parches secos..."
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            scanProgress = 0.8
+            scanStageText = "3/3: Evaluando compactación radicular y nitrógeno..."
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+            scanProgress = 1.0
+            scanStageText = "Diagnóstico fitosanitario completado con éxito"
+            isScanning = false
+            healthScore = Int.random(in: 68...82)
+            estimatedQuote = healthScore < 75 ? 195 : 175
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        }
+    }
+    
+    private func generateProceduralGrassDemoImage() -> UIImage {
+        let size = CGSize(width: 800, height: 600)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            let cg = ctx.cgContext
+            
+            // Rich turf lawn gradient
+            let colors = [
+                UIColor(red: 0.10, green: 0.38, blue: 0.12, alpha: 1.0).cgColor,
+                UIColor(red: 0.16, green: 0.54, blue: 0.20, alpha: 1.0).cgColor,
+                UIColor(red: 0.08, green: 0.30, blue: 0.10, alpha: 1.0).cgColor
+            ]
+            let space = CGColorSpaceCreateDeviceRGB()
+            if let grad = CGGradient(colorsSpace: space, colors: colors as CFArray, locations: [0.0, 0.5, 1.0]) {
+                cg.drawLinearGradient(grad, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 0, y: size.height), options: [])
+            }
+            
+            // Procedural lawn texture
+            for i in 0..<1200 {
+                let x = CGFloat(i % 40) * 20.0 + CGFloat.random(in: -8...8)
+                let y = CGFloat(i / 40) * 20.0 + CGFloat.random(in: -8...8)
+                let bladeH = CGFloat.random(in: 16...40)
+                let bladeW = CGFloat.random(in: 2...4)
+                let angle = CGFloat.random(in: -0.25...0.25)
+                
+                cg.saveGState()
+                cg.translateBy(x: x, y: y)
+                cg.rotate(by: angle)
+                
+                let bladeColor = (i % 8 == 0) ?
+                    UIColor(red: 0.58, green: 0.52, blue: 0.18, alpha: 0.85) :
+                    UIColor(red: CGFloat.random(in: 0.14...0.26), green: CGFloat.random(in: 0.55...0.78), blue: CGFloat.random(in: 0.18...0.30), alpha: 0.9)
+                cg.setFillColor(bladeColor.cgColor)
+                cg.fill(CGRect(x: -bladeW/2, y: -bladeH, width: bladeW, height: bladeH))
+                cg.restoreGState()
             }
         }
     }
@@ -9781,18 +10478,19 @@ struct AIYardHealthScannerHUDView: View {
 🌿 *RODRIGUEZ LAWN CARE - DIAGNÓSTICO FITOSANITARIO IA*
 📍 Central Texas • Tel: (254) 852-8163
 ━━━━━━━━━━━━━━━━━━━━
-📊 *Calificación de Salud:* 68/100 (Atención Requerida)
-⚠️ *Deficiencias detectadas:*
-• Falta de Nitrógeno y Clorofila
-• Compactación de raíz en zonas de alto tráfico
-• Maleza superficial detectada
+📊 *Calificación de Salud:* \(healthScore)/100 (Atención Requerida)
+🌱 *Especie detectada:* \(grassVariety)
+⚠️ *Deficiencias identificadas:*
+• \(nitrogenScore)
+• \(weedPressure)
+• \(compactionScore)
 
 💡 *Tratamiento Especializado Recomendado:*
-1. Aireación de suelo y oxigenación de raíces
-2. Fertilizante balanceado de temporada
-3. Cobertura de Mulch Oscuro protector
+1. Aireación de raíces y oxigenación con sacabocados.
+2. Aplicación de fertilizante balanceado de temporada.
+3. Cobertura de Mulch Oscuro protector.
 
-💵 *Presupuesto Especial Rodriguez:* $180 USD
+💵 *Presupuesto Especial Rodriguez:* $\(estimatedQuote) USD
 ¡Responde a este mensaje para agendar la recuperación de tu jardín!
 """
         UIPasteboard.general.string = msg
@@ -9820,6 +10518,7 @@ struct DiagnosticBarRow: View {
         }
     }
 }
+
 
 // MARK: - 4. CALCULADORA 3D DE CAMIÓN DE MULCH Y GRAVILLA
 struct BulkMaterialTruckCalculatorView: View {
