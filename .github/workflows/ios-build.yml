@@ -49,27 +49,27 @@ jobs:
         run: |
           mkdir -p "ipa online"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa online/rodriguezlawncareios.ipa"
-          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa online/RodriguezLawnCare_v2.4.0_Build29.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa online/RodriguezLawnCare_v2.4.1_Build30.ipa"
           mkdir -p "RodriguezLawnCareIosAPP/ipa online"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa online/rodriguezlawncareios.ipa"
           mkdir -p "ipa here"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare_Actualizado.ipa"
-          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare_v2.4.0_Build29.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare_v2.4.1_Build30.ipa"
           mkdir -p "RodriguezLawnCareIosAPP/ipa here"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_Actualizado.ipa"
-          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_v2.4.0_Build29.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_v2.4.1_Build30.ipa"
           mkdir -p "ipa nuevo"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa nuevo/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa nuevo/RodriguezLawnCare.ipa"
-          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa nuevo/RodriguezLawnCare_v2.4.0_Build29.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa nuevo/RodriguezLawnCare_v2.4.1_Build30.ipa"
           mkdir -p "RodriguezLawnCareIosAPP/ipa nuevo"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa nuevo/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa nuevo/RodriguezLawnCare.ipa"
-          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa nuevo/RodriguezLawnCare_v2.4.0_Build29.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa nuevo/RodriguezLawnCare_v2.4.1_Build30.ipa"
           ls -la "ipa online"
 
       - name: Commit and push IPA to repository
@@ -104,7 +104,7 @@ jobs:
             ipa here/RodriguezLawnCare.ipa
             ipa here/RodriguezLawnCare_v1.9.0_Build24.ipa
             ipa here/RodriguezLawnCare_v2.2.0_Build27.ipa
-            ipa here/RodriguezLawnCare_v2.4.0_Build29.ipa
+            ipa here/RodriguezLawnCare_v2.4.1_Build30.ipa
             ipa here/RodriguezLawnCare_Actualizado.ipa
 
       - name: Send IPA directly to Discord Channel (#ipalwan)
