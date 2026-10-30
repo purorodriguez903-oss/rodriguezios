@@ -9490,7 +9490,7 @@ struct TacticalTerritoryRadarView: View {
                                     .foregroundStyle(Brand.primary)
                                 if activeRoute != nil {
                                     Text("• EN RUTA")
-                                        .font(.caption2.black())
+                                        .font(.caption2.bold())
                                         .foregroundStyle(Color.yellow)
                                 }
                             }
