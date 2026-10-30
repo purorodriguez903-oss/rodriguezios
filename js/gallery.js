@@ -285,7 +285,7 @@
 
       const category = item.category || detectCategory(item.title);
       const icon = getCategoryIcon(category);
-      const title = item.title || `Trabajo #${item.id}`;
+      const title = item.title || `Project #${item.id}`;
       const location = item.location || item.city || 'Killeen & Central TX';
 
       return `
@@ -298,7 +298,7 @@
             </div>
             <img src="${item.url}" alt="${escapeHtml(title)}" class="gallery-img" loading="lazy" onerror="this.src='./assets/images/mowing.jpg'">
             <div class="gallery-overlay">
-              <span class="gallery-zoom-pill">🔍 Ampliar Foto</span>
+              <span class="gallery-zoom-pill">🔍 Zoom Photo</span>
             </div>
           </div>
           <div class="gallery-info">

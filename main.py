@@ -12,6 +12,7 @@ import json
 import time
 import asyncio
 import aiohttp
+import re
 from aiohttp import web
 import discord
 from discord import app_commands
@@ -1733,12 +1734,194 @@ async def handle_api_get_gallery(request):
     gallery = load_gallery()
     return cors_json_response({"success": True, "gallery": gallery})
 
+
+CATEGORY_TRANSLATION_MAP = {
+    # Spanish to English
+    "corte de césped": "Mowing & Edging",
+    "corte de cesped": "Mowing & Edging",
+    "corte de pasto": "Mowing & Edging",
+    "corte y orillado": "Mowing & Edging",
+    "corte y perfilado": "Mowing & Edging",
+    "corte": "Mowing & Edging",
+    "mowing & edging": "Mowing & Edging",
+    "mowing": "Mowing & Edging",
+    "patio frontal": "Front Yard",
+    "patio delantero": "Front Yard",
+    "frente y trasero": "Front Yard",
+    "frente": "Front Yard",
+    "front yard": "Front Yard",
+    "patio trasero": "Back Yard",
+    "trasero": "Back Yard",
+    "atrás": "Back Yard",
+    "atras": "Back Yard",
+    "back yard": "Back Yard",
+    "mulch": "Mulch",
+    "acolchado": "Mulch",
+    "mulch / acolchado": "Mulch",
+    "poda de árboles": "Tree Care",
+    "poda de arboles": "Tree Care",
+    "poda de árbol": "Tree Care",
+    "poda de arbol": "Tree Care",
+    "árboles": "Tree Care",
+    "arboles": "Tree Care",
+    "tree care": "Tree Care",
+    "arbustos y setos": "Shrubs & Bushes",
+    "arbustos": "Shrubs & Bushes",
+    "setos": "Shrubs & Bushes",
+    "shrubs & bushes": "Shrubs & Bushes",
+    "limpieza de yard": "Cleanups & More",
+    "limpieza de yarda": "Cleanups & More",
+    "limpieza de patio": "Cleanups & More",
+    "limpieza de hojas": "Cleanups & More",
+    "limpieza": "Cleanups & More",
+    "cleanups": "Cleanups & More",
+    "cleanups & more": "Cleanups & More",
+    "antes & después": "Before & After",
+    "antes y después": "Before & After",
+    "antes y despues": "Before & After",
+    "before & after": "Before & After",
+    "comercial & duplex": "Builder Duplex",
+    "comercial y dúplex": "Builder Duplex",
+    "comercial y duplex": "Builder Duplex",
+    "comercial": "Builder Duplex",
+    "duplex": "Builder Duplex",
+    "builder duplex": "Builder Duplex",
+    "cuidado general": "General LawnCare",
+    "general lawncare": "General LawnCare"
+}
+
+def normalize_gallery_category(cat: str) -> str:
+    """Ensures gallery category is always stored in clean English for the public website."""
+    if not cat:
+        return "General LawnCare"
+    cat_lower = cat.strip().lower()
+    for k, v in CATEGORY_TRANSLATION_MAP.items():
+        if k in cat_lower or cat_lower == k:
+            return v
+    return "General LawnCare"
+
+def translate_spanish_title_to_english(title: str, category_en: str, location: str = "") -> str:
+    """Translates and enhances Spanish job titles into professional English for web visitors."""
+    loc_str = f" in {location}" if location else " in Central TX"
+    if not title or not title.strip():
+        defaults = {
+            "Mowing & Edging": f"Precision Lawn Mowing & Razor Edging{loc_str}",
+            "Front Yard": f"Front Yard Clean & Sharp Mowing{loc_str}",
+            "Back Yard": f"Back Yard Mowing & Clean Lines{loc_str}",
+            "Mulch": f"Fresh Dark Mulch Installation{loc_str}",
+            "Tree Care": f"Tree Care & Precision Trimming{loc_str}",
+            "Shrubs & Bushes": f"Hedge Trimming & Shrub Shaping{loc_str}",
+            "Cleanups & More": f"Property Cleanup & Yard Overhaul{loc_str}",
+            "Before & After": f"Complete Yard Transformation{loc_str}",
+            "Builder Duplex": f"Duplex & Commercial Lawn Maintenance{loc_str}",
+            "General LawnCare": f"Professional Lawn Care Service{loc_str}"
+        }
+        return defaults.get(category_en, f"Professional Lawn Care Service{loc_str}")
+
+    t = title.strip()
+    replacements = [
+        (r'\bcorte y perfilado con navaja l[aá]ser\b', 'Razor Sharp Laser Mowing & Edging'),
+        (r'\bcorte y perfilado\b', 'Precision Mowing & Razor Edging'),
+        (r'\bcorte y orillado\b', 'Mowing & Razor Edging'),
+        (r'\bcorte de c[eé]sped\b', 'Lawn Mowing & Edging'),
+        (r'\bcorte de pasto\b', 'Lawn Mowing & Edging'),
+        (r'\bcorte residencial limpio\b', 'Clean Residential Mowing'),
+        (r'\bcorte residencial\b', 'Residential Lawn Mowing'),
+        (r'\bcorte comercial\b', 'Commercial Lawn Service'),
+        (r'\bcorte limpio\b', 'Clean Lawn Mowing'),
+        (r'\bcorte\b', 'Mowing'),
+        (r'\bpoda de [aá]rboles\b', 'Tree Trimming & Care'),
+        (r'\bpoda de [aá]rbol\b', 'Tree Trimming & Care'),
+        (r'\bpoda de arbustos\b', 'Hedge & Shrub Trimming'),
+        (r'\bpoda\b', 'Trimming'),
+        (r'\blimpieza completa\b', 'Complete Cleanup'),
+        (r'\blimpieza de yarda\b', 'Full Yard Cleanup'),
+        (r'\blimpieza de yard\b', 'Full Yard Cleanup'),
+        (r'\blimpieza de hojas\b', 'Leaf Cleanup & Removal'),
+        (r'\blimpieza de terreno\b', 'Lot Clearing & Cleanup'),
+        (r'\blimpieza general\b', 'General Property Cleanup'),
+        (r'\blimpieza\b', 'Cleanup'),
+        (r'\bretiro de ramas\b', 'Branch Removal'),
+        (r'\bretiro de hojas\b', 'Leaf Removal'),
+        (r'\bretiro de\b', 'Removal of'),
+        (r'\bretiro\b', 'Removal'),
+        (r'\binstalaci[oó]n de mulch negro\b', 'Black Mulch Installation'),
+        (r'\binstalaci[oó]n de mulch\b', 'Fresh Mulch Installation'),
+        (r'\bmulch negro\b', 'Black Mulch Installation'),
+        (r'\bmulch caf[eé]\b', 'Dark Brown Mulch Installation'),
+        (r'\bmulch marr[oó]n\b', 'Dark Mulch Installation'),
+        (r'\bantes y despu[eé]s\b', 'Before & After Transformation'),
+        (r'\bantes & despu[eé]s\b', 'Before & After Transformation'),
+        (r'\bdesbroce\b', 'Brush Clearing'),
+        (r'\bdesmalezado\b', 'Weed Eating & Clearing'),
+        (r'\bfertilizaci[oó]n\b', 'Lawn Fertilization Treatment'),
+        (r'\breparaci[oó]n de aspersores\b', 'Sprinkler Repair'),
+        (r'\breparaci[oó]n de irrigaci[oó]n\b', 'Irrigation Repair'),
+        (r'\btrabajo de yarda\b', 'Yard Care Service'),
+        (r'\btrabajo en\b', 'Work in'),
+        (r'\btrabajo terminado\b', 'Completed Lawn Care Service'),
+        (r'\btrabajo realizado\b', 'Completed Service'),
+        (r'\btrabajo\b', 'Service'),
+        (r'\bcliente recurrente\b', 'Recurring Client Service'),
+        (r'\bpatio delantero\b', 'Front Yard'),
+        (r'\bpatio frontal\b', 'Front Yard'),
+        (r'\bpatio trasero\b', 'Back Yard'),
+        (r'\bdelantero y trasero\b', 'Front & Back Yard'),
+        (r'\bdelantera\b', 'Front Yard'),
+        (r'\btrasera\b', 'Back Yard'),
+        (r'\bpropiedad comercial\b', 'Commercial Property'),
+        (r'\bcomercial\b', 'Commercial'),
+        (r'\bresidencial\b', 'Residential'),
+        (r'\bduplex\b', 'Duplex'),
+        (r'\bd[uú]plex\b', 'Duplex'),
+        (r'\bjard[ií]n\b', 'Garden'),
+        (r'\bpasto\b', 'Lawn'),
+        (r'\bc[eé]sped\b', 'Lawn'),
+        (r'\byarda\b', 'Yard'),
+        (r'\b[aá]rboles\b', 'Trees'),
+        (r'\b[aá]rbol\b', 'Tree'),
+        (r'\barbustos\b', 'Shrubs'),
+        (r'\bsetos\b', 'Hedges'),
+        (r'\bhojas\b', 'Leaves'),
+        (r'\bramas\b', 'Branches'),
+        (r'\borillado\b', 'Razor Edging'),
+        (r'\bperfilado\b', 'Razor Edging'),
+        (r'\bgrandes\b', 'Large'),
+        (r'\bgrande\b', 'Large'),
+        (r'\bhermoso\b', 'Beautiful'),
+        (r'\blimpio\b', 'Clean'),
+        (r'\bfresco\b', 'Fresh'),
+        (r'\bcompleto\b', 'Complete'),
+        (r'\bcompleta\b', 'Complete'),
+        (r'\ben\b', 'in'),
+        (r'\bcon\b', 'with'),
+        (r'\by\b', 'and'),
+        (r'\bde\b', 'of'),
+        (r'\bpara\b', 'for')
+    ]
+    for pattern, repl in replacements:
+        t = re.sub(pattern, repl, t, flags=re.IGNORECASE)
+
+    words = t.split()
+    caps = []
+    lowercase_fillers = {'in', 'with', 'and', 'of', 'for', 'the', 'a', 'an', '&'}
+    for idx, w in enumerate(words):
+        if idx > 0 and w.lower() in lowercase_fillers:
+            caps.append(w.lower())
+        else:
+            caps.append(w.capitalize())
+    return ' '.join(caps)
+
 async def handle_api_add_gallery(request):
-    """Adds a new photo to the website gallery from iOS App."""
+    """Adds a new photo to the website gallery from iOS App, ensuring 100% English on web."""
     try:
         data = await request.json()
-        title = data.get("title", "Lawn Care Service").strip()
-        category = data.get("category", "Front Yard").strip()
+        raw_title = data.get("title", "").strip()
+        raw_category = data.get("category", "").strip()
+        location = data.get("location", "Killeen & Central TX").strip()
+        
+        category = normalize_gallery_category(raw_category)
+        title = translate_spanish_title_to_english(raw_title, category, location)
         url = data.get("url", "").strip()
         image_base64 = data.get("image_base64", "").strip()
 
@@ -1811,10 +1994,12 @@ async def handle_api_update_gallery(request):
         target_item = None
         for item in gallery:
             if str(item.get("id")) == str(photo_id):
-                if "title" in data and data["title"]:
-                    item["title"] = data["title"].strip()
                 if "category" in data and data["category"]:
-                    item["category"] = data["category"].strip()
+                    item["category"] = normalize_gallery_category(data["category"].strip())
+                if "title" in data and data["title"]:
+                    cat = item.get("category", "General LawnCare")
+                    loc = item.get("location", "")
+                    item["title"] = translate_spanish_title_to_english(data["title"].strip(), cat, loc)
                 if "location" in data:
                     item["location"] = data["location"].strip()
                 if "image_base64" in data and data["image_base64"]:

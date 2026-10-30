@@ -246,6 +246,24 @@ struct GalleryPhoto: Identifiable, Codable, Equatable {
     var location: String?
     var verified: Bool?
     var uploaded_at: Int?
+
+    var categorySpanish: String {
+        LawnCareStore.categoryInSpanish(category)
+    }
+
+    var categoryIcon: String {
+        let lower = category.lowercased()
+        if lower.contains("front") || lower.contains("delanter") || lower.contains("frente") { return "🏡" }
+        if lower.contains("back") || lower.contains("traser") || lower.contains("atrás") { return "🌿" }
+        if lower.contains("mulch") || lower.contains("acolchado") { return "🪵" }
+        if lower.contains("tree") || lower.contains("árbol") || lower.contains("arbol") { return "🌳" }
+        if lower.contains("shrub") || lower.contains("bush") || lower.contains("arbusto") || lower.contains("seto") { return "🌱" }
+        if lower.contains("clean") || lower.contains("limpieza") { return "✂️" }
+        if lower.contains("mow") || lower.contains("corte") || lower.contains("orillado") { return "⚡" }
+        if lower.contains("before") || lower.contains("antes") { return "✨" }
+        if lower.contains("duplex") || lower.contains("commercial") || lower.contains("comercial") { return "🏢" }
+        return "🌿"
+    }
 }
 
 struct WebStats: Codable {
@@ -439,8 +457,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "2.5.0"
-    let currentAppBuild: Int = 31
+    let currentAppVersion: String = "2.5.1"
+    let currentAppBuild: Int = 32
 
     @Published var geocodedCache: [String: [Double]] = [:]
 
@@ -925,16 +943,190 @@ class LawnCareStore: ObservableObject {
         }
     }
 
+    static func categoryInSpanish(_ raw: String) -> String {
+        let lower = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if lower.contains("mow") || lower.contains("edg") || lower.contains("corte") || lower.contains("pasto") {
+            return "Corte y Orillado"
+        } else if lower.contains("front") || lower.contains("frente") || lower.contains("delanter") {
+            return "Patio Frontal"
+        } else if lower.contains("back") || lower.contains("traser") || lower.contains("atrás") {
+            return "Patio Trasero"
+        } else if lower.contains("mulch") || lower.contains("acolchado") {
+            return "Mulch"
+        } else if lower.contains("tree") || lower.contains("árbol") || lower.contains("arbol") {
+            return "Poda de Árboles"
+        } else if lower.contains("shrub") || lower.contains("bush") || lower.contains("arbusto") || lower.contains("seto") {
+            return "Arbustos y Setos"
+        } else if lower.contains("clean") || lower.contains("limpieza") {
+            return "Limpieza de Yarda"
+        } else if lower.contains("before") || lower.contains("antes") {
+            return "Antes y Después"
+        } else if lower.contains("duplex") || lower.contains("commercial") || lower.contains("comercial") {
+            return "Comercial y Dúplex"
+        }
+        return "Cuidado de Césped"
+    }
+
+    static func mapCategoryToEnglish(_ raw: String) -> String {
+        let lower = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if lower.contains("corte") || lower.contains("pasto") || lower.contains("césped") || lower.contains("cesped") || lower.contains("orillado") || lower.contains("mow") {
+            return "Mowing & Edging"
+        } else if lower.contains("delanter") || lower.contains("front") || lower.contains("frente") {
+            return "Front Yard"
+        } else if lower.contains("traser") || lower.contains("back") || lower.contains("atrás") || lower.contains("atras") {
+            return "Back Yard"
+        } else if lower.contains("mulch") || lower.contains("acolchado") {
+            return "Mulch"
+        } else if lower.contains("árbol") || lower.contains("arbol") || lower.contains("tree") {
+            return "Tree Care"
+        } else if lower.contains("arbusto") || lower.contains("seto") || lower.contains("shrub") || lower.contains("bush") {
+            return "Shrubs & Bushes"
+        } else if lower.contains("limpieza") || lower.contains("clean") || lower.contains("hoja") || lower.contains("leaf") {
+            return "Cleanups & More"
+        } else if lower.contains("antes") || lower.contains("después") || lower.contains("despues") || lower.contains("before") {
+            return "Before & After"
+        } else if lower.contains("comercial") || lower.contains("duplex") || lower.contains("dúplex") {
+            return "Builder Duplex"
+        }
+        return "General LawnCare"
+    }
+
+    static func translateTitleToEnglish(title: String, categoryEnglish: String, location: String) -> String {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            let loc = location.isEmpty ? "in Killeen, TX" : "in \(location)"
+            switch categoryEnglish {
+            case "Mowing & Edging": return "Precision Lawn Mowing & Razor Edging \(loc)"
+            case "Front Yard": return "Front Yard Clean Mowing & Razor Edging \(loc)"
+            case "Back Yard": return "Back Yard Precision Mowing & Crisp Lines \(loc)"
+            case "Mulch": return "Fresh Dark Mulch Installation \(loc)"
+            case "Tree Care": return "Tree Trimming & Canopy Care \(loc)"
+            case "Shrubs & Bushes": return "Hedge Trimming & Shrub Sculpting \(loc)"
+            case "Cleanups & More": return "Complete Yard Cleanup & Debris Removal \(loc)"
+            case "Before & After": return "Complete Yard Transformation \(loc)"
+            case "Builder Duplex": return "Commercial Duplex Lawn Maintenance \(loc)"
+            default: return "Professional Lawn Care Service \(loc)"
+            }
+        }
+        
+        var t = trimmed
+        let dict: [(pattern: String, replacement: String)] = [
+            ("corte y perfilado con navaja láser", "Razor Sharp Laser Mowing & Edging"),
+            ("corte y perfilado con navaja laser", "Razor Sharp Laser Mowing & Edging"),
+            ("corte y perfilado", "Precision Mowing & Razor Edging"),
+            ("corte y orillado", "Mowing & Razor Edging"),
+            ("corte de césped", "Lawn Mowing & Edging"),
+            ("corte de cesped", "Lawn Mowing & Edging"),
+            ("corte de pasto", "Lawn Mowing & Edging"),
+            ("corte residencial limpio", "Clean Residential Mowing"),
+            ("corte residencial", "Residential Lawn Mowing"),
+            ("corte comercial", "Commercial Lawn Service"),
+            ("corte limpio", "Clean Lawn Mowing"),
+            ("corte", "Mowing"),
+            ("poda de árboles", "Tree Trimming & Care"),
+            ("poda de arboles", "Tree Trimming & Care"),
+            ("poda de árbol", "Tree Trimming & Care"),
+            ("poda de arbol", "Tree Trimming & Care"),
+            ("poda de arbustos", "Hedge & Shrub Trimming"),
+            ("poda", "Trimming"),
+            ("limpieza completa", "Complete Cleanup"),
+            ("limpieza de yarda", "Full Yard Cleanup"),
+            ("limpieza de yard", "Full Yard Cleanup"),
+            ("limpieza de hojas", "Leaf Cleanup & Removal"),
+            ("limpieza de terreno", "Lot Clearing & Cleanup"),
+            ("limpieza general", "General Property Cleanup"),
+            ("limpieza", "Cleanup"),
+            ("retiro de ramas", "Branch Removal"),
+            ("retiro de hojas", "Leaf Removal"),
+            ("retiro de", "Removal of"),
+            ("retiro", "Removal"),
+            ("instalación de mulch negro", "Black Mulch Installation"),
+            ("instalacion de mulch negro", "Black Mulch Installation"),
+            ("instalación de mulch", "Fresh Mulch Installation"),
+            ("instalacion de mulch", "Fresh Mulch Installation"),
+            ("mulch negro", "Black Mulch Installation"),
+            ("mulch café", "Dark Brown Mulch Installation"),
+            ("mulch cafe", "Dark Brown Mulch Installation"),
+            ("mulch marrón", "Dark Mulch Installation"),
+            ("mulch marron", "Dark Mulch Installation"),
+            ("antes y después", "Before & After Transformation"),
+            ("antes y despues", "Before & After Transformation"),
+            ("antes & después", "Before & After Transformation"),
+            ("desbroce", "Brush Clearing"),
+            ("desmalezado", "Weed Eating & Clearing"),
+            ("fertilización", "Lawn Fertilization Treatment"),
+            ("fertilizacion", "Lawn Fertilization Treatment"),
+            ("reparación de aspersores", "Sprinkler Repair"),
+            ("reparacion de aspersores", "Sprinkler Repair"),
+            ("reparación de irrigación", "Irrigation Repair"),
+            ("reparacion de irrigacion", "Irrigation Repair"),
+            ("trabajo de yarda", "Yard Care Service"),
+            ("trabajo en", "Work in"),
+            ("trabajo terminado", "Completed Lawn Care Service"),
+            ("trabajo realizado", "Completed Service"),
+            ("trabajo", "Service"),
+            ("cliente recurrente", "Recurring Client Service"),
+            ("patio delantero", "Front Yard"),
+            ("patio frontal", "Front Yard"),
+            ("patio trasero", "Back Yard"),
+            ("delantero y trasero", "Front & Back Yard"),
+            ("delantera", "Front Yard"),
+            ("trasera", "Back Yard"),
+            ("propiedad comercial", "Commercial Property"),
+            ("comercial", "Commercial"),
+            ("residencial", "Residential"),
+            ("duplex", "Duplex"),
+            ("dúplex", "Duplex"),
+            ("jardín", "Garden"),
+            ("jardin", "Garden"),
+            ("pasto", "Lawn"),
+            ("césped", "Lawn"),
+            ("cesped", "Lawn"),
+            ("yarda", "Yard"),
+            ("árboles", "Trees"),
+            ("arboles", "Trees"),
+            ("árbol", "Tree"),
+            ("arbol", "Tree"),
+            ("arbustos", "Shrubs"),
+            ("setos", "Hedges"),
+            ("hojas", "Leaves"),
+            ("ramas", "Branches"),
+            ("orillado", "Razor Edging"),
+            ("perfilado", "Razor Edging"),
+            ("grandes", "Large"),
+            ("grande", "Large"),
+            ("hermoso", "Beautiful"),
+            ("limpio", "Clean"),
+            ("fresco", "Fresh"),
+            ("completo", "Complete"),
+            ("completa", "Complete"),
+            (" en ", " in "),
+            (" con ", " with "),
+            (" y ", " and "),
+            (" de ", " of "),
+            (" para ", " for ")
+        ]
+        
+        for item in dict {
+            t = t.replacingOccurrences(of: item.pattern, with: item.replacement, options: .caseInsensitive)
+        }
+        
+        return t.prefix(1).uppercased() + t.dropFirst()
+    }
+
     @MainActor
     func addGalleryPhoto(title: String, category: String, urlString: String? = nil, location: String = "Killeen & Central TX", imageBase64: String? = nil) async {
+        let categoryEN = LawnCareStore.mapCategoryToEnglish(category)
+        let titleEN = LawnCareStore.translateTitleToEnglish(title: title, categoryEnglish: categoryEN, location: location)
+        
         let newId = (gallery.map { $0.id }.max() ?? 0) + 1
         let finalUrl = (urlString != nil && !urlString!.isEmpty) ? urlString! : "./assets/gallery/work_\(newId).jpg"
         let newPhoto = GalleryPhoto(
             id: newId,
             filename: "work_\(newId).jpg",
             url: finalUrl,
-            title: title,
-            category: category,
+            title: titleEN,
+            category: categoryEN,
             location: location,
             verified: true,
             uploaded_at: Int(Date().timeIntervalSince1970 * 1000)
@@ -943,8 +1135,8 @@ class LawnCareStore: ObservableObject {
 
         guard let url = URL(string: "\(cleanURL)/api/gallery") else { return }
         var payload: [String: Any] = [
-            "title": title,
-            "category": category,
+            "title": titleEN,
+            "category": categoryEN,
             "url": finalUrl,
             "location": location
         ]
@@ -965,15 +1157,18 @@ class LawnCareStore: ObservableObject {
 
     @MainActor
     func updateGalleryPhoto(id: Int, title: String, category: String, urlString: String? = nil, location: String? = nil, imageBase64: String? = nil) async {
+        let categoryEN = LawnCareStore.mapCategoryToEnglish(category)
+        let titleEN = LawnCareStore.translateTitleToEnglish(title: title, categoryEnglish: categoryEN, location: location ?? "")
+        
         if let idx = gallery.firstIndex(where: { $0.id == id }) {
-            gallery[idx].title = title
-            gallery[idx].category = category
+            gallery[idx].title = titleEN
+            gallery[idx].category = categoryEN
             if let u = urlString, !u.isEmpty { gallery[idx].url = u }
             if let loc = location { gallery[idx].location = loc }
         }
 
         guard let url = URL(string: "\(cleanURL)/api/gallery/update") else { return }
-        var payload: [String: Any] = ["id": id, "title": title, "category": category]
+        var payload: [String: Any] = ["id": id, "title": titleEN, "category": categoryEN]
         if let u = urlString, !u.isEmpty { payload["url"] = u }
         if let loc = location { payload["location"] = loc }
         if let b64 = imageBase64, !b64.isEmpty { payload["image_base64"] = b64 }
@@ -3233,8 +3428,9 @@ struct GalleryAdminView: View {
         if selectedFilter == "all" {
             return store.gallery
         }
+        let f = selectedFilter.lowercased()
         return store.gallery.filter {
-            $0.category.lowercased().contains(selectedFilter.lowercased())
+            $0.category.lowercased().contains(f) || $0.categorySpanish.lowercased().contains(f)
         }
     }
 
@@ -3263,12 +3459,12 @@ struct GalleryAdminView: View {
                     // Categories Filter Bar (Matching Image 1)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            GalleryFilterPill(title: "★ All Projects \(store.gallery.count)", isSelected: selectedFilter == "all") { selectedFilter = "all" }
-                            GalleryFilterPill(title: "🏡 Front Yard \(store.gallery.filter { $0.category.lowercased().contains("front") }.count)", isSelected: selectedFilter == "front") { selectedFilter = "front" }
-                            GalleryFilterPill(title: "🌿 Back Yard \(store.gallery.filter { $0.category.lowercased().contains("back") }.count)", isSelected: selectedFilter == "back") { selectedFilter = "back" }
+                            GalleryFilterPill(title: "★ Todos \(store.gallery.count)", isSelected: selectedFilter == "all") { selectedFilter = "all" }
+                            GalleryFilterPill(title: "🏡 Frontal \(store.gallery.filter { $0.category.lowercased().contains("front") }.count)", isSelected: selectedFilter == "front") { selectedFilter = "front" }
+                            GalleryFilterPill(title: "🌿 Trasero \(store.gallery.filter { $0.category.lowercased().contains("back") }.count)", isSelected: selectedFilter == "back") { selectedFilter = "back" }
                             GalleryFilterPill(title: "🪵 Mulch \(store.gallery.filter { $0.category.lowercased().contains("mulch") }.count)", isSelected: selectedFilter == "mulch") { selectedFilter = "mulch" }
-                            GalleryFilterPill(title: "🌳 Tree Care", isSelected: selectedFilter == "tree") { selectedFilter = "tree" }
-                            GalleryFilterPill(title: "✂️ Cleanups & More", isSelected: selectedFilter == "clean") { selectedFilter = "clean" }
+                            GalleryFilterPill(title: "🌳 Árboles", isSelected: selectedFilter == "tree") { selectedFilter = "tree" }
+                            GalleryFilterPill(title: "✂️ Limpiezas", isSelected: selectedFilter == "clean") { selectedFilter = "clean" }
                         }
                         .padding(.horizontal)
                         .padding(.vertical, 6)
@@ -3411,9 +3607,9 @@ struct GalleryWorkCard: View {
                     Spacer()
 
                     HStack(spacing: 3) {
-                        Image(systemName: "house.fill")
-                            .font(.system(size: 8))
-                        Text(photo.category)
+                        Text(photo.categoryIcon)
+                            .font(.system(size: 9))
+                        Text(photo.categorySpanish)
                             .font(.system(size: 9, weight: .bold))
                     }
                     .foregroundStyle(.white)
@@ -3429,7 +3625,7 @@ struct GalleryWorkCard: View {
             // Info Card Bottom
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
-                    Text(photo.category.uppercased())
+                    Text(photo.categorySpanish.uppercased())
                         .font(.system(size: 9, weight: .heavy))
                         .foregroundStyle(Brand.primary)
                     Spacer()
@@ -3560,7 +3756,7 @@ struct EditGalleryPhotoSheet: View {
     @ObservedObject var store: LawnCareStore
 
     @State private var title = ""
-    @State private var category = "Front Yard"
+    @State private var category = "Patio Frontal"
     @State private var location = ""
     @State private var imageURL = ""
     @State private var selectedImage: UIImage? = nil
@@ -3568,17 +3764,16 @@ struct EditGalleryPhotoSheet: View {
     @State private var isSaving = false
 
     let categories = [
-        "Front Yard",
-        "Back Yard",
-        "Front & Back",
-        "Mulch",
-        "Tree Care",
-        "Shrubs & Bushes",
-        "Cleanups & More",
-        "Mowing & Edging",
-        "General LawnCare",
-        "Builder Duplex",
-        "Commercial Grounds"
+        "Patio Frontal",
+        "Patio Trasero",
+        "Corte y Orillado",
+        "Mulch / Acolchado",
+        "Poda de Árboles",
+        "Arbustos y Setos",
+        "Limpieza de Yarda",
+        "Antes y Después",
+        "Comercial y Dúplex",
+        "Cuidado General"
     ]
 
     var body: some View {
@@ -3730,7 +3925,7 @@ struct EditGalleryPhotoSheet: View {
             }
             .onAppear {
                 title = photo.title
-                category = photo.category
+                category = photo.categorySpanish
                 location = photo.location ?? "Killeen & Central TX"
                 imageURL = photo.url
             }
@@ -3784,7 +3979,7 @@ struct AddGalleryPhotoSheet: View {
     @ObservedObject var store: LawnCareStore
 
     @State private var title = ""
-    @State private var category = "Front Yard"
+    @State private var category = "Patio Frontal"
     @State private var location = "Killeen & Central TX"
     @State private var imageURL = ""
     @State private var selectedImage: UIImage? = nil
@@ -3792,17 +3987,16 @@ struct AddGalleryPhotoSheet: View {
     @State private var isUploading = false
 
     let categories = [
-        "Front Yard",
-        "Back Yard",
-        "Front & Back",
-        "Mulch",
-        "Tree Care",
-        "Shrubs & Bushes",
-        "Cleanups & More",
-        "Mowing & Edging",
-        "General LawnCare",
-        "Builder Duplex",
-        "Commercial Grounds"
+        "Patio Frontal",
+        "Patio Trasero",
+        "Corte y Orillado",
+        "Mulch / Acolchado",
+        "Poda de Árboles",
+        "Arbustos y Setos",
+        "Limpieza de Yarda",
+        "Antes y Después",
+        "Comercial y Dúplex",
+        "Cuidado General"
     ]
 
     var body: some View {
@@ -8560,12 +8754,12 @@ struct BeforeAfterCameraSheetView: View {
     @State private var afterImage: UIImage? = nil
     @State private var showBeforePicker: Bool = false
     @State private var showAfterPicker: Bool = false
-    @State private var titleText: String = "Corte & Mantenimiento Residencial"
-    @State private var categoryText: String = "Front Yard"
+    @State private var titleText: String = "Corte y Mantenimiento Residencial"
+    @State private var categoryText: String = "Corte y Orillado"
     @State private var isPublishing: Bool = false
     @State private var showSuccessAlert: Bool = false
     
-    let categories = ["Front Yard", "Back Yard", "Mulch", "Tree Care", "Cleanups", "General LawnCare"]
+    let categories = ["Corte y Orillado", "Patio Frontal", "Patio Trasero", "Mulch / Acolchado", "Poda de Árboles", "Limpieza de Yarda", "Antes y Después"]
     
     var body: some View {
         NavigationView {
@@ -12188,7 +12382,7 @@ struct UploadWorkToWebGalleryView: View {
     @State private var pickerSourceType: UIImagePickerController.SourceType = .photoLibrary
     
     @State private var jobTitle: String = ""
-    @State private var selectedCategory: String = "Corte de Césped"
+    @State private var selectedCategory: String = "Corte y Orillado"
     @State private var selectedCity: String = "Killeen, TX"
     @State private var jobNotes: String = ""
     
@@ -12197,12 +12391,15 @@ struct UploadWorkToWebGalleryView: View {
     @State private var errorMessage: String? = nil
     
     let categories = [
-        "Corte de Césped",
-        "Mulch",
+        "Corte y Orillado",
+        "Patio Frontal",
+        "Patio Trasero",
+        "Mulch / Acolchado",
         "Poda de Árboles",
-        "Limpieza de Yard",
-        "Antes & Después",
-        "Comercial & Duplex"
+        "Arbustos y Setos",
+        "Limpieza de Yarda",
+        "Antes y Después",
+        "Comercial y Dúplex"
     ]
     
     let centralTexasCities = [
@@ -12233,7 +12430,7 @@ struct UploadWorkToWebGalleryView: View {
                                 Text("SUBIR TRABAJO A LA WEB")
                                     .font(.caption.bold())
                                     .foregroundStyle(Brand.primary)
-                                Text("Las fotos que subas aquí aparecerán de inmediato en rodriguezlawncare.com en la galería en vivo.")
+                                Text("En tu app eliges todo en español; al subir a la web se traduce y publica 100% en inglés automáticamente.")
                                     .font(.caption2)
                                     .foregroundStyle(.gray)
                             }
