@@ -1446,7 +1446,11 @@ async def handle_index(request):
     except Exception:
         pass
     index_path = os.path.join(BASE_DIR, "index.html")
-    return web.FileResponse(index_path)
+    response = web.FileResponse(index_path)
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 async def handle_gallery_json(request):
     """Serves gallery.json with no-cache headers so visitors always see live photos."""
