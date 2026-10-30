@@ -854,7 +854,7 @@ function initPhotoUploaders() {
           if (b64) heroUploadedPhotos.push(b64);
         }
       }
-      renderThumbnails('heroPhotoThumbnails', heroUploadedPhotos, 'label[for="heroPhotoInput"] .btn-file-label', '📷 Attach Yard Photos (Subir Fotos)');
+      renderThumbnails('heroPhotoThumbnails', heroUploadedPhotos, 'label[for="heroPhotoInput"] .btn-file-label', '📷 Attach Yard Photos (Click to Upload)');
       heroInput.value = '';
     });
   }
@@ -868,7 +868,7 @@ function initPhotoUploaders() {
           if (b64) bookingUploadedPhotos.push(b64);
         }
       }
-      renderThumbnails('bookingPhotoThumbnails', bookingUploadedPhotos, 'label[for="bookingPhotoInput"] .btn-file-label', '📷 Attach Yard Photos (Subir Fotos de tu Jardín)');
+      renderThumbnails('bookingPhotoThumbnails', bookingUploadedPhotos, 'label[for="bookingPhotoInput"] .btn-file-label', '📷 Attach Yard Photos (Click to Upload)');
       bookingInput.value = '';
     });
   }
@@ -888,7 +888,7 @@ async function checkCalendarDate(dateVal, noticeElementId, timeSelectId, submitB
     if (isDayFull) {
       if (noticeEl) {
         noticeEl.style.display = 'block';
-        noticeEl.innerHTML = `⚠️ <strong>Team Fully Booked:</strong> Este día tenemos todos los horarios ocupados. Por favor selecciona otra fecha disponible.`;
+        noticeEl.innerHTML = `⚠️ <strong>Team Fully Booked:</strong> We are fully booked on this date. Please select another available date.`;
       }
       const btn = document.querySelector(submitBtnSelector);
       if (btn) btn.disabled = true;

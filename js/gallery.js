@@ -262,9 +262,9 @@
       container.innerHTML = `
         <div class="gallery-empty-state" style="grid-column: 1 / -1; text-align: center; padding: 3rem 1.5rem; background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: 16px;">
           <span class="empty-icon" style="font-size: 2.8rem; display: block; margin-bottom: 0.8rem;">🌿</span>
-          <h3 style="color: #fff; margin-bottom: 0.5rem; font-size: 1.3rem;">No hay fotos para este filtro</h3>
-          <p style="color: #94a3b8; max-width: 460px; margin: 0 auto 1.2rem;">No encontramos trabajos en <strong>"${escapeHtml(cityFilter !== 'all' ? cityFilter : filter)}"</strong>. Selecciona "Todas las Ciudades" o "Todos los Trabajos".</p>
-          <button type="button" class="btn btn-outline btn-sm" onclick="document.querySelector('[data-city=all]')?.click(); document.querySelector('[data-filter=all]')?.click();" style="border-radius: 9999px; font-weight: 600;">Ver Todos los Trabajos ✨</button>
+          <h3 style="color: #fff; margin-bottom: 0.5rem; font-size: 1.3rem;">No photos found for this filter</h3>
+          <p style="color: #94a3b8; max-width: 460px; margin: 0 auto 1.2rem;">No projects found in <strong>"${escapeHtml(cityFilter !== 'all' ? cityFilter : filter)}"</strong>. Please select "All Cities" or "All Projects".</p>
+          <button type="button" class="btn btn-outline btn-sm" onclick="document.querySelector('[data-city=all]')?.click(); document.querySelector('[data-filter=all]')?.click();" style="border-radius: 9999px; font-weight: 600;">View All Projects ✨</button>
         </div>
       `;
       return;

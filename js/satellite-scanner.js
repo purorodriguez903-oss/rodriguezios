@@ -62,7 +62,7 @@
       const estPerimeter = Math.round(320 + (absHash % 15) * 12);
 
       if (areaLabel) areaLabel.textContent = `${estAcres} Acres (~${estSqFt.toLocaleString()} sq ft)`;
-      if (perimeterLabel) perimeterLabel.textContent = `~${estPerimeter} Linear Ft (Orillado)`;
+      if (perimeterLabel) perimeterLabel.textContent = `~${estPerimeter} Linear Ft (Edging)`;
 
       // Approximate Central TX coordinates with subtle variation
       const lat = (31.1171 + ((absHash % 50) - 25) * 0.001).toFixed(4);
@@ -80,7 +80,7 @@
       scanBtn.addEventListener('click', () => {
         const addr = addressInput ? addressInput.value : '';
         if (!addr) {
-          alert('Por favor escribe tu dirección primero (calle y número) para escanear tu lote.');
+          alert('Please enter your full street address first to scan your yard.');
           addressInput?.focus();
           return;
         }

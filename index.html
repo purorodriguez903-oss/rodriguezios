@@ -98,10 +98,6 @@
         </p>
 
         <div class="hero-actions">
-          <a href="/instalar" class="btn btn-accent btn-lg hero-install-btn" style="display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg, #22c55e 0%, #15803d 100%);color:#ffffff;border:none;box-shadow:0 8px 24px rgba(34,197,94,0.4);border-radius:12px;font-weight:800;">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 7.07c.65-.79 1.09-1.89.97-2.99-.95.04-2.1.64-2.77 1.43-.59.68-1.11 1.79-.97 2.87 1.06.08 2.13-.55 2.77-1.31z"/></svg>
-            <span>📱 Instalar App iOS (v2.3.0)</span>
-          </a>
           <a href="#calculator" class="btn btn-accent btn-lg" data-i18n="hero_cta_calc">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>
             Calculate Instant Price
@@ -201,14 +197,14 @@
             <div class="form-group">
               <label for="heroTime" class="form-label">⏰ Preferred Time</label>
               <select id="heroTime" class="form-control" required>
-                <option value="Any Available Time Window">Cualquier Horario / Any Available Time</option>
-                <optgroup label="⏰ Horas Específicas / Specific Hours">
+                <option value="Any Available Time Window">Any Available Time Window (Flexible)</option>
+                <optgroup label="⏰ Specific Preferred Hours">
                   <option value="7:00 AM">7:00 AM</option>
                   <option value="8:00 AM">8:00 AM</option>
                   <option value="9:00 AM">9:00 AM</option>
                   <option value="10:00 AM">10:00 AM</option>
                   <option value="11:00 AM">11:00 AM</option>
-                  <option value="12:00 PM">12:00 PM (Mediodía / Noon)</option>
+                  <option value="12:00 PM">12:00 PM (Noon)</option>
                   <option value="1:00 PM">1:00 PM</option>
                   <option value="2:00 PM">2:00 PM</option>
                   <option value="3:00 PM">3:00 PM</option>
@@ -217,7 +213,7 @@
                   <option value="6:00 PM">6:00 PM</option>
                   <option value="7:00 PM">7:00 PM</option>
                 </optgroup>
-                <optgroup label="🕒 Rangos Flexibles / Time Windows">
+                <optgroup label="🕒 Flexible Time Windows">
                   <option value="Morning (8:00 AM - 12:00 PM)">Morning (8:00 AM - 12:00 PM)</option>
                   <option value="Afternoon (12:00 PM - 4:00 PM)">Afternoon (12:00 PM - 4:00 PM)</option>
                   <option value="Late Afternoon (4:00 PM - 7:00 PM)">Late Afternoon (4:00 PM - 7:00 PM)</option>
@@ -228,10 +224,10 @@
           <div id="heroAvailabilityNotice" class="availability-notice" style="display: none;"></div>
 
           <div class="form-group">
-            <label class="form-label">📸 Yard Photos (Optional / Opcional)</label>
+            <label class="form-label">📸 Yard Photos (Optional)</label>
             <label for="heroPhotoInput" class="custom-file-upload">
               <input type="file" id="heroPhotoInput" accept="image/*" multiple style="display:none;">
-              <span class="btn-file-label">📷 Attach Yard Photos (Subir Fotos)</span>
+              <span class="btn-file-label">📷 Attach Yard Photos (Click to Upload)</span>
             </label>
             <div id="heroPhotoThumbnails" class="photo-thumbnails-container"></div>
           </div>
@@ -1084,16 +1080,16 @@
                   <span class="hud-coords" id="satelliteCoordsLabel">31.1171° N, 97.7278° W • Killeen, TX</span>
                 </div>
                 <div class="satellite-map-frame-wrap">
-                  <iframe id="satelliteIframe" class="satellite-iframe" loading="lazy" src="about:blank" title="Vista Satelital del Lote"></iframe>
+                  <iframe id="satelliteIframe" class="satellite-iframe" loading="lazy" src="about:blank" title="Yard Satellite View"></iframe>
                   <div class="satellite-crosshair"></div>
                   <div class="satellite-badge-overlay">
-                    <div class="badge-item"><span>📐 Est. Superficie:</span> <strong id="lotAreaEstimate">0.22 Acres (~9,500 sq ft)</strong></div>
-                    <div class="badge-item"><span>✂️ Perímetro Orillado:</span> <strong id="lotPerimeterEstimate">~390 Linear Ft</strong></div>
-                    <div class="badge-item"><span>🎯 Zona de Servicio:</span> <strong id="lotCityDetected">Killeen / Central Texas</strong></div>
+                    <div class="badge-item"><span>📐 Est. Lot Area:</span> <strong id="lotAreaEstimate">0.22 Acres (~9,500 sq ft)</strong></div>
+                    <div class="badge-item"><span>✂️ Edging Perimeter:</span> <strong id="lotPerimeterEstimate">~390 Linear Ft</strong></div>
+                    <div class="badge-item"><span>🎯 Service Area:</span> <strong id="lotCityDetected">Killeen / Central Texas</strong></div>
                   </div>
                 </div>
                 <div class="satellite-hud-footer">
-                  <span>✅ Vista satelital en alta resolución sincronizada para cálculo exacto de mano de obra y corte</span>
+                  <span>✅ High-resolution satellite yard preview synchronized for exact mowing estimate</span>
                 </div>
               </div>
             </div>
@@ -1106,14 +1102,14 @@
               <div class="form-group">
                 <label for="formTime" class="form-label" data-i18n="form_lbl_time">⏰ Preferred Time Window</label>
                 <select id="formTime" class="form-control" required>
-                  <option value="Any Available Time Window">Cualquier Horario / Any Available Time</option>
-                  <optgroup label="⏰ Horas Específicas / Specific Hours">
+                  <option value="Any Available Time Window">Any Available Time Window (Flexible)</option>
+                  <optgroup label="⏰ Specific Preferred Hours">
                     <option value="7:00 AM">7:00 AM</option>
                     <option value="8:00 AM">8:00 AM</option>
                     <option value="9:00 AM">9:00 AM</option>
                     <option value="10:00 AM">10:00 AM</option>
                     <option value="11:00 AM">11:00 AM</option>
-                    <option value="12:00 PM">12:00 PM (Mediodía / Noon)</option>
+                    <option value="12:00 PM">12:00 PM (Noon)</option>
                     <option value="1:00 PM">1:00 PM</option>
                     <option value="2:00 PM">2:00 PM</option>
                     <option value="3:00 PM">3:00 PM</option>
@@ -1122,7 +1118,7 @@
                     <option value="6:00 PM">6:00 PM</option>
                     <option value="7:00 PM">7:00 PM</option>
                   </optgroup>
-                  <optgroup label="🕒 Rangos Flexibles / Time Windows">
+                  <optgroup label="🕒 Flexible Time Windows">
                     <option value="Morning (8:00 AM - 12:00 PM)">Morning (8:00 AM - 12:00 PM)</option>
                     <option value="Afternoon (12:00 PM - 4:00 PM)">Afternoon (12:00 PM - 4:00 PM)</option>
                     <option value="Late Afternoon (4:00 PM - 7:00 PM)">Late Afternoon (4:00 PM - 7:00 PM)</option>
@@ -1180,10 +1176,10 @@
                         <div id="bookingAvailabilityNotice" class="availability-notice" style="display: none;"></div>
 
             <div class="form-group">
-              <label class="form-label">📸 Yard Photos (Optional / Opcional)</label>
+              <label class="form-label">📸 Yard Photos (Optional)</label>
               <label for="bookingPhotoInput" class="custom-file-upload">
                 <input type="file" id="bookingPhotoInput" accept="image/*" multiple style="display:none;">
-                <span class="btn-file-label">📷 Attach Yard Photos (Subir Fotos de tu Jardín)</span>
+                <span class="btn-file-label">📷 Attach Yard Photos (Click to Upload)</span>
               </label>
               <div id="bookingPhotoThumbnails" class="photo-thumbnails-container"></div>
             </div>

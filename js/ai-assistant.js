@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  let currentLang = 'es'; // default Spanish or detect from navigator
+  let currentLang = 'en'; // default Spanish or detect from navigator
 
   if (navigator.language && navigator.language.startsWith('en')) {
     currentLang = 'en';
