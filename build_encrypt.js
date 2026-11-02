@@ -52,6 +52,30 @@ const OBFUSCATION_OPTIONS = {
     target: 'browser'
 };
 
+const TROLL_BANNER = `/*
+ * =========================================================================================
+ *  💀 PAGE 100% ENCRYPTED BY RAFA • LOL NOOB HAHAHA 😂💀
+ * =========================================================================================
+ *   ____      _    _____ _         _           _
+ *  |  _ \\    / \\  |  ___/ \\       | |     ___ | |
+ *  | |_) |  / _ \\ | |_ / _ \\  ___ | |    / _ \\| |
+ *  |  _ <  / ___ \\|  _/ ___ \\|___|| |___| (_) | |
+ *  |_| \\_\\/_/   \\_\\_|/_/   \\_\\    |_____|\\___/|_|
+ *
+ *  Nice try noob! You cannot edit, inspect, steal, or copy anything from this page!
+ *  Rodriguez LawnCare Military-Grade Anti-Theft Protection is ACTIVE.
+ *  All decompilation, cloning, and scraping attempts are blocked & logged.
+ *  Go build your own website, noob! 🛡️⚡
+ * =========================================================================================
+ */\n`;
+
+const CSS_BANNER = `/*
+ * =========================================================================================
+ *  💀 PAGE 100% ENCRYPTED BY RAFA • LOL NOOB HAHAHA 😂💀
+ *  PROTECTED STYLESHEET - REVERSE ENGINEERING & DESIGN THEFT PROHIBITED
+ * =========================================================================================
+ */\n`;
+
 console.log('\n[1/3] Encrypting and Obfuscating JavaScript Files...');
 for (const file of JS_FILES) {
     if (!fs.existsSync(file.src)) {
@@ -76,9 +100,8 @@ for (const file of JS_FILES) {
     const destDir = path.dirname(file.dest);
     if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
 
-    // Prepend security header
-    const banner = '/* (C) RODRIGUEZ LAWNCARE - PROPRIETARY ENCRYPTED CLIENT ASSET. REVERSE ENGINEERING & DECOMPILATION PROHIBITED. */\n';
-    fs.writeFileSync(file.dest, banner + encryptedCode, 'utf8');
+    // Prepend troll banner & encrypted code
+    fs.writeFileSync(file.dest, TROLL_BANNER + encryptedCode, 'utf8');
 
     console.log(`  ✓ ${file.dest.padEnd(26)}: ${raw.length.toString().padStart(6)}b -> ${encryptedCode.length.toString().padStart(7)}b encrypted in ${duration}ms`);
 }
@@ -95,14 +118,13 @@ for (const file of CSS_FILES) {
     const destDir = path.dirname(file.dest);
     if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
 
-    const banner = '/* (C) RODRIGUEZ LAWNCARE - PROTECTED STYLESHEET */\n';
-    fs.writeFileSync(file.dest, banner + minified, 'utf8');
+    fs.writeFileSync(file.dest, CSS_BANNER + minified, 'utf8');
     console.log(`  ✓ ${file.dest.padEnd(26)}: ${raw.length.toString().padStart(6)}b -> ${minified.length.toString().padStart(7)}b compressed`);
 }
 
 console.log('\n[3/3] Updating index.html Cache-Busting Tokens...');
 let html = fs.readFileSync('index.html', 'utf8');
-const stamp = '5.0.sec_' + Date.now().toString(36);
+const stamp = '5.1.rafa_' + Date.now().toString(36);
 
 html = html.replace(/href="\.\/css\/styles\.css(\?v=[^"]*)?"/g, `href="./css/styles.css?v=${stamp}"`);
 html = html.replace(/href="\.\/security\/security\.css(\?v=[^"]*)?"/g, `href="./security/security.css?v=${stamp}"`);

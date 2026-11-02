@@ -110,6 +110,17 @@
   // -----------------------------------------------------------------------
   // SECURITY SHIELD TOAST NOTIFICATION
   // -----------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+  // TROLL & SECURITY CONSOLE BANNER
+  // -----------------------------------------------------------------------
+  try {
+    console.log(
+      '%c💀 PAGE ENCRYPTED BY RAFA • LOL NOOB HAHAHAHA! 💀\n%cNice try noob! You cannot edit, copy or steal this site. Go build your own!',
+      'color: #22c55e; font-size: 20px; font-weight: 900; background: #05140b; padding: 12px 20px; border: 2px solid #22c55e; border-radius: 8px; text-shadow: 0 0 10px #22c55e;',
+      'color: #ef4444; font-size: 14px; font-weight: bold; margin-top: 6px;'
+    );
+  } catch (e) {}
+
   function showSecurityNotice() {
     try {
       let toast = document.getElementById('rodriguezSecurityNotice');
@@ -117,7 +128,7 @@
         toast = document.createElement('div');
         toast.id = 'rodriguezSecurityNotice';
         toast.style.cssText = 'position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#05140b;border:1.5px solid #22c55e;color:#ffffff;padding:12px 24px;border-radius:50px;box-shadow:0 10px 30px rgba(0,0,0,0.85),0 0 20px rgba(34,197,94,0.5);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;font-size:13px;font-weight:700;z-index:999999;display:flex;align-items:center;gap:10px;pointer-events:none;transition:opacity 0.3s ease,transform 0.3s ease;opacity:0;';
-        toast.innerHTML = '<span style="font-size:16px;">🛡️</span> <span>Protected System • Source code inspection and asset copying disabled.</span>';
+        toast.innerHTML = '<span style="font-size:16px;">🛡️</span> <span>PAGE 100% ENCRYPTED BY RAFA • LOL NOOB HAHAHA! Inspection & copying disabled.</span>';
         document.body.appendChild(toast);
       }
       if (toast) {
