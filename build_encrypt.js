@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const https = require('https');
 const JavaScriptObfuscator = require('javascript-obfuscator');
 const CleanCSS = require('clean-css');
 
@@ -22,8 +23,6 @@ const CSS_FILES = [
     { src: 'src/security/security.css', dest: 'security/security.css' }
 ];
 
-// Configuration optimized for heavy obfuscation, Chinese/Hex numbers,
-// anti-tampering, debug protection, and 100% browser compatibility.
 const OBFUSCATION_OPTIONS = {
     compact: true,
     controlFlowFlattening: true,
@@ -46,9 +45,9 @@ const OBFUSCATION_OPTIONS = {
     selfDefending: true, // Prevents beautification / formatting in DevTools
     debugProtection: true, // Traps and freezes DevTools with debugger loop
     debugProtectionInterval: 2500,
-    disableConsoleOutput: false, // Keep normal console flow for any network logs
-    renameGlobals: false, // Preserves global window APIs and DOM hooks
-    transformObjectKeys: false, // Preserves DOM dataset and object properties
+    disableConsoleOutput: false,
+    renameGlobals: false,
+    transformObjectKeys: false,
     target: 'browser'
 };
 
@@ -76,68 +75,152 @@ const CSS_BANNER = `/*
  * =========================================================================================
  */\n`;
 
-console.log('\n[1/3] Encrypting and Obfuscating JavaScript Files...');
-for (const file of JS_FILES) {
-    if (!fs.existsSync(file.src)) {
-        console.error(`❌ Source file missing: ${file.src}`);
-        process.exit(1);
-    }
-    const raw = fs.readFileSync(file.src, 'utf8');
-    const start = Date.now();
-    const result = JavaScriptObfuscator.obfuscate(raw, OBFUSCATION_OPTIONS);
-    const encryptedCode = result.getObfuscatedCode();
-    const duration = Date.now() - start;
+const HTML_TROLL_BANNER = `<!--
+=========================================================================================
+ 💀 PAGE 100% ENCRYPTED BY RAFA • LOL NOOB HAHAHA 😂💀
+=========================================================================================
+  ____      _    _____ _         _           _
+ |  _ \\    / \\  |  ___/ \\       | |     ___ | |
+ | |_) |  / _ \\ | |_ / _ \\  ___ | |    / _ \\| |
+ |  _ <  / ___ \\|  _/ ___ \\|___|| |___| (_) | |
+ |_| \\_\\/_/   \\_\\_|/_/   \\_\\    |_____|\\___/|_|
 
-    // Verify syntax
-    try {
-        new vm.Script(encryptedCode);
-    } catch (err) {
-        console.error(`❌ Syntax verification failed on ${file.dest}:`, err);
-        process.exit(1);
-    }
+ Nice try noob! You cannot edit, inspect, steal, or copy anything from this page!
+ Rodriguez LawnCare Military-Grade Anti-Theft Protection is ACTIVE.
+ All decompilation, cloning, and scraping attempts are blocked & logged.
+ Go build your own website, noob! 🛡️⚡
+=========================================================================================
+-->\n`;
 
-    // Ensure target directory exists
-    const destDir = path.dirname(file.dest);
-    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+async function syncLiveMobileUploads() {
+    console.log('\n[0/4] Checking and Syncing Live Mobile Uploads from Cloud...');
+    return new Promise((resolve) => {
+        const req = https.get('https://rodriguezlawncare.xyz/api/gallery', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 4000 }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    const liveItems = parsed.gallery || [];
+                    console.log(`  ✓ Cloud server responded with ${liveItems.length} live items.`);
 
-    // Prepend troll banner & encrypted code
-    fs.writeFileSync(file.dest, TROLL_BANNER + encryptedCode, 'utf8');
+                    const localGalleryPath = path.join(__dirname, 'gallery.json');
+                    let localItems = [];
+                    if (fs.existsSync(localGalleryPath)) {
+                        localItems = JSON.parse(fs.readFileSync(localGalleryPath, 'utf8'));
+                    }
 
-    console.log(`  ✓ ${file.dest.padEnd(26)}: ${raw.length.toString().padStart(6)}b -> ${encryptedCode.length.toString().padStart(7)}b encrypted in ${duration}ms`);
+                    const localIds = new Set(localItems.map(it => it.id));
+                    let added = 0;
+                    for (const item of liveItems) {
+                        if (item && item.id && !localIds.has(item.id)) {
+                            localItems.push(item);
+                            localIds.add(item.id);
+                            added++;
+                        }
+                    }
+
+                    localItems.sort((a, b) => (b.id || 0) - (a.id || 0));
+                    fs.writeFileSync(localGalleryPath, JSON.stringify(localItems, null, 2), 'utf8');
+
+                    // Also backup to data_backup
+                    const backupDir = path.join(__dirname, 'data_backup');
+                    if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+                    fs.writeFileSync(path.join(backupDir, 'gallery_persistent.json'), JSON.stringify(localItems, null, 2), 'utf8');
+
+                    console.log(`  ✓ Sync complete: ${added} new items merged from phone. Total gallery records: ${localItems.length}`);
+                } catch (err) {
+                    console.log(`  ✓ Notice: Using local gallery database (${err.message})`);
+                }
+                resolve();
+            });
+        });
+
+        req.on('error', (e) => {
+            console.log(`  ✓ Cloud sync skipped (${e.message}). Local records preserved.`);
+            resolve();
+        });
+    });
 }
 
-console.log('\n[2/3] Minifying and Compressing CSS Stylesheets...');
-const cleanCss = new CleanCSS({ level: 2 });
-for (const file of CSS_FILES) {
-    if (!fs.existsSync(file.src)) {
-        console.error(`❌ CSS Source missing: ${file.src}`);
-        process.exit(1);
-    }
-    const raw = fs.readFileSync(file.src, 'utf8');
-    const minified = cleanCss.minify(raw).styles;
-    const destDir = path.dirname(file.dest);
-    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+async function runBuild() {
+    await syncLiveMobileUploads();
 
-    fs.writeFileSync(file.dest, CSS_BANNER + minified, 'utf8');
-    console.log(`  ✓ ${file.dest.padEnd(26)}: ${raw.length.toString().padStart(6)}b -> ${minified.length.toString().padStart(7)}b compressed`);
+    console.log('\n[1/4] Encrypting and Obfuscating JavaScript Files...');
+    for (const file of JS_FILES) {
+        if (!fs.existsSync(file.src)) {
+            console.error(`❌ Source file missing: ${file.src}`);
+            process.exit(1);
+        }
+        const raw = fs.readFileSync(file.src, 'utf8');
+        const start = Date.now();
+        const result = JavaScriptObfuscator.obfuscate(raw, OBFUSCATION_OPTIONS);
+        const encryptedCode = result.getObfuscatedCode();
+        const duration = Date.now() - start;
+
+        // Verify syntax
+        try {
+            new vm.Script(encryptedCode);
+        } catch (err) {
+            console.error(`❌ Syntax verification failed on ${file.dest}:`, err);
+            process.exit(1);
+        }
+
+        const destDir = path.dirname(file.dest);
+        if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+
+        fs.writeFileSync(file.dest, TROLL_BANNER + encryptedCode, 'utf8');
+        console.log(`  ✓ ${file.dest.padEnd(26)}: ${raw.length.toString().padStart(6)}b -> ${encryptedCode.length.toString().padStart(7)}b encrypted in ${duration}ms`);
+    }
+
+    console.log('\n[2/4] Minifying and Compressing CSS Stylesheets...');
+    const cleanCss = new CleanCSS({ level: 2 });
+    for (const file of CSS_FILES) {
+        if (!fs.existsSync(file.src)) {
+            console.error(`❌ CSS Source missing: ${file.src}`);
+            process.exit(1);
+        }
+        const raw = fs.readFileSync(file.src, 'utf8');
+        const minified = cleanCss.minify(raw).styles;
+        const destDir = path.dirname(file.dest);
+        if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+
+        fs.writeFileSync(file.dest, CSS_BANNER + minified, 'utf8');
+        console.log(`  ✓ ${file.dest.padEnd(26)}: ${raw.length.toString().padStart(6)}b -> ${minified.length.toString().padStart(7)}b compressed`);
+    }
+
+    console.log('\n[3/4] Protecting and Encrypting HTML Shell...');
+    let html = fs.readFileSync('index.html', 'utf8');
+
+    // Prepend HTML troll banner if not present
+    if (!html.includes('PAGE 100% ENCRYPTED BY RAFA')) {
+        html = HTML_TROLL_BANNER + html;
+    }
+
+    // Protect body with inline anti-theft attributes
+    if (!html.includes('oncontextmenu="return false;"')) {
+        html = html.replace('<body class="theme-tactical"', '<body class="theme-tactical" oncontextmenu="return false;" ondragstart="return false;" onselectstart="if (event.target.tagName !== \'INPUT\' && event.target.tagName !== \'TEXTAREA\') return false;"');
+        html = html.replace('<body>', '<body oncontextmenu="return false;" ondragstart="return false;" onselectstart="if (event.target.tagName !== \'INPUT\' && event.target.tagName !== \'TEXTAREA\') return false;"');
+    }
+
+    console.log('\n[4/4] Updating index.html Cache-Busting Tokens...');
+    const stamp = '5.2.rafa_' + Date.now().toString(36);
+
+    html = html.replace(/href="\.\/css\/styles\.css(\?v=[^"]*)?"/g, `href="./css/styles.css?v=${stamp}"`);
+    html = html.replace(/href="\.\/security\/security\.css(\?v=[^"]*)?"/g, `href="./security/security.css?v=${stamp}"`);
+    html = html.replace(/src="\.\/js\/main\.js(\?v=[^"]*)?"/g, `src="./js/main.js?v=${stamp}"`);
+    html = html.replace(/src="\.\/js\/gallery\.js(\?v=[^"]*)?"/g, `src="./js/gallery.js?v=${stamp}"`);
+    html = html.replace(/src="\.\/js\/satellite-scanner\.js(\?v=[^"]*)?"/g, `src="./js/satellite-scanner.js?v=${stamp}"`);
+    html = html.replace(/src="\.\/js\/ai-assistant\.js(\?v=[^"]*)?"/g, `src="./js/ai-assistant.js?v=${stamp}"`);
+    html = html.replace(/src="\.\/security\/anti-bot\.js(\?v=[^"]*)?"/g, `src="./security/anti-bot.js?v=${stamp}"`);
+    html = html.replace(/src="\.\/security\/web-shield\.js(\?v=[^"]*)?"/g, `src="./security/web-shield.js?v=${stamp}"`);
+
+    fs.writeFileSync('index.html', html, 'utf8');
+    console.log(`  ✓ index.html updated with cache token: v=${stamp}`);
+
+    console.log('\n====================================================');
+    console.log('🎉 100% SUCCESS: ALL ASSETS ENCRYPTED & DATA PRESERVED');
+    console.log('====================================================\n');
 }
 
-console.log('\n[3/3] Updating index.html Cache-Busting Tokens...');
-let html = fs.readFileSync('index.html', 'utf8');
-const stamp = '5.1.rafa_' + Date.now().toString(36);
-
-html = html.replace(/href="\.\/css\/styles\.css(\?v=[^"]*)?"/g, `href="./css/styles.css?v=${stamp}"`);
-html = html.replace(/href="\.\/security\/security\.css(\?v=[^"]*)?"/g, `href="./security/security.css?v=${stamp}"`);
-html = html.replace(/src="\.\/js\/main\.js(\?v=[^"]*)?"/g, `src="./js/main.js?v=${stamp}"`);
-html = html.replace(/src="\.\/js\/gallery\.js(\?v=[^"]*)?"/g, `src="./js/gallery.js?v=${stamp}"`);
-html = html.replace(/src="\.\/js\/satellite-scanner\.js(\?v=[^"]*)?"/g, `src="./js/satellite-scanner.js?v=${stamp}"`);
-html = html.replace(/src="\.\/js\/ai-assistant\.js(\?v=[^"]*)?"/g, `src="./js/ai-assistant.js?v=${stamp}"`);
-html = html.replace(/src="\.\/security\/anti-bot\.js(\?v=[^"]*)?"/g, `src="./security/anti-bot.js?v=${stamp}"`);
-html = html.replace(/src="\.\/security\/web-shield\.js(\?v=[^"]*)?"/g, `src="./security/web-shield.js?v=${stamp}"`);
-
-fs.writeFileSync('index.html', html, 'utf8');
-console.log(`  ✓ index.html updated with cache token: v=${stamp}`);
-
-console.log('\n====================================================');
-console.log('🎉 100% SUCCESS: ALL ASSETS ENCRYPTED AND DEPLOYABLE');
-console.log('====================================================\n');
+runBuild();

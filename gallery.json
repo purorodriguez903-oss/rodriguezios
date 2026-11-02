@@ -1,5 +1,85 @@
 [
   {
+    "id": 16,
+    "filename": "work_16.jpg",
+    "url": "./assets/gallery/work_16.jpg",
+    "uploaded_at": 1793650000000,
+    "title": "Duplex Clean Mowing & Razor Edging in Killeen, TX",
+    "category": "Mowing & Edging",
+    "location": "Killeen, TX",
+    "verified": true
+  },
+  {
+    "id": 15,
+    "filename": "work_15.jpg",
+    "url": "./assets/gallery/work_15.jpg",
+    "uploaded_at": 1793649000000,
+    "title": "Precision Razor Edging in Killeen, TX",
+    "category": "Mowing & Edging",
+    "location": "Killeen, TX",
+    "verified": true
+  },
+  {
+    "id": 14,
+    "filename": "work_14.jpg",
+    "url": "./assets/gallery/work_14.jpg",
+    "uploaded_at": 1793648000000,
+    "title": "Tree Care & Precision Trimming in Killeen, TX",
+    "category": "Tree Care",
+    "location": "Killeen, TX",
+    "verified": true
+  },
+  {
+    "id": 13,
+    "filename": "work_13.jpg",
+    "url": "./assets/gallery/work_13.jpg",
+    "uploaded_at": 1793647000000,
+    "title": "Back Yard Precision Mowing in Killeen, TX",
+    "category": "Back Yard",
+    "location": "Killeen, TX",
+    "verified": true
+  },
+  {
+    "id": 12,
+    "filename": "work_12.jpg",
+    "url": "./assets/gallery/work_12.jpg",
+    "uploaded_at": 1793646000000,
+    "title": "Fresh Dark Mulch Installation in Copperas Cove, TX",
+    "category": "Mulch",
+    "location": "Copperas Cove, TX",
+    "verified": true
+  },
+  {
+    "id": 11,
+    "filename": "work_11.jpg",
+    "url": "./assets/gallery/work_11.jpg",
+    "uploaded_at": 1793645000000,
+    "title": "Commercial Duplex Lawn Care in Copperas Cove, TX",
+    "category": "Mowing & Edging",
+    "location": "Copperas Cove, TX",
+    "verified": true
+  },
+  {
+    "id": 10,
+    "filename": "work_10.jpg",
+    "url": "./assets/gallery/work_10.jpg",
+    "uploaded_at": 1793644000000,
+    "title": "Front & Back Yard Full Overhaul in Killeen, TX",
+    "category": "Back Yard",
+    "location": "Killeen, TX",
+    "verified": true
+  },
+  {
+    "id": 9,
+    "filename": "work_9.jpg",
+    "url": "./assets/gallery/work_9.jpg",
+    "uploaded_at": 1793643000000,
+    "title": "Back Yard Precision Mowing & Crisp Lines in Killeen, TX",
+    "category": "Mowing & Edging",
+    "location": "Killeen, TX",
+    "verified": true
+  },
+  {
     "id": 8,
     "filename": "work_8.jpg",
     "url": "./assets/gallery/work_8.jpg",
@@ -58,7 +138,7 @@
     "id": 3,
     "filename": "work_3.jpg",
     "url": "./assets/gallery/work_3.jpg",
-    "uploaded_at": 1790900000000,
+    "uploaded_at": 1790890000000,
     "title": "Hedge Trimming & Shrub Shaping",
     "category": "Shrubs & Bushes",
     "location": "Harker Heights, TX",
@@ -69,7 +149,7 @@
     "id": 2,
     "filename": "work_2.jpg",
     "url": "./assets/gallery/work_2.jpg",
-    "uploaded_at": 1791331200000,
+    "uploaded_at": 1790880000000,
     "title": "Front Yard Renovation & Razor Edging",
     "category": "Front Yard",
     "location": "Killeen, TX",
