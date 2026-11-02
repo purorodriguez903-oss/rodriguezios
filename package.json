@@ -4,6 +4,11 @@
   "description": "Rodriguez LawnCare Official Website & AI Receptionist",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "encrypt": "node build_encrypt.js"
+  },
+  "devDependencies": {
+    "clean-css": "^5.3.3",
+    "javascript-obfuscator": "^5.9.1"
   }
 }
