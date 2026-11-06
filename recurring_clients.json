@@ -6,11 +6,16 @@
     "address": "4502 Trimmier Rd, Killeen, TX",
     "frequency": "weekly",
     "service_day": "Martes",
-    "price": 60.0,
+    "price": 60,
     "status": "paid",
-    "services": ["Front & Back Yard Cut", "Perimeter Edging"],
+    "services": [
+      "Front & Back Yard Cut",
+      "Perimeter Edging"
+    ],
     "notes": "Gate code #1290, 2 small dogs in back yard (friendly)",
-    "last_serviced": "2026-10-27"
+    "last_serviced": "2026-10-27",
+    "lat": 31.0747614,
+    "lng": -97.739602
   },
   {
     "id": 2,
@@ -19,11 +24,16 @@
     "address": "2804 Rosewood Dr, Harker Heights, TX",
     "frequency": "biweekly",
     "service_day": "Jueves",
-    "price": 75.0,
+    "price": 75,
     "status": "pending",
-    "services": ["Front & Back Yard Cut", "Shrub & Hedge Trimming"],
+    "services": [
+      "Front & Back Yard Cut",
+      "Shrub & Hedge Trimming"
+    ],
     "notes": "Pay via Zelle after service",
-    "last_serviced": "2026-10-15"
+    "last_serviced": "2026-10-15",
+    "lat": 31.0772,
+    "lng": -97.662
   },
   {
     "id": 3,
@@ -32,10 +42,15 @@
     "address": "1108 Clear Creek Rd, Killeen, TX",
     "frequency": "weekly",
     "service_day": "Viernes",
-    "price": 55.0,
+    "price": 55,
     "status": "pending",
-    "services": ["Front & Back Yard Cut", "Sidewalk Edging & Blowing"],
+    "services": [
+      "Front & Back Yard Cut",
+      "Sidewalk Edging & Blowing"
+    ],
     "notes": "Military discount applied (Fort Cavazos area)",
-    "last_serviced": "2026-10-23"
+    "last_serviced": "2026-10-23",
+    "lat": 31.0979286,
+    "lng": -97.8054927
   }
 ]

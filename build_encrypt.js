@@ -191,6 +191,54 @@ async function syncLiveMobileUploads() {
             resolve();
         });
     });
+
+    // 3. Sync Recurring Clients Database
+    await new Promise((resolve) => {
+        const req = https.get('https://rodriguezlawncare.xyz/api/recurring', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 4000 }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    const liveClients = parsed.clients || [];
+                    if (Array.isArray(liveClients)) {
+                        const localClientsPath = path.join(__dirname, 'recurring_clients.json');
+                        let localClients = [];
+                        if (fs.existsSync(localClientsPath)) {
+                            localClients = JSON.parse(fs.readFileSync(localClientsPath, 'utf8'));
+                        }
+
+                        const localIds = new Set(localClients.map(c => c.id));
+                        let added = 0;
+                        for (const client of liveClients) {
+                            if (client && client.id && !localIds.has(client.id)) {
+                                localClients.push(client);
+                                localIds.add(client.id);
+                                added++;
+                            }
+                        }
+
+                        localClients.sort((a, b) => (a.id || 0) - (b.id || 0));
+                        fs.writeFileSync(localClientsPath, JSON.stringify(localClients, null, 2), 'utf8');
+
+                        const backupDir = path.join(__dirname, 'data_backup');
+                        if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+                        fs.writeFileSync(path.join(backupDir, 'recurring_persistent.json'), JSON.stringify(localClients, null, 2), 'utf8');
+
+                        console.log(`  ✓ Recurring clients sync complete: ${added} new clients merged from mobile. Total clients: ${localClients.length}`);
+                    }
+                } catch (err) {
+                    console.log(`  ✓ Notice: Using local recurring clients database (${err.message})`);
+                }
+                resolve();
+            });
+        });
+
+        req.on('error', (e) => {
+            console.log(`  ✓ Cloud recurring clients sync skipped (${e.message}). Local records preserved.`);
+            resolve();
+        });
+    });
 }
 
 async function runBuild() {

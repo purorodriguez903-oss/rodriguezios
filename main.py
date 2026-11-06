@@ -78,6 +78,7 @@ os.makedirs(DATA_BACKUP_DIR, exist_ok=True)
 GALLERY_BACKUP_PATH = os.path.join(DATA_BACKUP_DIR, "gallery_persistent.json")
 LEADS_BACKUP_PATH = os.path.join(DATA_BACKUP_DIR, "leads_persistent.json")
 REVIEWS_BACKUP_PATH = os.path.join(DATA_BACKUP_DIR, "reviews_persistent.json")
+RECURRING_BACKUP_PATH = os.path.join(DATA_BACKUP_DIR, "recurring_persistent.json")
 
 def load_gallery():
     items = []
@@ -119,19 +120,39 @@ def save_gallery(data):
         return False
 
 def load_recurring():
-    if not os.path.exists(RECURRING_JSON_PATH):
-        return []
-    try:
-        with open(RECURRING_JSON_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"[Error] Cargando recurring_clients.json: {e}")
-        return []
+    items = []
+    if os.path.exists(RECURRING_JSON_PATH):
+        try:
+            with open(RECURRING_JSON_PATH, "r", encoding="utf-8") as f:
+                items = json.load(f)
+        except Exception as e:
+            print(f"[Error] Cargando recurring_clients.json: {e}")
+
+    # Auto-merge with persistent backup to prevent any clients from being lost on rebuilds
+    if os.path.exists(RECURRING_BACKUP_PATH):
+        try:
+            with open(RECURRING_BACKUP_PATH, "r", encoding="utf-8") as f:
+                backup_items = json.load(f)
+                existing_ids = {it.get("id") for it in items if isinstance(it, dict) and "id" in it}
+                for b_it in backup_items:
+                    if isinstance(b_it, dict) and b_it.get("id") not in existing_ids:
+                        items.append(b_it)
+                        existing_ids.add(b_it.get("id"))
+                items.sort(key=lambda x: x.get("id", 0))
+        except Exception as e:
+            print(f"[Notice] Error reading persistent recurring clients backup: {e}")
+
+    return items
 
 def save_recurring(data):
     try:
         with open(RECURRING_JSON_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+        try:
+            with open(RECURRING_BACKUP_PATH, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
         return True
     except Exception as e:
         print(f"[Error] Guardando recurring_clients.json: {e}")
@@ -3177,24 +3198,63 @@ async def handle_api_get_recurring(request):
     clients = load_recurring()
     return cors_json_response({"success": True, "clients": clients})
 
+def geocode_address_texas(address):
+    """Resolves real coordinates for a Texas address using OSM Nominatim."""
+    if not address or len(address.strip()) < 4:
+        return None, None
+    clean = address.strip()
+    query = clean if ("TX" in clean or "Texas" in clean) else f"{clean}, TX"
+    try:
+        import urllib.request, urllib.parse
+        encoded = urllib.parse.quote(query)
+        url = f"https://nominatim.openstreetmap.org/search?q={encoded}&format=json&limit=1"
+        req = urllib.request.Request(url, headers={"User-Agent": "RodriguezLawnCareServer/2.0"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            if data and len(data) > 0:
+                return float(data[0]["lat"]), float(data[0]["lon"])
+    except Exception as e:
+        print(f"[Notice] Geocoding lookup for '{address}': {e}")
+    return None, None
+
 async def handle_api_save_recurring(request):
     try:
         data = await request.json()
         clients = load_recurring()
         client_id = int(data.get("id") or int(time.time() * 1000))
         existing = next((c for c in clients if c.get("id") == client_id), None)
+
+        # Coordinates parsing or geocoding
+        lat = data.get("lat")
+        lng = data.get("lng")
+        if lat is not None and lng is not None:
+            try:
+                lat = float(lat)
+                lng = float(lng)
+            except Exception:
+                lat = None
+                lng = None
+
+        address = (data.get("address") or "").strip()
+        if (lat is None or lng is None) and address:
+            g_lat, g_lng = geocode_address_texas(address)
+            if g_lat and g_lng:
+                lat, lng = g_lat, g_lng
+
         item = {
             "id": client_id,
             "name": (data.get("name") or "Cliente").strip(),
             "phone": (data.get("phone") or "").strip(),
-            "address": (data.get("address") or "").strip(),
+            "address": address,
             "frequency": (data.get("frequency") or "weekly").strip(),
             "service_day": (data.get("service_day") or "Martes").strip(),
             "price": float(data.get("price") or 55.0),
             "status": (data.get("status") or "pending").strip(),
             "services": data.get("services", ["Front & Back Yard Cut"]),
             "notes": (data.get("notes") or "").strip(),
-            "last_serviced": data.get("last_serviced", "")
+            "last_serviced": data.get("last_serviced", ""),
+            "lat": lat,
+            "lng": lng
         }
         if existing:
             existing.update(item)

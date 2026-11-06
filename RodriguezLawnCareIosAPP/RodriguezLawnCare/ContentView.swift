@@ -160,6 +160,8 @@ struct RecurringClient: Identifiable, Codable {
     var services: [String]?
     var notes: String?
     var last_serviced: String?
+    var lat: Double?
+    var lng: Double?
 }
 
 struct SoundManager {
@@ -462,6 +464,51 @@ class LawnCareStore: ObservableObject {
     let currentAppBuild: Int = 32
 
     @Published var geocodedCache: [String: [Double]] = [:]
+    private let RECURRING_CACHE_KEY = "cached_recurring_clients_v2"
+    private let GEOCODE_CACHE_KEY = "cached_geocoded_addresses_v2"
+
+    func loadPersistedRecurringClients() {
+        if let data = UserDefaults.standard.data(forKey: RECURRING_CACHE_KEY),
+           let list = try? JSONDecoder().decode([RecurringClient].self, from: data), !list.isEmpty {
+            self.recurringClients = list
+        }
+        if let geoData = UserDefaults.standard.data(forKey: GEOCODE_CACHE_KEY),
+           let geoMap = try? JSONDecoder().decode([String: [Double]].self, from: geoData) {
+            self.geocodedCache = geoMap
+        }
+    }
+
+    func persistRecurringClients() {
+        if let data = try? JSONEncoder().encode(self.recurringClients) {
+            UserDefaults.standard.set(data, forKey: RECURRING_CACHE_KEY)
+        }
+        if let geoData = try? JSONEncoder().encode(self.geocodedCache) {
+            UserDefaults.standard.set(geoData, forKey: GEOCODE_CACHE_KEY)
+        }
+    }
+
+    func geocodeAddress(_ address: String) async -> CLLocationCoordinate2D? {
+        let clean = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return nil }
+        if let cached = geocodedCache[clean], cached.count == 2 {
+            return CLLocationCoordinate2D(latitude: cached[0], longitude: cached[1])
+        }
+        let query = (clean.contains("TX") || clean.contains("Texas")) ? clean : "\(clean), TX"
+        do {
+            let placemarks = try await CLGeocoder().geocodeAddressString(query)
+            if let loc = placemarks.first?.location {
+                let coord = loc.coordinate
+                DispatchQueue.main.async {
+                    self.geocodedCache[clean] = [coord.latitude, coord.longitude]
+                    self.persistRecurringClients()
+                }
+                return coord
+            }
+        } catch {
+            print("Notice geocodeAddress for '\(clean)': \(error)")
+        }
+        return nil
+    }
 
     func resolveCoordinate(for rawAddress: String, clientName: String = "") -> CLLocationCoordinate2D {
         let clean = rawAddress.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -510,12 +557,8 @@ class LawnCareStore: ObservableObject {
             baseLng = -97.7410
         }
         
-        let hash = abs((clientName + clean).hashValue)
-        let latOffset = Double((hash % 30) - 15) * 0.0004
-        let lngOffset = Double(((hash / 30) % 30) - 15) * 0.0005
-        
         geocodeAddressInBackground(clean)
-        return CLLocationCoordinate2D(latitude: baseLat + latOffset, longitude: baseLng + lngOffset)
+        return CLLocationCoordinate2D(latitude: baseLat, longitude: baseLng)
     }
     
     func geocodeAddressInBackground(_ address: String) {
@@ -528,6 +571,7 @@ class LawnCareStore: ObservableObject {
             guard let self = self, let loc = placemarks?.first?.location else { return }
             DispatchQueue.main.async {
                 self.geocodedCache[clean] = [loc.coordinate.latitude, loc.coordinate.longitude]
+                self.persistRecurringClients()
             }
         }
     }
@@ -554,6 +598,7 @@ class LawnCareStore: ObservableObject {
             UserDefaults.standard.set("https://rodriguezlawncare.xyz", forKey: "api_server_url")
         }
         activeEffectiveURL = serverURL
+        loadPersistedRecurringClients()
         loadDemoData()
         requestNotificationPermissions()
         startRealtimePolling()
@@ -1581,6 +1626,7 @@ class LawnCareStore: ObservableObject {
             if let resp = try? JSONDecoder().decode(RecResp.self, from: data) {
                 DispatchQueue.main.async {
                     self.recurringClients = resp.clients
+                    self.persistRecurringClients()
                 }
             }
         } catch {
@@ -1589,6 +1635,14 @@ class LawnCareStore: ObservableObject {
     }
 
     func saveRecurringClient(_ client: RecurringClient) async {
+        DispatchQueue.main.async {
+            if let idx = self.recurringClients.firstIndex(where: { $0.id == client.id }) {
+                self.recurringClients[idx] = client
+            } else {
+                self.recurringClients.append(client)
+            }
+            self.persistRecurringClients()
+        }
         guard let url = URL(string: "\(cleanURL)/api/recurring") else { return }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -1602,6 +1656,13 @@ class LawnCareStore: ObservableObject {
     }
 
     func togglePaidRecurring(id: Int) async {
+        DispatchQueue.main.async {
+            if let idx = self.recurringClients.firstIndex(where: { $0.id == id }) {
+                let curr = self.recurringClients[idx].status
+                self.recurringClients[idx].status = curr == "pending" ? "paid" : "pending"
+                self.persistRecurringClients()
+            }
+        }
         guard let url = URL(string: "\(cleanURL)/api/recurring/toggle-paid") else { return }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -1616,6 +1677,7 @@ class LawnCareStore: ObservableObject {
         DispatchQueue.main.async {
             if let idx = self.recurringClients.firstIndex(where: { $0.id == client.id }) {
                 self.recurringClients[idx] = client
+                self.persistRecurringClients()
             }
         }
         guard let url = URL(string: "\(cleanURL)/api/recurring") else { return }
@@ -1625,11 +1687,16 @@ class LawnCareStore: ObservableObject {
         if let body = try? JSONEncoder().encode(client) {
             req.httpBody = body
             _ = try? await URLSession.shared.data(for: req)
+            await fetchRecurringClients()
         }
         if soundEffectsEnabled { SoundManager.playSuccessTone() }
     }
 
     func deleteRecurringClient(id: Int) async {
+        DispatchQueue.main.async {
+            self.recurringClients.removeAll(where: { $0.id == id })
+            self.persistRecurringClients()
+        }
         guard let url = URL(string: "\(cleanURL)/api/recurring/delete") else { return }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -8971,20 +9038,29 @@ struct AddRecurringClientSheet: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Guardar") {
-                        let newC = RecurringClient(
-                            id: Int(Date().timeIntervalSince1970 * 1000),
-                            name: name.isEmpty ? "Cliente" : name,
-                            phone: phone,
-                            address: address,
-                            frequency: frequency,
-                            service_day: serviceDay,
-                            price: Double(price) ?? 60.0,
-                            status: "pending",
-                            services: ["Front & Back Yard Cut"],
-                            notes: notes,
-                            last_serviced: ""
-                        )
+                        let cleanAddr = address.trimmingCharacters(in: .whitespacesAndNewlines)
                         Task {
+                            var realLat: Double? = nil
+                            var realLng: Double? = nil
+                            if let loc = await store.geocodeAddress(cleanAddr) {
+                                realLat = loc.latitude
+                                realLng = loc.longitude
+                            }
+                            let newC = RecurringClient(
+                                id: Int(Date().timeIntervalSince1970 * 1000),
+                                name: name.isEmpty ? "Cliente" : name,
+                                phone: phone,
+                                address: cleanAddr,
+                                frequency: frequency,
+                                service_day: serviceDay,
+                                price: Double(price) ?? 60.0,
+                                status: "pending",
+                                services: ["Front & Back Yard Cut"],
+                                notes: notes,
+                                last_serviced: "",
+                                lat: realLat,
+                                lng: realLng
+                            )
                             await store.saveRecurringClient(newC)
                             dismiss()
                         }
@@ -9770,15 +9846,30 @@ struct TacticalLiveRadarMapView: UIViewRepresentable {
             mapView.mapType = mapType
         }
         
-        // Update annotations if list changed
-        let currentCustom = mapView.annotations.filter { !($0 is MKUserLocation) }
-        if currentCustom.count != pins.count {
+        // Update annotations if list or pin locations changed
+        var shouldUpdate = currentCustom.count != pins.count
+        if !shouldUpdate {
+            for pin in pins {
+                if let match = currentCustom.first(where: { $0.title == pin.name }) {
+                    if abs(match.coordinate.latitude - pin.coordinate.latitude) > 0.00005 ||
+                       abs(match.coordinate.longitude - pin.coordinate.longitude) > 0.00005 {
+                        shouldUpdate = true
+                        break
+                    }
+                } else {
+                    shouldUpdate = true
+                    break
+                }
+            }
+        }
+        
+        if shouldUpdate {
             mapView.removeAnnotations(currentCustom)
             let newAnnotations = pins.map { pin -> MKPointAnnotation in
                 let a = MKPointAnnotation()
                 a.coordinate = pin.coordinate
                 a.title = pin.name
-                a.subtitle = "\(pin.serviceDay) • $\(Int(pin.price))"
+                a.subtitle = "\(pin.serviceDay) • $\(Int(pin.price)) USD • \(pin.address)"
                 return a
             }
             mapView.addAnnotations(newAnnotations)
@@ -9845,7 +9936,12 @@ struct TacticalTerritoryRadarView: View {
         
         for client in store.recurringClients {
             let addr = client.address.isEmpty ? "Propiedad en Killeen, TX" : client.address
-            let coord = store.resolveCoordinate(for: addr, clientName: client.name)
+            let coord: CLLocationCoordinate2D
+            if let lat = client.lat, let lng = client.lng, lat != 0.0 && lng != 0.0 {
+                coord = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+            } else {
+                coord = store.resolveCoordinate(for: addr, clientName: client.name)
+            }
             list.append(
                 TacticalHouseClientPin(
                     id: "rec_\(client.id)",
@@ -14656,7 +14752,8 @@ struct EditRecurringClientSheetView: View {
         var updated = client
         updated.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.phone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
-        updated.address = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanAddr = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.address = cleanAddr
         updated.price = price
         updated.frequency = frequency
         updated.service_day = serviceDay
@@ -14664,6 +14761,10 @@ struct EditRecurringClientSheetView: View {
         updated.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         
         Task {
+            if let loc = await store.geocodeAddress(cleanAddr) {
+                updated.lat = loc.latitude
+                updated.lng = loc.longitude
+            }
             await store.updateRecurringClient(updated)
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             dismiss()
