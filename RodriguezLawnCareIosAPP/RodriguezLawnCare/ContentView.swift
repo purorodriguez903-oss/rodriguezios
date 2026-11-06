@@ -460,8 +460,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "2.5.1"
-    let currentAppBuild: Int = 32
+    let currentAppVersion: String = "2.6.0"
+    let currentAppBuild: Int = 33
 
     @Published var geocodedCache: [String: [Double]] = [:]
     private let RECURRING_CACHE_KEY = "cached_recurring_clients_v2"

@@ -11,7 +11,7 @@ permissions:
 jobs:
   build-ios:
     name: Build & Package iOS App (IPA)
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -45,39 +45,50 @@ jobs:
           /usr/bin/zip -qry ../rodriguezlawncareios-unsigned.ipa Payload
           cd ..
 
-      - name: Copy IPA to 'ipa online' folder
+      - name: Copy IPA to distribution folders
         run: |
+          mkdir -p "ultima actu"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ultima actu/rodriguezlawncareios.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ultima actu/RodriguezLawnCare.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ultima actu/RodriguezLawnCare_v2.6.0_Build33.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ultima actu/RodriguezLawnCare_Actualizado.ipa"
+          mkdir -p "RodriguezLawnCareIosAPP/ultima actu"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ultima actu/rodriguezlawncareios.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ultima actu/RodriguezLawnCare.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ultima actu/RodriguezLawnCare_v2.6.0_Build33.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ultima actu/RodriguezLawnCare_Actualizado.ipa"
           mkdir -p "ipa online"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa online/rodriguezlawncareios.ipa"
-          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa online/RodriguezLawnCare_v2.5.1_Build32.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa online/RodriguezLawnCare_v2.6.0_Build33.ipa"
           mkdir -p "RodriguezLawnCareIosAPP/ipa online"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa online/rodriguezlawncareios.ipa"
           mkdir -p "ipa here"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare_Actualizado.ipa"
-          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare_v2.5.1_Build32.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa here/RodriguezLawnCare_v2.6.0_Build33.ipa"
           mkdir -p "RodriguezLawnCareIosAPP/ipa here"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_Actualizado.ipa"
-          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_v2.5.1_Build32.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa here/RodriguezLawnCare_v2.6.0_Build33.ipa"
           mkdir -p "ipa nuevo"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa nuevo/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa nuevo/RodriguezLawnCare.ipa"
-          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa nuevo/RodriguezLawnCare_v2.5.1_Build32.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ipa nuevo/RodriguezLawnCare_v2.6.0_Build33.ipa"
           mkdir -p "RodriguezLawnCareIosAPP/ipa nuevo"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa nuevo/rodriguezlawncareios.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa nuevo/RodriguezLawnCare.ipa"
-          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa nuevo/RodriguezLawnCare_v2.5.1_Build32.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/ipa nuevo/RodriguezLawnCare_v2.6.0_Build33.ipa"
+          ls -la "ultima actu"
           ls -la "ipa online"
 
       - name: Commit and push IPA to repository
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add "ipa online/" "RodriguezLawnCareIosAPP/ipa online/" "ipa here/" "RodriguezLawnCareIosAPP/ipa here/" "ipa nuevo/" "RodriguezLawnCareIosAPP/ipa nuevo/"
-          git commit -m "Automated build: Update rodriguezlawncareios.ipa in 'ipa online' [skip ci]" || echo "No changes to commit"
+          git add "ultima actu/" "RodriguezLawnCareIosAPP/ultima actu/" "ipa online/" "RodriguezLawnCareIosAPP/ipa online/" "ipa here/" "RodriguezLawnCareIosAPP/ipa here/" "ipa nuevo/" "RodriguezLawnCareIosAPP/ipa nuevo/"
+          git commit -m "Automated build: Update IPAs in 'ultima actu' and 'ipa online' (v2.6.0 Build 33) [skip ci]" || echo "No changes to commit"
           git push origin main
 
       - name: Upload IPA Artifact
@@ -85,6 +96,8 @@ jobs:
         with:
           name: rodriguezlawncareios-IPA
           path: |
+            ultima actu/rodriguezlawncareios.ipa
+            ultima actu/RodriguezLawnCare_v2.6.0_Build33.ipa
             ipa online/rodriguezlawncareios.ipa
             ipa here/rodriguezlawncareios.ipa
             RodriguezLawnCareIosAPP/build.log
@@ -99,12 +112,13 @@ jobs:
           name: "rodriguezlawncareios App (Latest IPA)"
           body: "Descarga directa de rodriguezlawncareios.ipa compilada automáticamente por GitHub Actions."
           files: |
+            ultima actu/rodriguezlawncareios.ipa
+            ultima actu/RodriguezLawnCare_v2.6.0_Build33.ipa
+            ultima actu/RodriguezLawnCare.ipa
             ipa online/rodriguezlawncareios.ipa
             ipa here/rodriguezlawncareios.ipa
             ipa here/RodriguezLawnCare.ipa
-            ipa here/RodriguezLawnCare_v1.9.0_Build24.ipa
-            ipa here/RodriguezLawnCare_v2.2.0_Build27.ipa
-            ipa here/RodriguezLawnCare_v2.5.1_Build32.ipa
+            ipa here/RodriguezLawnCare_v2.6.0_Build33.ipa
             ipa here/RodriguezLawnCare_Actualizado.ipa
 
       - name: Send IPA directly to Discord Channel (#ipalwan)

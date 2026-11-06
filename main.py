@@ -576,6 +576,10 @@ def get_ipa_file_path():
     version_str = cfg.get("app_version", "2.2.0")
     build_num = cfg.get("app_build", 27)
     candidates = [
+        os.path.join(BASE_DIR, "ultima actu", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
+        os.path.join(BASE_DIR, "ultima actu", "rodriguezlawncareios.ipa"),
+        os.path.join(BASE_DIR, "ultima actu", "RodriguezLawnCare.ipa"),
+        os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ultima actu", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
         os.path.join(BASE_DIR, "ipa nuevo", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
         os.path.join(BASE_DIR, "ipa online", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
         os.path.join(BASE_DIR, "ipa here", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
@@ -2611,6 +2615,10 @@ async def handle_download_ipa(request):
     build = config.get("app_build", 28)
     target_name = f"RodriguezLawnCare_v{version}_Build{build}.ipa"
     candidate_paths = [
+        os.path.join(BASE_DIR, "ultima actu", target_name),
+        os.path.join(BASE_DIR, "ultima actu", "rodriguezlawncareios.ipa"),
+        os.path.join(BASE_DIR, "ultima actu", "RodriguezLawnCare.ipa"),
+        os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ultima actu", target_name),
         os.path.join(BASE_DIR, "ipa nuevo", target_name),
         os.path.join(BASE_DIR, "ipa nuevo", "rodriguezlawncareios.ipa"),
         os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa nuevo", target_name),

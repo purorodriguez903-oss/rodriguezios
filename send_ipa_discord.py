@@ -26,11 +26,15 @@ if os.path.exists(cloud_cfg_path):
         pass
 
 IPA_CANDIDATES = [
+    os.path.join(BASE_DIR, "ultima actu", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
+    os.path.join(BASE_DIR, "ultima actu", "rodriguezlawncareios.ipa"),
+    os.path.join(BASE_DIR, "ultima actu", "RodriguezLawnCare.ipa"),
     os.path.join(BASE_DIR, "ipa nuevo", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
     os.path.join(BASE_DIR, "ipa online", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
     os.path.join(BASE_DIR, "ipa here", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
     os.path.join(BASE_DIR, "ipa nuevo", "rodriguezlawncareios.ipa"),
     os.path.join(BASE_DIR, "ipa online", "rodriguezlawncareios.ipa"),
+    os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ultima actu", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
     os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa nuevo", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
     os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa online", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
     os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa here", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
