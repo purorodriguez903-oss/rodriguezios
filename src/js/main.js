@@ -154,10 +154,10 @@ const translations = {
     area_placeholder: 'e.g. Killeen, Harker Heights, Copperas Cove, Belton',
     area_btn: 'Check Availability',
 
-    // Testimonials
-    rev_badge: 'Customer Reviews',
-    rev_title: 'What Your Neighbors Are Saying',
-    rev_sub: 'Real feedback from homeowners and businesses who trust Rodriguez Lawn Care.',
+    // Testimonials / Client Reviews
+    rev_badge: '⭐ Verified Client Reviews',
+    rev_title: 'Client Reviews & Ratings',
+    rev_sub: 'Real feedback and 5-star ratings from homeowners, builders, and commercial clients across Killeen & Central Texas.',
 
     // FAQ
     faq_badge: 'Frequently Asked Questions',
@@ -742,18 +742,20 @@ async function initReviews() {
     if (!res.ok) return;
     const reviews = await res.json();
     
-    // If no reviews yet, show clean invitation call to action
+    // If no reviews yet, show clean invitation placeholder
     if (!Array.isArray(reviews) || reviews.length === 0) {
       container.innerHTML = `
         <div class="empty-reviews-card">
-          <div class="empty-icon">⭐</div>
-          <h3>Be the First to Leave a Review!</h3>
-          <p>
-            Have we serviced your yard in Killeen, Harker Heights or Copperas Cove? Share your feedback with your neighbors and help our family business grow.
+          <div class="empty-icon" style="font-size: 2.8rem; margin-bottom: 0.5rem;">🌟</div>
+          <h3 style="font-size: 1.3rem; font-weight: 800; color: #0f172a; margin-bottom: 0.4rem;">Customer Reviews & Feedback</h3>
+          <p style="color: #64748b; font-size: 0.95rem; max-width: 520px; margin: 0 auto 1.25rem; line-height: 1.5;">
+            We take immense pride in every lawn we mow, edge, and transform. Have we worked on your yard or construction project? Tap the button above to share your review and photos!
           </p>
-          <button type="button" class="btn btn-primary" onclick="openReviewModal()" style="display:inline-flex; align-items:center; gap:8px; font-weight:700; border-radius:12px; padding:12px 24px; box-shadow: 0 4px 14px rgba(34,197,94,0.35);">
-            ✍️ Write a Customer Review
-          </button>
+          <div style="display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; font-size: 0.85rem; color: #15803d; font-weight: 700;">
+            <span>✓ 100% Real Feedback</span>
+            <span>✓ Photo Uploads Supported</span>
+            <span>✓ Homeowners & Builders Welcome</span>
+          </div>
         </div>
       `;
       return;
