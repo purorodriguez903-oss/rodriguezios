@@ -1533,6 +1533,31 @@ class LawnCareStore: ObservableObject {
         }.resume()
     }
 
+    func updateReview(id: Int, name: String, role: String, badge: String, rating: Int, text: String, completion: @escaping (Bool) -> Void) {
+        guard let url = URL(string: "\(cleanURL)/api/reviews") else { completion(false); return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let payload: [String: Any] = [
+            "id": id,
+            "name": name,
+            "role": role,
+            "badge": badge,
+            "rating": rating,
+            "text": text
+        ]
+        guard let httpBody = try? JSONSerialization.data(withJSONObject: payload) else { completion(false); return }
+        req.httpBody = httpBody
+        URLSession.shared.dataTask(with: req) { [weak self] data, _, err in
+            if err == nil {
+                Task { await self?.fetchReviews() }
+                DispatchQueue.main.async { completion(true) }
+            } else {
+                DispatchQueue.main.async { completion(false) }
+            }
+        }.resume()
+    }
+
     func deleteReview(id: Int, completion: @escaping (Bool) -> Void) {
         guard let url = URL(string: "\(cleanURL)/api/reviews/delete") else { completion(false); return }
         var req = URLRequest(url: url)
@@ -1672,6 +1697,7 @@ struct TopLeftDropdownMenuView: View {
         ("calculadora", "function", "Calculadora", false),
         ("reportes", "chart.bar.fill", "Reportes", false),
         ("promos", "megaphone.fill", "Promociones", false),
+        ("reviews", "star.bubble.fill", "Reseñas de Clientes", false),
         ("subir_fotos", "camera.fill", "Subir Trabajos a Web", false),
         ("ajustes", "gearshape.fill", "Ajustes", false)
     ]
@@ -1742,6 +1768,7 @@ struct ContentView: View {
     @State private var showFlyerMakerSheet: Bool = false
     @State private var showUploadWorkSheet: Bool = false
     @State private var showGoogleReviewSheet: Bool = false
+    @State private var showReviewsManagerSheet: Bool = false
     @State private var showDigitalCardSheet: Bool = false
     @State private var showBeforeAfterSheet: Bool = false
 
@@ -1951,6 +1978,7 @@ struct ContentView: View {
         .sheet(isPresented: $showFlyerMakerSheet) { SocialMediaFlyerMakerSheetView(store: store) }
         .sheet(isPresented: $showUploadWorkSheet) { UploadWorkToWebGalleryView(store: store) }
         .sheet(isPresented: $showGoogleReviewSheet) { GoogleReviewBoosterSheetView(store: store) }
+        .sheet(isPresented: $showReviewsManagerSheet) { ReviewsManagerView(store: store) }
         .sheet(isPresented: $showDigitalCardSheet) { NeighborDigitalCardQRView(store: store) }
         .sheet(isPresented: $showBeforeAfterSheet) { BeforeAfterCameraSheetView(store: store) }
         .sheet(isPresented: $store.showUpdateModal) { OTAUpdateSheetView(store: store) }
@@ -1990,6 +2018,8 @@ struct ContentView: View {
             showVipLoyaltySheet = true
         case "promos":
             selectedTab = 3
+        case "reviews":
+            showReviewsManagerSheet = true
         case "subir_fotos":
             showUploadWorkSheet = true
         case "ajustes":
@@ -2016,7 +2046,8 @@ struct ContentView: View {
         case "autopay": showRecurringAutoPaySheet = true
         case "video": showVideoMakerSheet = true
         case "flyer": showFlyerMakerSheet = true
-        case "reviews": showGoogleReviewSheet = true
+        case "reviews": showReviewsManagerSheet = true
+        case "google_review": showGoogleReviewSheet = true
         case "digitalcard": showDigitalCardSheet = true
         case "beforeafter": showBeforeAfterSheet = true
         case "promos": selectedTab = 3
@@ -7594,6 +7625,9 @@ struct ReviewsManagerView: View {
     @ObservedObject var store: LawnCareStore
     @Environment(\.dismiss) var dismiss
     @State private var showAddReviewSheet = false
+    @State private var reviewToEdit: ClientReview? = nil
+    @State private var reviewToDelete: ClientReview? = nil
+    @State private var showDeleteConfirmAlert: Bool = false
 
     var body: some View {
         NavigationView {
@@ -7607,7 +7641,7 @@ struct ReviewsManagerView: View {
                             Text("⭐ Testimonios en la Página Web")
                                 .font(.headline.bold())
                                 .foregroundStyle(.white)
-                            Text("Los clientes ven estas opiniones reales en tu web")
+                            Text("Modifica, revisa o elimina opiniones de clientes")
                                 .font(.caption)
                                 .foregroundStyle(.gray)
                         }
@@ -7623,7 +7657,7 @@ struct ReviewsManagerView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(Brand.primary)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.black)
                             .clipShape(Capsule())
                         }
                     }
@@ -7639,8 +7673,13 @@ struct ReviewsManagerView: View {
                                         .font(.system(size: 40))
                                         .foregroundStyle(.gray)
                                     Text("No hay reseñas registradas aún")
-                                        .font(.subheadline)
+                                        .font(.subheadline.bold())
                                         .foregroundStyle(.gray)
+                                    Text("Cuando tus clientes o constructores manden reseñas desde el celular aparecerán aquí al instante.")
+                                        .font(.caption)
+                                        .foregroundStyle(.gray.opacity(0.8))
+                                        .multilineTextAlignment(.center)
+                                        .padding(.horizontal, 24)
                                 }
                                 .padding(.top, 40)
                             } else {
@@ -7669,6 +7708,19 @@ struct ReviewsManagerView: View {
             .sheet(isPresented: $showAddReviewSheet) {
                 AddReviewSheetView(store: store)
             }
+            .sheet(item: $reviewToEdit) { rev in
+                EditReviewSheetView(review: rev, store: store)
+            }
+            .alert("¿Eliminar Reseña?", isPresented: $showDeleteConfirmAlert) {
+                Button("Eliminar", role: .destructive) {
+                    if let rev = reviewToDelete {
+                        store.deleteReview(id: rev.id) { _ in }
+                    }
+                }
+                Button("Cancelar", role: .cancel) {}
+            } message: {
+                Text("Esta reseña se borrará de forma permanente de tu página web y de tu app.")
+            }
         }
     }
 
@@ -7688,22 +7740,36 @@ struct ReviewsManagerView: View {
                 if let badge = r.badge, !badge.isEmpty {
                     Text(badge)
                         .font(.caption2.bold())
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
                         .background(Brand.primary.opacity(0.18))
                         .foregroundStyle(Brand.primary)
                         .clipShape(Capsule())
                 }
 
-                Button {
-                    store.deleteReview(id: r.id) { _ in }
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.caption)
-                        .foregroundStyle(Color.red.opacity(0.8))
-                        .padding(6)
-                        .background(Color.red.opacity(0.12))
-                        .clipShape(Circle())
+                HStack(spacing: 8) {
+                    Button {
+                        reviewToEdit = r
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.caption.bold())
+                            .foregroundStyle(Brand.primary)
+                            .padding(7)
+                            .background(Brand.primary.opacity(0.15))
+                            .clipShape(Circle())
+                    }
+
+                    Button {
+                        reviewToDelete = r
+                        showDeleteConfirmAlert = true
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.caption)
+                            .foregroundStyle(Color.red.opacity(0.85))
+                            .padding(7)
+                            .background(Color.red.opacity(0.15))
+                            .clipShape(Circle())
+                    }
                 }
             }
 
@@ -7711,6 +7777,29 @@ struct ReviewsManagerView: View {
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.95))
                 .lineSpacing(2)
+
+            // Fotos del jardín si el cliente las subió
+            if let photos = r.photos, !photos.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(photos, id: \.self) { photoPath in
+                            let clean = photoPath.replacingOccurrences(of: "./", with: "")
+                            let photoUrl = URL(string: "\(store.cleanURL)/\(clean)")
+                            AsyncImage(url: photoUrl) { phase in
+                                if let img = phase.image {
+                                    img.resizable().scaledToFill()
+                                } else {
+                                    Rectangle().fill(Color.gray.opacity(0.3))
+                                }
+                            }
+                            .frame(width: 70, height: 70)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.12), lineWidth: 1))
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
 
             HStack(spacing: 10) {
                 ZStack {
@@ -7748,6 +7837,170 @@ struct ReviewsManagerView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
+    }
+}
+
+// MARK: - EDITAR RESEÑA DE CLIENTE
+struct EditReviewSheetView: View {
+    let review: ClientReview
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+
+    @State private var clientName: String
+    @State private var serviceRole: String
+    @State private var clientBadge: String
+    @State private var rating: Int
+    @State private var reviewText: String
+    @State private var isSaving: Bool = false
+
+    init(review: ClientReview, store: LawnCareStore) {
+        self.review = review
+        self.store = store
+        _clientName = State(initialValue: review.name)
+        _serviceRole = State(initialValue: review.role)
+        _clientBadge = State(initialValue: review.badge ?? "Verified Homeowner")
+        _rating = State(initialValue: review.rating)
+        _reviewText = State(initialValue: review.text)
+    }
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Rating Picker
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("CALIFICACIÓN (ESTRELLAS)")
+                                .font(.caption.bold())
+                                .foregroundStyle(.gray)
+
+                            HStack(spacing: 10) {
+                                ForEach(1...5, id: \.self) { star in
+                                    Image(systemName: star <= rating ? "star.fill" : "star")
+                                        .font(.title2)
+                                        .foregroundStyle(star <= rating ? Color.yellow : Color.gray)
+                                        .onTapGesture {
+                                            rating = star
+                                        }
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                        .background(Brand.card)
+                        .cornerRadius(12)
+
+                        // Name
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("NOMBRE DEL CLIENTE")
+                                .font(.caption.bold())
+                                .foregroundStyle(.gray)
+                            TextField("Nombre", text: $clientName)
+                                .textFieldStyle(.plain)
+                                .padding(10)
+                                .background(Color.black.opacity(0.4))
+                                .cornerRadius(8)
+                                .foregroundStyle(.white)
+                        }
+                        .padding()
+                        .background(Brand.card)
+                        .cornerRadius(12)
+
+                        // Role / Type
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("TIPO DE CLIENTE / SERVICIO")
+                                .font(.caption.bold())
+                                .foregroundStyle(.gray)
+                            TextField("e.g. Homeowner, Builder, Commercial...", text: $serviceRole)
+                                .textFieldStyle(.plain)
+                                .padding(10)
+                                .background(Color.black.opacity(0.4))
+                                .cornerRadius(8)
+                                .foregroundStyle(.white)
+                        }
+                        .padding()
+                        .background(Brand.card)
+                        .cornerRadius(12)
+
+                        // Badge
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("INSIGNIA (BADGE)")
+                                .font(.caption.bold())
+                                .foregroundStyle(.gray)
+                            TextField("e.g. Verified Homeowner, Verified Builder...", text: $clientBadge)
+                                .textFieldStyle(.plain)
+                                .padding(10)
+                                .background(Color.black.opacity(0.4))
+                                .cornerRadius(8)
+                                .foregroundStyle(.white)
+                        }
+                        .padding()
+                        .background(Brand.card)
+                        .cornerRadius(12)
+
+                        // Review Text
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("TEXTO / OPINIÓN DEL CLIENTE")
+                                .font(.caption.bold())
+                                .foregroundStyle(.gray)
+                            TextEditor(text: $reviewText)
+                                .frame(height: 120)
+                                .padding(6)
+                                .background(Color.black.opacity(0.4))
+                                .cornerRadius(8)
+                                .foregroundStyle(.white)
+                        }
+                        .padding()
+                        .background(Brand.card)
+                        .cornerRadius(12)
+
+                        Button {
+                            isSaving = true
+                            store.updateReview(
+                                id: review.id,
+                                name: clientName,
+                                role: serviceRole,
+                                badge: clientBadge,
+                                rating: rating,
+                                text: reviewText
+                            ) { success in
+                                isSaving = false
+                                if success {
+                                    dismiss()
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                if isSaving {
+                                    ProgressView().tint(.black)
+                                } else {
+                                    Image(systemName: "checkmark.circle.fill")
+                                    Text("Guardar Cambios")
+                                }
+                            }
+                            .font(.headline.bold())
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Brand.primary)
+                            .cornerRadius(12)
+                        }
+                        .disabled(isSaving || clientName.isEmpty || reviewText.isEmpty)
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Modificar Reseña")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancelar") { dismiss() }
+                        .foregroundStyle(Brand.primary)
+                }
+            }
+        }
     }
 }
 

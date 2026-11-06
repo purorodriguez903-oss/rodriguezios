@@ -138,11 +138,11 @@ const translations = {
     pillar_4_desc: 'Straightforward, upfront pricing with zero hidden fees. Easy payments via Zelle, cards, or checks.',
 
     // Stats
-    stat_1_num: '1,500+',
+    stat_1_num: '300+',
     stat_1_lbl: 'Yards Beautified',
     stat_2_num: '99.8%',
     stat_2_lbl: 'Satisfied Homeowners',
-    stat_3_num: '10+',
+    stat_3_num: '2+',
     stat_3_lbl: 'Years of Experience',
     stat_4_num: '5.0★',
     stat_4_lbl: 'Average Rating',
@@ -1417,7 +1417,7 @@ function initBookingForms() {
       const data = {
         name: document.getElementById('heroName')?.value || 'Customer',
         phone: document.getElementById('heroPhone')?.value || '',
-        address: 'To be confirmed by call/text',
+        address: document.getElementById('heroAddress')?.value.trim() || 'Killeen, TX',
         date: heroDateVal,
         time: heroTimeVal,
         services: services,
