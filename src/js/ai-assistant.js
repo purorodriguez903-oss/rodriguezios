@@ -1,7 +1,7 @@
 /**
  * RODRIGUEZ LAWN CARE - 24/7 AI SMART ASSISTANT WIDGET
- * Provides instant answers for Lawn Care pricing, service areas (Killeen, Fort Cavazos, Harker Heights, Temple, Copperas Cove),
- * official Zelle & Cash App payment details, and 1-tap quote booking.
+ * Provides instant answers for Lawn Care pricing, service areas (Killeen, Fort Cavazos, Harker Heights, Copperas Cove, Belton),
+ * official Zelle, Venmo, Cash in Hand & PayPal payment details, and 1-tap quote booking.
  */
 
 (function () {
@@ -15,32 +15,32 @@
 
   const KNOWLEDGE_BASE = {
     es: {
-      welcome: "👋 ¡Hola! Soy el **Asistente Virtual de Rodriguez Lawn Care**. ¿En qué puedo ayudarte hoy? Puedes preguntarme precios de corte, mulch, zonas de servicio o métodos de pago (Zelle / Cash App).",
+      welcome: "👋 ¡Hola! Soy el **Asistente Virtual de Rodriguez Lawn Care**. ¿En qué puedo ayudarte hoy? Puedes preguntarme precios de corte, mulch, zonas de servicio o métodos de pago (Zelle, Venmo, Efectivo en Mano o PayPal).",
       pricing: "🌱 **Nuestros Precios Estimados:**\n• **Corte Residencial Estándar (Frente y Atrás):** Desde **$45 - $65** (incluye corte de pasto, orillado razor-sharp y soplado de banquetas).\n• **Patios Grandes / Esquinas:** **$65 - $85**.\n• **Instalación de Mulch:** **$85 - $115** por yarda cúbica instalada.\n• **Poda de Arbustos / Setos:** Desde **$45** según cantidad y altura.\n• **Tala de Árboles y Limpieza:** Cotización personalizada gratuita.\n\n¿Quieres que te agendemos un estimado 100% gratis a tu domicilio?",
-      payment: "💳 **Métodos de Pago Oficiales de Rodriguez Lawn Care:**\n\n• **ZELLE:**\n  👤 Nombre: **Olivia Rodriguez**\n  📱 Número: **(623) 764-4177**\n\n• **CASH APP:**\n  💲 Cashtag: **$rafajrii**\n  🔗 Link: [cash.app/$rafajrii](https://cash.app/$rafajrii)\n\n• También aceptamos: Efectivo y Tarjetas de Débito/Crédito.\n\n*Nota: Siempre incluye tu dirección o nombre en la nota de pago para tu recibo.*",
-      coverage: "📍 **Áreas y Ciudades de Cobertura en Texas:**\nAtendemos todo el condado de Bell y alrededores:\n• **Killeen, TX**\n• **Fort Cavazos (Base Militar)**\n• **Harker Heights, TX**\n• **Copperas Cove, TX**\n• **Temple, TX**\n• **Belton, TX**\n• **Nolanville, TX**\n\n¿En qué ciudad o código postal se encuentra tu propiedad?",
+      payment: "💳 **Métodos de Pago Oficiales de Rodriguez Lawn Care:**\n\n• **ZELLE:**\n  👤 Nombre: **Olivia Rodriguez**\n  📱 Número: **(623) 764-4177**\n\n• **VENMO:** Aceptado al completar el servicio.\n• **EFECTIVO EN MANO (Cash in Hand):** Directo en persona al finalizar el trabajo.\n• **PAYPAL:** Aceptado previa solicitud.\n\n*(Nota importante: Únicamente aceptamos estos 4 métodos de pago).* Siempre incluye tu dirección o nombre en la nota de pago para tu recibo.",
+      coverage: "📍 **Áreas y Ciudades de Cobertura Oficiales en Texas:**\nAtendemos exclusivamente las siguientes 5 zonas:\n• **Killeen, TX**\n• **Fort Cavazos (Fort Hood)**\n• **Harker Heights, TX**\n• **Copperas Cove, TX**\n• **Belton, TX**\n\n¿En cuál de estas 5 ciudades se encuentra tu propiedad?",
       schedule: "📅 **¡Excelente! Para agendar tu estimado gratis:**\nPuedes llenar el formulario de arriba en esta página, llamarnos directo al **(254) 612-1399** o mandarnos un mensaje rápido por WhatsApp al mismo número.",
       contact: "📞 **Contacto Directo:**\n• Teléfono / WhatsApp: **(254) 612-1399**\n• Horario: Lunes a Sábado 7:00 AM - 7:00 PM\n• Base: Killeen, TX",
       fallback: "Entendido. Para darte el mejor precio exacto y atención personalizada, te recomiendo llamarnos o escribirnos al **(254) 612-1399** o hacer clic en 'Agendar Estimado Gratis'. ¿Deseas que te comunique por WhatsApp?",
       pills: [
         { label: "💵 ¿Cuánto cobran?", query: "precios" },
-        { label: "💳 Métodos de Pago (Zelle/Cash App)", query: "pagos" },
+        { label: "💳 Métodos de Pago", query: "pagos" },
         { label: "📍 ¿Cubren mi ciudad?", query: "ciudades" },
         { label: "📅 Agendar Estimado Gratis", query: "agendar" },
         { label: "🪵 Mulch y Arbustos", query: "mulch" }
       ]
     },
     en: {
-      welcome: "👋 Hi there! I'm the **Rodriguez Lawn Care AI Assistant**. How can I help you today? Ask me about mowing prices, mulch, service areas, or payment methods (Zelle / Cash App)!",
+      welcome: "👋 Hi there! I'm the **Rodriguez Lawn Care AI Assistant**. How can I help you today? Ask me about mowing prices, mulch, service areas, or payment methods (Zelle, Venmo, Cash in Hand, or PayPal)!",
       pricing: "🌱 **Estimated Pricing:**\n• **Standard Residential Cut (Front & Back):** Starting at **$45 - $65** (includes mowing, razor-sharp sidewalk edging, and clean blow-off).\n• **Large / Corner Lots:** **$65 - $85**.\n• **Mulch Installation:** **$85 - $115** per cubic yard installed.\n• **Shrub & Hedge Trimming:** Starting at **$45** depending on size.\n• **Tree Trimming & Cleanups:** Free custom on-site quote.\n\nWould you like a 100% free estimate at your home?",
-      payment: "💳 **Official Payment Methods:**\n\n• **ZELLE:**\n  👤 Name: **Olivia Rodriguez**\n  📱 Phone: **(623) 764-4177**\n\n• **CASH APP:**\n  💲 Cashtag: **$rafajrii**\n  🔗 Link: [cash.app/$rafajrii](https://cash.app/$rafajrii)\n\n• We also accept: Cash and all major Debit/Credit Cards.\n\n*Note: Please include your address or name in the payment memo.*",
-      coverage: "📍 **Service Areas in Central Texas:**\nWe proudly service all of Bell County and nearby communities:\n• **Killeen, TX**\n• **Fort Cavazos (Military Base)**\n• **Harker Heights, TX**\n• **Copperas Cove, TX**\n• **Temple, TX**\n• **Belton, TX**\n• **Nolanville, TX**\n\nWhich city or ZIP code is your lawn located in?",
+      payment: "💳 **Official Payment Methods:**\n\n• **ZELLE:**\n  👤 Name: **Olivia Rodriguez**\n  📱 Phone: **(623) 764-4177**\n\n• **VENMO:** Accepted upon service completion.\n• **CASH IN HAND:** Direct cash payment in person upon job completion.\n• **PAYPAL:** Accepted upon request.\n\n*(Note: We strictly and only accept these 4 methods: Zelle, Venmo, Cash in Hand, or PayPal).* Please include your address or name in the payment memo.",
+      coverage: "📍 **Official Service Areas in Central Texas:**\nWe exclusively service the following 5 areas:\n• **Killeen, TX**\n• **Fort Cavazos (Fort Hood)**\n• **Harker Heights, TX**\n• **Copperas Cove, TX**\n• **Belton, TX**\n\nWhich of these 5 cities is your lawn located in?",
       schedule: "📅 **Awesome! To schedule your free estimate:**\nYou can fill out the fast quote form on this page, call us directly at **(254) 612-1399**, or send us a quick WhatsApp text.",
       contact: "📞 **Direct Contact Info:**\n• Phone / WhatsApp: **(254) 612-1399**\n• Hours: Monday - Saturday 7:00 AM - 7:00 PM\n• Location: Killeen, TX",
       fallback: "Got it! For the most accurate pricing tailored to your yard, you can call or text us anytime at **(254) 612-1399** or tap 'Book Free Estimate'. Would you like to connect via WhatsApp?",
       pills: [
         { label: "💵 Pricing Estimates", query: "precios" },
-        { label: "💳 Payment Methods (Zelle/CashApp)", query: "pagos" },
+        { label: "💳 Payment Methods", query: "pagos" },
         { label: "📍 Do you cover my city?", query: "ciudades" },
         { label: "📅 Book Free Estimate", query: "agendar" },
         { label: "🪵 Mulch & Shrub Trimming", query: "mulch" }
@@ -134,10 +134,10 @@
       if (q.includes('precio') || q.includes('price') || q.includes('cost') || q.includes('cuanto') || q.includes('how much') || q.includes('rate') || q.includes('cut')) {
         return kb.pricing;
       }
-      if (q.includes('pago') || q.includes('pay') || q.includes('zelle') || q.includes('cash app') || q.includes('cashapp') || q.includes('card') || q.includes('tarjeta') || q.includes('money')) {
+      if (q.includes('pago') || q.includes('pay') || q.includes('zelle') || q.includes('venmo') || q.includes('paypal') || q.includes('cash') || q.includes('efectivo') || q.includes('money')) {
         return kb.payment;
       }
-      if (q.includes('ciudad') || q.includes('area') || q.includes('killeen') || q.includes('hood') || q.includes('cavazos') || q.includes('temple') || q.includes('cove') || q.includes('heights') || q.includes('donde') || q.includes('where')) {
+      if (q.includes('ciudad') || q.includes('area') || q.includes('killeen') || q.includes('hood') || q.includes('cavazos') || q.includes('belton') || q.includes('cove') || q.includes('heights') || q.includes('donde') || q.includes('where')) {
         return kb.coverage;
       }
       if (q.includes('agendar') || q.includes('book') || q.includes('cita') || q.includes('estimate') || q.includes('cotiz') || q.includes('free') || q.includes('schedule')) {

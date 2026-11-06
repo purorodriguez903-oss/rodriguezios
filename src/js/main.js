@@ -135,7 +135,7 @@ const translations = {
     pillar_3_title: 'Warm, Clear Communication',
     pillar_3_desc: 'Quick responses to calls and messages. Fully fluent in both English and Spanish for seamless coordination.',
     pillar_4_title: 'Transparent, Honest Quotes',
-    pillar_4_desc: 'Straightforward, upfront pricing with zero hidden fees. Easy payments via Zelle, cards, or checks.',
+    pillar_4_desc: 'Straightforward, upfront pricing with zero hidden fees. Easy payments via Zelle, Venmo, Cash in Hand, or PayPal.',
 
     // Stats
     stat_1_num: '300+',
@@ -150,8 +150,8 @@ const translations = {
     // Area Checker
     area_badge: 'Service Area',
     area_title: 'Do We Service Your Neighborhood?',
-    area_sub: 'Enter your ZIP Code or City to check service in Killeen, Harker Heights, Copperas Cove, or Belton.',
-    area_placeholder: 'e.g. Killeen, Harker Heights, Copperas Cove, Belton',
+    area_sub: 'Enter your ZIP Code or City to check service in Killeen, Fort Cavazos, Harker Heights, Copperas Cove, or Belton.',
+    area_placeholder: 'e.g. Killeen, Fort Cavazos, Harker Heights, Copperas Cove, Belton',
     area_btn: 'Check Availability',
 
     // Testimonials / Client Reviews
@@ -166,7 +166,7 @@ const translations = {
     faq_q1: 'Do I need to be home during service?',
     faq_a1: 'No, you do not need to be home. As long as our crew has safe gate access to the backyard and pets are safely inside, we take care of everything and send you a confirmation photo.',
     faq_q2: 'What payment methods do you accept?',
-    faq_a2: 'We make payment effortless: we accept Zelle, credit/debit cards, bank transfers, checks, and cash. Instant digital receipts are sent to your email or phone.',
+    faq_a2: 'We make payment effortless: we accept Zelle, Venmo, Cash in Hand, or PayPal. Instant digital receipts are sent to your phone or email.',
     faq_q3: 'What happens if it rains on my scheduled day?',
     faq_a3: 'To protect your lawn from rutting and soggy soil damage, wet weather delays are automatically rescheduled to the very next dry day available.',
     faq_q4: 'Are you fully insured?',
@@ -680,9 +680,9 @@ function initAreaChecker() {
 
     if (!query) return;
 
-    // Service areas: Killeen, Harker Heights, Copperas Cove, Belton & their ZIP codes
+    // Service areas: Killeen, Fort Cavazos, Harker Heights, Copperas Cove, Belton & their ZIP codes
     const coveredKeywords = [
-      'killeen', 'harker heights', 'harker', 'copperas cove', 'copperas', 'cove', 'belton',
+      'killeen', 'fort cavazos', 'cavazos', 'fort hood', 'hood', 'harker heights', 'harker', 'copperas cove', 'copperas', 'cove', 'belton',
       '76540', '76541', '76542', '76543', '76544', '76547', '76548', '76549',
       '76522', '76513'
     ];
@@ -692,10 +692,10 @@ function initAreaChecker() {
     resultBox.className = 'area-result-box';
     if (isCovered) {
       resultBox.classList.add('success');
-      resultBox.innerHTML = `<span>✓</span> <strong>Great news! We service your area.</strong> We have active routes and weekly openings in Killeen, Harker Heights, Copperas Cove, and Belton.`;
+      resultBox.innerHTML = `<span>✓</span> <strong>Great news! We service your area.</strong> We have active routes and weekly openings in Killeen, Fort Cavazos, Harker Heights, Copperas Cove, and Belton.`;
     } else {
       resultBox.classList.add('warning');
-      resultBox.innerHTML = `<span>ℹ</span> We exclusively service Killeen, Harker Heights, Copperas Cove, and Belton. Please call us at (254) 612-1399 for nearby inquiries!`;
+      resultBox.innerHTML = `<span>ℹ</span> We exclusively service Killeen, Fort Cavazos, Harker Heights, Copperas Cove, and Belton. Please call us at (254) 612-1399 for nearby inquiries!`;
     }
     resultBox.style.display = 'flex';
   });

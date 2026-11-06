@@ -3,7 +3,7 @@
  * Loads real-time photos managed via the Discord Bot & iOS App.
  * Highlights new photos with a glowing "🔥 NEW" badge for 3 days (72 hours),
  * Displays category badges (🏡 Front Yard, 🌿 Back Yard, 🪵 Mulch, 🌳 Tree Care, etc.),
- * Supports dual filtering: by Category AND by City (Killeen, Fort Cavazos, Harker Heights, Temple, Copperas Cove),
+ * Supports dual filtering: by Category AND by City (Killeen, Fort Cavazos, Harker Heights, Copperas Cove, Belton),
  * and allows instant fullscreen viewing.
  */
 
@@ -117,7 +117,7 @@
     // Normalize category and location properties
     items = items.map((item, idx) => {
       const cat = item.category || detectCategory(item.title);
-      const cities = ["Killeen, TX", "Fort Cavazos, TX", "Harker Heights, TX", "Copperas Cove, TX", "Temple, TX"];
+      const cities = ["Killeen, TX", "Fort Cavazos, TX", "Harker Heights, TX", "Copperas Cove, TX", "Belton, TX"];
       const loc = item.location || cities[idx % cities.length];
       return {
         ...item,

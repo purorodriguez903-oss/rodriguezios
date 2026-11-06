@@ -39,7 +39,6 @@
 
       if (qLower.includes('heights')) detectedCity = "Harker Heights, TX";
       else if (qLower.includes('cove')) detectedCity = "Copperas Cove, TX";
-      else if (qLower.includes('temple')) detectedCity = "Temple, TX";
       else if (qLower.includes('cavazos') || qLower.includes('hood')) detectedCity = "Fort Cavazos, TX";
       else if (qLower.includes('belton')) detectedCity = "Belton, TX";
 

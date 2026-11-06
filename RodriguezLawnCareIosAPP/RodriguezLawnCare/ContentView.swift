@@ -490,9 +490,6 @@ class LawnCareStore: ObservableObject {
         } else if lower.contains("belton") {
             baseLat = 31.0560
             baseLng = -97.4645
-        } else if lower.contains("temple") {
-            baseLat = 31.0982
-            baseLng = -97.3428
         } else if lower.contains("cavazos") || lower.contains("hood") {
             baseLat = 31.1305
             baseLng = -97.7780
@@ -6564,10 +6561,10 @@ struct InvoiceSheetView: View {
                                         .foregroundStyle(.white)
                                 }
                                 HStack {
-                                    Image(systemName: "dollarsign.circle.fill").foregroundStyle(.green)
-                                    Text("Cash App: $rafajrii (cash.app/$rafajrii)")
-                                        .font(.caption2)
-                                        .foregroundStyle(.white.opacity(0.9))
+                                    Image(systemName: "banknote.fill").foregroundStyle(.green)
+                                    Text("Venmo • Cash in Hand • PayPal")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.white.opacity(0.95))
                                 }
                             }
                             .padding(10)
@@ -6745,8 +6742,9 @@ struct InvoiceSheetView: View {
 
 💳 *MÉTODOS DE PAGO ACEPTADOS:*
 • Zelle: Olivia Rodriguez • (623) 764-4177
-• Cash App: $rafajrii (https://cash.app/$rafajrii)
-• Efectivo al terminar el trabajo
+• Venmo
+• Cash in Hand (Efectivo en mano)
+• PayPal
 
 ✅ *Garantía 100% de Calidad y Satisfacción.*
 ¿Confirmamos este horario para realizar tu servicio? ¡Quedamos a tus órdenes!
@@ -9838,7 +9836,6 @@ struct TacticalTerritoryRadarView: View {
         ("Copperas Cove", "mountain.2.fill", 31.1241, -97.9031, 0.05),
         ("Killeen", "building.2.fill", 31.1171, -97.7278, 0.07),
         ("Harker Heights", "tree.fill", 31.0835, -97.6597, 0.05),
-        ("Temple", "cross.case.fill", 31.0982, -97.3428, 0.06),
         ("Belton", "water.waves", 31.0560, -97.4645, 0.05),
         ("Fort Cavazos", "shield.fill", 31.1305, -97.7780, 0.06)
     ]
@@ -11872,7 +11869,7 @@ struct FlyerCanvasView: View {
                         Text("PAGOS SEGUROS:")
                             .font(.system(size: 6, weight: .bold))
                             .foregroundStyle(.gray)
-                        Text("Zelle • Cash App • Card")
+                        Text("Zelle • Venmo • Cash • PayPal")
                             .font(.system(size: 8, weight: .black))
                             .foregroundStyle(.black)
                             .padding(.horizontal, 6)
@@ -12661,7 +12658,6 @@ struct UploadWorkToWebGalleryView: View {
         "Copperas Cove, TX",
         "Harker Heights, TX",
         "Fort Cavazos, TX",
-        "Temple, TX",
         "Belton, TX"
     ]
     
@@ -14157,7 +14153,7 @@ struct CommercialProposalSheetView: View {
 
 💳 *MÉTODOS DE PAGO:*
 • Zelle: Olivia Rodriguez (623) 764-4177
-• Cash App: $rafajrii
+• Venmo • Cash in Hand • PayPal
 • Facturación mensual formal (Net 15)
 
 Contacto Comercial: (254) 852-8163 • Killeen, Texas
@@ -14299,12 +14295,12 @@ struct RecurringAutoPaySubscriptionSheetView: View {
                             Divider().background(Color.gray.opacity(0.3))
                             
                             HStack {
-                                Image(systemName: "dollarsign.circle.fill")
+                                Image(systemName: "banknote.fill")
                                     .foregroundStyle(Color.green)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("CASH APP OFICIAL:")
+                                    Text("VENMO • CASH IN HAND • PAYPAL:")
                                         .font(.caption2.bold()).foregroundStyle(.gray)
-                                    Text("$rafajrii (cash.app/$rafajrii)")
+                                    Text("Zelle, Venmo, Cash in Hand o PayPal")
                                         .font(.caption.bold()).foregroundStyle(.white)
                                 }
                                 Spacer()
@@ -14391,7 +14387,7 @@ Te enviamos tu estado de cuenta por el mantenimiento mensual de césped de tu pr
 
 💳 *MÉTODOS DE PAGO DISPONIBLES:*
 • *Zelle:* Olivia Rodriguez • (623) 764-4177
-• *Cash App:* $rafajrii • https://cash.app/$rafajrii
+• *Venmo, Cash in Hand o PayPal*
 
 *Por favor incluye tu nombre o dirección en la nota del pago.*
 ¡Agradecemos mucho tu puntualidad y preferencia!
@@ -14782,7 +14778,7 @@ struct PatronMasterDrawerMenuView: View {
                     DrawerCategorySection(
                         icon: "person.2.fill",
                         title: "3. CLIENTES & COBROS",
-                        subtitle: "Clientes fijos, lealtad VIP y pagos Zelle / Cash App",
+                        subtitle: "Clientes fijos, lealtad VIP y pagos Zelle / Venmo / Cash",
                         color: Color.yellow
                     ) {
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
@@ -14792,7 +14788,7 @@ struct PatronMasterDrawerMenuView: View {
                             DrawerToolItemButton(icon: "crown.fill", title: "Niveles VIP", subtitle: "Lealtad & LTV", color: Color.yellow) {
                                 onSelectAction("vip")
                             }
-                            DrawerToolItemButton(icon: "creditcard.fill", title: "Auto-Pay Recurrente", subtitle: "Zelle Olivia & $rafajrii", color: Color.cyan) {
+                            DrawerToolItemButton(icon: "creditcard.fill", title: "Auto-Pay Recurrente", subtitle: "Zelle, Venmo & Cash", color: Color.cyan) {
                                 onSelectAction("autopay")
                             }
                             DrawerToolItemButton(icon: "signature", title: "Firma Digital", subtitle: "Firmar en pantalla", color: Color.pink) {
