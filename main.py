@@ -3691,6 +3691,9 @@ def create_web_app():
     app.router.add_get('/reviews', handle_review_redirect)
 
     # Static files (CSS, JS, Assets)
+    assets_dir = os.path.join(BASE_DIR, "assets")
+    if os.path.exists(assets_dir):
+        app.router.add_static('/assets', path=assets_dir, show_index=False)
     app.router.add_static('/', path=BASE_DIR, show_index=False)
     return app
 
