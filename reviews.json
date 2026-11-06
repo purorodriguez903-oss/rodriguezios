@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "id": 1793952622395,
+    "name": "emry",
+    "role": "Homeowner (Residential)",
+    "badge": "Verified Homeowner",
+    "rating": 5,
+    "text": "I've been using their lawn care service for a year now, and I'm extremely happy with the results. They always do an excellent job with mowing, edging, and everything else. The service is always perfect, and my yard looks great every time. Highly recommend them! Thank you for the great service!",
+    "initials": "E",
+    "photos": [
+      "./assets/uploads/reviews/review_1793952622395_1.jpg"
+    ],
+    "date": "2026-11-06"
+  }
+]

@@ -780,18 +780,18 @@ async function initReviews() {
       return `
         <div class="review-card" data-review-id="${r.id}">
           <div>
-            <div class="review-stars" style="color: #f59e0b; margin-bottom: 0.75rem; font-size: 1.15rem; letter-spacing: 2px;">${stars}</div>
-            <p class="review-text" style="color: #334155; line-height: 1.6; font-size: 0.96rem; margin-bottom: 0.85rem;">"${r.text}"</p>
+            <div class="review-stars" style="color: #f59e0b; margin-bottom: 0.45rem; font-size: 1.05rem; letter-spacing: 1.5px;">${stars}</div>
+            <p class="review-text" style="color: #334155; line-height: 1.5; font-size: 0.88rem; margin-bottom: 0.65rem;">"${r.text}"</p>
             ${photosHtml}
           </div>
-          <div class="review-author-wrap" style="display: flex; align-items: center; gap: 12px; border-top: 1px solid #f1f5f9; padding-top: 1rem;">
-            <div class="author-avatar" style="width: 44px; height: 44px; border-radius: 50%; background: #dcfce7; color: #166534; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 0.95rem;">${initials}</div>
-            <div class="author-info">
-              <h4 style="font-size: 0.98rem; font-weight: 700; color: #0f172a; margin-bottom: 2px;">
-                ${r.name} 
-                <span class="verified-badge" style="background: #ecfdf5; color: #059669; font-size: 0.75rem; padding: 2px 7px; border-radius: 9999px; font-weight: 600; margin-left: 4px;">✓ ${badgeText}</span>
+          <div class="review-author-wrap" style="display: flex; align-items: center; gap: 10px; border-top: 1px solid #f1f5f9; padding-top: 0.75rem; margin-top: 0.5rem;">
+            <div class="author-avatar" style="width: 38px; height: 38px; border-radius: 50%; background: #dcfce7; color: #166534; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0;">${initials}</div>
+            <div class="author-info" style="min-width: 0;">
+              <h4 style="font-size: 0.92rem; font-weight: 700; color: #0f172a; margin-bottom: 2px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
+                <span>${r.name}</span> 
+                <span class="verified-badge" style="background: #ecfdf5; color: #059669; font-size: 0.72rem; padding: 2px 6px; border-radius: 9999px; font-weight: 600;">✓ ${badgeText}</span>
               </h4>
-              <span style="font-size: 0.82rem; color: #64748b;">${r.role || 'Homeowner (Residential)'}</span>
+              <span style="font-size: 0.78rem; color: #64748b; display: block;">${r.role || 'Homeowner (Residential)'}</span>
               ${dateStr}
             </div>
           </div>
