@@ -321,6 +321,7 @@ struct ClientReview: Identifiable, Codable {
     var text: String
     var initials: String?
     var date: String?
+    var photos: [String]?
 }
 
 struct WebSettings: Codable {
@@ -11649,7 +11650,7 @@ struct GoogleReviewBoosterSheetView: View {
     @State private var clientName: String = ""
     @State private var selectedRating: Int = 5
     
-    let googleReviewURL = "https://rodriguezlawncare.xyz/#reviews"
+    let googleReviewURL = "https://rodriguezlawncare.xyz/review"
     
     var body: some View {
         NavigationView {

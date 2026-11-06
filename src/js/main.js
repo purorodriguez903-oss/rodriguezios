@@ -221,6 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initAreaChecker();
   initFaqAccordion();
   initReviews();
+  initCustomerReviewModal();
   initPhotoUploaders();
   initCalendarLiveCheckers();
   initFlashPromotions();
@@ -731,6 +732,8 @@ let activeWhatsAppUrl = 'https://wa.me/12546121399';
 
 
 // ==================== REVIEWS / TESTIMONIALS ENGINE ====================
+let reviewUploadedPhotos = [];
+
 async function initReviews() {
   const container = document.getElementById('testimonialsGrid');
   if (!container) return;
@@ -738,24 +741,56 @@ async function initReviews() {
     const res = await fetch('/api/reviews');
     if (!res.ok) return;
     const reviews = await res.json();
-    if (!Array.isArray(reviews) || reviews.length === 0) return;
+    
+    // If no reviews yet, show clean invitation call to action
+    if (!Array.isArray(reviews) || reviews.length === 0) {
+      container.innerHTML = `
+        <div class="empty-reviews-card">
+          <div class="empty-icon">⭐</div>
+          <h3>Be the First to Leave a Review!</h3>
+          <p>
+            Have we serviced your yard in Killeen, Harker Heights or Copperas Cove? Share your feedback with your neighbors and help our family business grow.
+          </p>
+          <button type="button" class="btn btn-primary" onclick="openReviewModal()" style="display:inline-flex; align-items:center; gap:8px; font-weight:700; border-radius:12px; padding:12px 24px; box-shadow: 0 4px 14px rgba(34,197,94,0.35);">
+            ✍️ Write a Customer Review
+          </button>
+        </div>
+      `;
+      return;
+    }
 
     container.innerHTML = reviews.map(r => {
       const starCount = Math.max(1, Math.min(5, parseInt(r.rating || 5, 10)));
       const stars = '★'.repeat(starCount);
       const initials = r.initials || (r.name ? r.name.substring(0, 2).toUpperCase() : 'RC');
-      const badgeText = r.badge || 'Verified Client';
+      const badgeText = r.badge || 'Verified Homeowner';
+      
+      const photosHtml = (Array.isArray(r.photos) && r.photos.length > 0) ? `
+        <div class="review-photos-grid">
+          ${r.photos.map(p => `
+            <img src="${p}" alt="Yard Photo" loading="lazy" onclick="openReviewPhotoLightbox('${p}')" title="Click to view full photo">
+          `).join('')}
+        </div>
+      ` : '';
+
+      const dateStr = r.date ? `<span style="font-size:0.75rem; color:#94a3b8; display:block; margin-top:2px;">📅 ${r.date}</span>` : '';
+
       return `
         <div class="review-card" data-review-id="${r.id}">
           <div>
             <div class="review-stars" style="color: #f59e0b; margin-bottom: 0.75rem; font-size: 1.15rem; letter-spacing: 2px;">${stars}</div>
-            <p class="review-text" style="color: #334155; line-height: 1.6; font-size: 0.96rem; margin-bottom: 1.25rem;">"${r.text}"</p>
+            <p class="review-text" style="color: #334155; line-height: 1.6; font-size: 0.96rem; margin-bottom: 0.85rem;">"${r.text}"</p>
+            ${photosHtml}
           </div>
           <div class="review-author-wrap" style="display: flex; align-items: center; gap: 12px; border-top: 1px solid #f1f5f9; padding-top: 1rem;">
             <div class="author-avatar" style="width: 44px; height: 44px; border-radius: 50%; background: #dcfce7; color: #166534; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 0.95rem;">${initials}</div>
             <div class="author-info">
-              <h4 style="font-size: 0.98rem; font-weight: 700; color: #0f172a; margin-bottom: 2px;">${r.name} <span class="verified-badge" style="background: #ecfdf5; color: #059669; font-size: 0.75rem; padding: 2px 7px; border-radius: 9999px; font-weight: 600; margin-left: 4px;">✓ ${badgeText}</span></h4>
-              <span style="font-size: 0.82rem; color: #64748b;">${r.role || 'Residential Service'}</span>
+              <h4 style="font-size: 0.98rem; font-weight: 700; color: #0f172a; margin-bottom: 2px;">
+                ${r.name} 
+                <span class="verified-badge" style="background: #ecfdf5; color: #059669; font-size: 0.75rem; padding: 2px 7px; border-radius: 9999px; font-weight: 600; margin-left: 4px;">✓ ${badgeText}</span>
+              </h4>
+              <span style="font-size: 0.82rem; color: #64748b;">${r.role || 'Homeowner (Residential)'}</span>
+              ${dateStr}
             </div>
           </div>
         </div>
@@ -763,6 +798,251 @@ async function initReviews() {
     }).join('');
   } catch (e) {
     console.warn('Dynamic reviews load error:', e);
+  }
+}
+
+// ==================== INTERACTIVE CUSTOMER REVIEW MODAL ====================
+function initCustomerReviewModal() {
+  setupStarRatingPicker();
+  checkDirectReviewLink();
+}
+
+function openReviewModal() {
+  const modal = document.getElementById('reviewModal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => {
+    const nameInput = document.getElementById('reviewNameInput');
+    if (nameInput) nameInput.focus();
+  }, 100);
+}
+
+function closeReviewModal() {
+  const modal = document.getElementById('reviewModal');
+  if (!modal) return;
+  modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function handleRoleSelectChange(val) {
+  const customWrap = document.getElementById('reviewCustomRoleWrap');
+  if (!customWrap) return;
+  if (val === 'Custom') {
+    customWrap.style.display = 'block';
+    const input = document.getElementById('reviewCustomRoleInput');
+    if (input) input.focus();
+  } else {
+    customWrap.style.display = 'none';
+  }
+}
+
+function setupStarRatingPicker() {
+  const picker = document.getElementById('starRatingPicker');
+  const ratingInput = document.getElementById('reviewRatingInput');
+  const descLabel = document.getElementById('starRatingDesc');
+  if (!picker || !ratingInput) return;
+
+  const starBtns = picker.querySelectorAll('.star-btn');
+  const starDescriptions = {
+    1: '1.0 / 5.0 - Needs Improvement ⭐',
+    2: '2.0 / 5.0 - Fair ⭐⭐',
+    3: '3.0 / 5.0 - Good Work ⭐⭐⭐',
+    4: '4.0 / 5.0 - Very Good Service! ⭐⭐⭐⭐',
+    5: '5.0 / 5.0 - Outstanding Experience! ⭐⭐⭐⭐⭐'
+  };
+
+  function updateStars(val) {
+    starBtns.forEach(btn => {
+      const btnVal = parseInt(btn.dataset.val, 10);
+      if (btnVal <= val) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+    if (descLabel && starDescriptions[val]) {
+      descLabel.textContent = starDescriptions[val];
+    }
+  }
+
+  starBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const val = parseInt(btn.dataset.val, 10);
+      ratingInput.value = val;
+      updateStars(val);
+    });
+
+    btn.addEventListener('mouseenter', () => {
+      const val = parseInt(btn.dataset.val, 10);
+      starBtns.forEach(b => {
+        const bVal = parseInt(b.dataset.val, 10);
+        if (bVal <= val) b.classList.add('hovered');
+        else b.classList.remove('hovered');
+      });
+    });
+
+    btn.addEventListener('mouseleave', () => {
+      starBtns.forEach(b => b.classList.remove('hovered'));
+    });
+  });
+}
+
+async function handleReviewPhotoSelect(input) {
+  if (!input.files || input.files.length === 0) return;
+
+  for (let i = 0; i < input.files.length; i++) {
+    const file = input.files[i];
+    if (reviewUploadedPhotos.length >= 6) {
+      alert('You can upload up to 6 photos per review.');
+      break;
+    }
+    try {
+      const compressedB64 = await compressImageFile(file, 900, 0.82);
+      reviewUploadedPhotos.push(compressedB64);
+      renderReviewPhotoThumbnails();
+    } catch (e) {
+      console.warn('Error compressing photo:', e);
+    }
+  }
+  input.value = '';
+}
+
+function renderReviewPhotoThumbnails() {
+  const container = document.getElementById('reviewPhotoThumbnails');
+  if (!container) return;
+  container.innerHTML = reviewUploadedPhotos.map((b64, idx) => `
+    <div style="position: relative; width: 68px; height: 68px; border-radius: 8px; overflow: hidden; border: 1.5px solid #22c55e;">
+      <img src="${b64}" style="width: 100%; height: 100%; object-fit: cover;">
+      <button type="button" onclick="removeReviewPhoto(${idx})" style="position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.65); color: #fff; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1;">&times;</button>
+    </div>
+  `).join('');
+}
+
+function removeReviewPhoto(idx) {
+  reviewUploadedPhotos.splice(idx, 1);
+  renderReviewPhotoThumbnails();
+}
+
+async function handleCustomerReviewSubmit(e) {
+  e.preventDefault();
+  const nameInput = document.getElementById('reviewNameInput');
+  const roleSelect = document.getElementById('reviewRoleSelect');
+  const customRoleInput = document.getElementById('reviewCustomRoleInput');
+  const textInput = document.getElementById('reviewTextInput');
+  const ratingInput = document.getElementById('reviewRatingInput');
+  const submitBtn = document.getElementById('submitReviewBtn');
+
+  const name = nameInput ? nameInput.value.trim() : '';
+  const text = textInput ? textInput.value.trim() : '';
+  const rating = ratingInput ? parseInt(ratingInput.value, 10) : 5;
+
+  if (!name || !text) {
+    alert('Please enter your full name and review comments.');
+    return;
+  }
+
+  let role = roleSelect ? roleSelect.value : 'Homeowner (Residential)';
+  let badge = 'Verified Homeowner';
+
+  if (role === 'Builder / General Contractor') {
+    badge = 'Verified Builder';
+  } else if (role === 'Commercial Property') {
+    badge = 'Verified Commercial Client';
+  } else if (role === 'Realtor / Investor') {
+    badge = 'Verified Realtor';
+  } else if (role === 'Custom') {
+    const customVal = customRoleInput ? customRoleInput.value.trim() : '';
+    role = customVal || 'Client';
+    badge = 'Verified Client';
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span>⏳ Posting Review...</span>';
+  }
+
+  try {
+    const payload = {
+      name,
+      role,
+      badge,
+      rating,
+      text,
+      photos: reviewUploadedPhotos
+    };
+
+    const res = await fetch('/api/reviews', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      closeReviewModal();
+      // Reset form
+      if (nameInput) nameInput.value = '';
+      if (textInput) textInput.value = '';
+      if (customRoleInput) customRoleInput.value = '';
+      reviewUploadedPhotos = [];
+      renderReviewPhotoThumbnails();
+
+      // Refresh reviews list dynamically
+      await initReviews();
+
+      // Show alert toast
+      alert(`🎉 Thank you, ${name}! Your review has been posted successfully.`);
+
+      // Smooth scroll to reviews
+      const revSec = document.getElementById('reviews');
+      if (revSec) revSec.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      alert(`Error: ${data.error || 'Could not submit review. Please try again.'}`);
+    }
+  } catch (err) {
+    console.error('Review submit error:', err);
+    alert('Connection error. Please check your internet and try again.');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<span>Post Review ★★★★★</span>';
+    }
+  }
+}
+
+// Detect custom link e.g. rodriguezlawncare.xyz/review or ?review=1 or #review
+function checkDirectReviewLink() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const hash = window.location.hash.toLowerCase();
+  const isReviewIntent = urlParams.has('review') ||
+                         hash === '#review' ||
+                         hash === '#reviews?new=true' ||
+                         hash === '#leave-review' ||
+                         hash.includes('review');
+
+  if (isReviewIntent) {
+    setTimeout(() => {
+      const revSec = document.getElementById('reviews');
+      if (revSec) {
+        revSec.scrollIntoView({ behavior: 'smooth' });
+        setTimeout(openReviewModal, 450);
+      }
+    }, 400);
+  }
+}
+
+window.addEventListener('hashchange', checkDirectReviewLink);
+
+function openReviewPhotoLightbox(imgSrc) {
+  const lightbox = document.getElementById('lightboxModal');
+  const img = document.getElementById('lightboxImage');
+  const title = document.getElementById('lightboxTitle');
+  if (lightbox && img) {
+    img.src = imgSrc;
+    if (title) title.textContent = 'Customer Yard Photo';
+    lightbox.classList.add('active');
+    document.body.style.overflow = 'hidden';
   }
 }
 

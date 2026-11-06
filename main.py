@@ -64,6 +64,8 @@ REVIEWS_JSON_PATH = os.path.join(BASE_DIR, "reviews.json")
 RECURRING_JSON_PATH = os.path.join(BASE_DIR, "recurring_clients.json")
 UPLOADS_LEADS_FOLDER = os.path.join(BASE_DIR, "assets", "uploads", "leads")
 os.makedirs(UPLOADS_LEADS_FOLDER, exist_ok=True)
+UPLOADS_REVIEWS_FOLDER = os.path.join(BASE_DIR, "assets", "uploads", "reviews")
+os.makedirs(UPLOADS_REVIEWS_FOLDER, exist_ok=True)
 
 
 THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000
@@ -75,6 +77,7 @@ DATA_BACKUP_DIR = os.path.join(BASE_DIR, "data_backup")
 os.makedirs(DATA_BACKUP_DIR, exist_ok=True)
 GALLERY_BACKUP_PATH = os.path.join(DATA_BACKUP_DIR, "gallery_persistent.json")
 LEADS_BACKUP_PATH = os.path.join(DATA_BACKUP_DIR, "leads_persistent.json")
+REVIEWS_BACKUP_PATH = os.path.join(DATA_BACKUP_DIR, "reviews_persistent.json")
 
 def load_gallery():
     items = []
@@ -135,23 +138,71 @@ def save_recurring(data):
         return False
 
 def load_reviews():
-    if not os.path.exists(REVIEWS_JSON_PATH):
-        return []
-    try:
-        with open(REVIEWS_JSON_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"[Error] Cargando reviews.json: {e}")
-        return []
+    items = []
+    if os.path.exists(REVIEWS_JSON_PATH):
+        try:
+            with open(REVIEWS_JSON_PATH, "r", encoding="utf-8") as f:
+                items = json.load(f)
+        except Exception as e:
+            print(f"[Error] Cargando reviews.json: {e}")
+
+    # Auto-merge with persistent backup to prevent customer reviews from resetting
+    if os.path.exists(REVIEWS_BACKUP_PATH):
+        try:
+            with open(REVIEWS_BACKUP_PATH, "r", encoding="utf-8") as f:
+                backup_items = json.load(f)
+                existing_ids = {item.get("id") for item in items if isinstance(item, dict) and "id" in item}
+                for b_item in backup_items:
+                    if isinstance(b_item, dict) and b_item.get("id") not in existing_ids:
+                        items.append(b_item)
+                        existing_ids.add(b_item.get("id"))
+                items.sort(key=lambda x: x.get("id", 0), reverse=True)
+        except Exception as e:
+            print(f"[Notice] Error reading persistent reviews backup: {e}")
+
+    # Remove initial placeholder fake reviews (IDs 1, 2, 3)
+    items = [it for it in items if isinstance(it, dict) and it.get("id") not in (1, 2, 3)]
+
+    return items
 
 def save_reviews(data):
     try:
         with open(REVIEWS_JSON_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+        try:
+            with open(REVIEWS_BACKUP_PATH, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
         return True
     except Exception as e:
         print(f"[Error] Guardando reviews.json: {e}")
         return False
+
+def save_review_photos(photos_data, review_id):
+    """Decodes base64 photos uploaded with customer reviews and saves them locally."""
+    saved_urls = []
+    if not photos_data or not isinstance(photos_data, list):
+        return saved_urls
+    import base64
+    for idx, item in enumerate(photos_data):
+        if not item or not isinstance(item, str):
+            continue
+        if item.startswith("data:image"):
+            try:
+                header, encoded = item.split(",", 1)
+                ext = "png" if "png" in header else "jpg"
+                raw = base64.b64decode(encoded)
+                filename = f"review_{review_id}_{idx+1}.{ext}"
+                filepath = os.path.join(UPLOADS_REVIEWS_FOLDER, filename)
+                with open(filepath, "wb") as f:
+                    f.write(raw)
+                saved_urls.append(f"./assets/uploads/reviews/{filename}")
+            except Exception as e:
+                print(f"[Error] Guardando foto de reseña: {e}")
+        elif item.startswith("http") or item.startswith("./") or item.startswith("/"):
+            saved_urls.append(item)
+    return saved_urls
 
 def load_leads():
     items = []
@@ -3225,15 +3276,44 @@ async def handle_api_get_reviews(request):
     """Returns list of client reviews for website and iOS app."""
     return cors_json_response(load_reviews())
 
+async def notify_new_review_discord(name, rating, role, badge, text, photos=None):
+    """Sends a real-time notification to Discord when a client posts a review."""
+    if not bot_global or not bot_global.is_ready():
+        return
+    try:
+        channel = bot_global.get_channel(LEADS_CHANNEL_ID)
+        if not channel:
+            return
+        stars_str = "⭐" * max(1, min(5, int(rating or 5)))
+        embed = discord.Embed(
+            title=f"🌟 ¡Nueva Reseña de Cliente en la Web! ({stars_str})",
+            description=f"**Cliente:** {name}\n**Tipo / Rol:** {role} (`{badge}`)\n**Calificación:** {rating}/5 Estrellas\n\n**Opinión:**\n> {text}",
+            color=discord.Color.gold(),
+            timestamp=discord.utils.utcnow()
+        )
+        if photos and len(photos) > 0:
+            embed.set_footer(text=f"📷 Incluye {len(photos)} foto(s) de patio adjuntada(s)")
+            first_p = photos[0].replace("./", "").replace("/", os.sep)
+            full_p = os.path.join(BASE_DIR, first_p)
+            if os.path.exists(full_p):
+                file_obj = discord.File(full_p, filename="review_yard.jpg")
+                embed.set_image(url="attachment://review_yard.jpg")
+                await channel.send(embed=embed, file=file_obj)
+                return
+        await channel.send(embed=embed)
+    except Exception as e:
+        print(f"[Error enviando reseña a Discord]: {e}")
+
 async def handle_api_add_review(request):
-    """Adds or updates a client review."""
+    """Adds or updates a client review with photos and instant Discord alert."""
     try:
         data = await request.json()
         name = data.get("name", "").strip() or "Verified Customer"
-        role = data.get("role", "").strip() or "Residential Service"
+        role = data.get("role", "").strip() or "Homeowner (Residential)"
         badge = data.get("badge", "").strip() or "Verified Homeowner"
         rating = int(data.get("rating", 5) or 5)
         text = data.get("text", "").strip()
+        raw_photos = data.get("photos", [])
         if not text:
             return cors_json_response({"success": False, "error": "El texto de la reseña es requerido"}, status=400)
 
@@ -3243,6 +3323,8 @@ async def handle_api_add_review(request):
         reviews = load_reviews()
         review_id = int(data.get("id", int(time.time() * 1000)))
 
+        saved_photos = save_review_photos(raw_photos, review_id) if raw_photos else []
+
         existing = next((r for r in reviews if r.get("id") == review_id), None)
         if existing:
             existing.update({
@@ -3251,7 +3333,8 @@ async def handle_api_add_review(request):
                 "badge": badge,
                 "rating": rating,
                 "text": text,
-                "initials": initials
+                "initials": initials,
+                "photos": saved_photos or existing.get("photos", [])
             })
         else:
             new_review = {
@@ -3262,14 +3345,23 @@ async def handle_api_add_review(request):
                 "rating": rating,
                 "text": text,
                 "initials": initials,
+                "photos": saved_photos,
                 "date": time.strftime("%Y-%m-%d", time.localtime())
             }
             reviews.insert(0, new_review)
 
         save_reviews(reviews)
+
+        # Notify Discord asynchronously
+        asyncio.create_task(notify_new_review_discord(name, rating, role, badge, text, saved_photos))
+
         return cors_json_response({"success": True, "reviews": reviews})
     except Exception as e:
         return cors_json_response({"success": False, "error": str(e)}, status=400)
+
+async def handle_review_redirect(request):
+    """Redirects /review or /reviews directly to the reviews section with the modal open."""
+    raise web.HTTPFound('/#review')
 
 async def handle_api_delete_review(request):
     """Deletes a client review by id."""
@@ -3525,6 +3617,10 @@ def create_web_app():
     app.router.add_get('/api/analytics', handle_api_get_analytics)
     app.router.add_post('/api/analytics/visit', handle_api_record_visit)
     app.router.add_get('/api/stats', handle_api_stats)
+
+    # Direct Client Review Portal URLs
+    app.router.add_get('/review', handle_review_redirect)
+    app.router.add_get('/reviews', handle_review_redirect)
 
     # Static files (CSS, JS, Assets)
     app.router.add_static('/', path=BASE_DIR, show_index=False)

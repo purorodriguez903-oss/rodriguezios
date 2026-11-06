@@ -94,7 +94,9 @@ const HTML_TROLL_BANNER = `<!--
 
 async function syncLiveMobileUploads() {
     console.log('\n[0/4] Checking and Syncing Live Mobile Uploads from Cloud...');
-    return new Promise((resolve) => {
+    
+    // 1. Sync Gallery Items
+    await new Promise((resolve) => {
         const req = https.get('https://rodriguezlawncare.xyz/api/gallery', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 4000 }, (res) => {
             let data = '';
             res.on('data', chunk => data += chunk);
@@ -102,7 +104,7 @@ async function syncLiveMobileUploads() {
                 try {
                     const parsed = JSON.parse(data);
                     const liveItems = parsed.gallery || [];
-                    console.log(`  ✓ Cloud server responded with ${liveItems.length} live items.`);
+                    console.log(`  ✓ Cloud server responded with ${liveItems.length} live gallery items.`);
 
                     const localGalleryPath = path.join(__dirname, 'gallery.json');
                     let localItems = [];
@@ -128,7 +130,7 @@ async function syncLiveMobileUploads() {
                     if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
                     fs.writeFileSync(path.join(backupDir, 'gallery_persistent.json'), JSON.stringify(localItems, null, 2), 'utf8');
 
-                    console.log(`  ✓ Sync complete: ${added} new items merged from phone. Total gallery records: ${localItems.length}`);
+                    console.log(`  ✓ Gallery sync complete: ${added} new items merged from phone. Total gallery records: ${localItems.length}`);
                 } catch (err) {
                     console.log(`  ✓ Notice: Using local gallery database (${err.message})`);
                 }
@@ -137,7 +139,55 @@ async function syncLiveMobileUploads() {
         });
 
         req.on('error', (e) => {
-            console.log(`  ✓ Cloud sync skipped (${e.message}). Local records preserved.`);
+            console.log(`  ✓ Cloud gallery sync skipped (${e.message}). Local records preserved.`);
+            resolve();
+        });
+    });
+
+    // 2. Sync Customer Reviews
+    await new Promise((resolve) => {
+        const req = https.get('https://rodriguezlawncare.xyz/api/reviews', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 4000 }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const liveReviews = JSON.parse(data);
+                    if (Array.isArray(liveReviews)) {
+                        const localReviewsPath = path.join(__dirname, 'reviews.json');
+                        let localReviews = [];
+                        if (fs.existsSync(localReviewsPath)) {
+                            localReviews = JSON.parse(fs.readFileSync(localReviewsPath, 'utf8'));
+                        }
+
+                        const FAKE_REVIEW_IDS = new Set([1, 2, 3]);
+                        const localIds = new Set(localReviews.map(r => r.id));
+                        let added = 0;
+                        for (const rev of liveReviews) {
+                            if (rev && rev.id && !FAKE_REVIEW_IDS.has(rev.id) && !localIds.has(rev.id)) {
+                                localReviews.push(rev);
+                                localIds.add(rev.id);
+                                added++;
+                            }
+                        }
+
+                        localReviews.sort((a, b) => (b.id || 0) - (a.id || 0));
+                        fs.writeFileSync(localReviewsPath, JSON.stringify(localReviews, null, 2), 'utf8');
+
+                        const backupDir = path.join(__dirname, 'data_backup');
+                        if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+                        fs.writeFileSync(path.join(backupDir, 'reviews_persistent.json'), JSON.stringify(localReviews, null, 2), 'utf8');
+
+                        console.log(`  ✓ Reviews sync complete: ${added} new reviews merged from web/mobile. Total reviews: ${localReviews.length}`);
+                    }
+                } catch (err) {
+                    console.log(`  ✓ Notice: Using local reviews database (${err.message})`);
+                }
+                resolve();
+            });
+        });
+
+        req.on('error', (e) => {
+            console.log(`  ✓ Cloud reviews sync skipped (${e.message}). Local records preserved.`);
             resolve();
         });
     });

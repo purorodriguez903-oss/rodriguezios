@@ -1,5 +1,25 @@
 [
   {
+    "id": 18,
+    "filename": "work_18.jpg",
+    "url": "./assets/gallery/work_18.jpg",
+    "uploaded_at": 1793905416972,
+    "title": "Back Yard in Copperas Cove, Tx",
+    "category": "Back Yard",
+    "location": "Copperas Cove, TX",
+    "verified": true
+  },
+  {
+    "id": 17,
+    "filename": "work_17.jpg",
+    "url": "./assets/gallery/work_17.jpg",
+    "uploaded_at": 1793905386476,
+    "title": "Mowing & Razor Edging in Copperas Cove, Tx",
+    "category": "Mowing & Edging",
+    "location": "Copperas Cove, TX",
+    "verified": true
+  },
+  {
     "id": 16,
     "filename": "work_16.jpg",
     "url": "./assets/gallery/work_16.jpg",
