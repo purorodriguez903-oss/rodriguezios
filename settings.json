@@ -1,17 +1,17 @@
 {
   "hero_type": "video",
   "hero_video_url": "./assets/video/hero.mp4",
-  "hero_poster_url": "./assets/images/drone_tundra_intro.jpg",
+  "hero_poster_url": "./assets/images/drone_mowing_aerial.jpg",
   "hero_preset_id": "drone_tundra",
   "hero_title": "Your Dream Lawn, Flawlessly Maintained",
   "hero_subtitle": "Crisp commercial stripe mowing, razor-sharp concrete edging, and premium landscape care. Available for direct homeowner jobs and general contractors.",
   "video_presets": [
     {
       "id": "drone_tundra",
-      "name": "🚁 Drone Aéreo Tundra & Remolque (Con Créditos)",
+      "name": "🚁 Video IA: Dron Aéreo, Cuadrilla Cortando & Team Rafa",
       "video_url": "./assets/video/hero.mp4",
-      "poster_url": "./assets/images/drone_tundra_intro.jpg",
-      "desc": "Vista de dron 4K, camioneta Toyota Tundra negra, remolque rotulado, créditos de Rafael Rodriguez y transición Antes/Después."
+      "poster_url": "./assets/images/drone_mowing_aerial.jpg",
+      "desc": "Vista cinematográfica de dron 4K, podadoras comerciales cortando líneas, poda artística y descenso suave hacia la troka Tundra y el equipo con logos de Rodriguez LawnCare."
     },
     {
       "id": "mower_stripes",
