@@ -64,6 +64,10 @@ html {
   scroll-behavior: smooth;
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -71,7 +75,10 @@ body {
   color: var(--gray-700);
   background-color: var(--white);
   line-height: 1.6;
+  width: 100%;
+  max-width: 100%;
   overflow-x: hidden;
+  position: relative;
 }
 
 img {
@@ -1460,9 +1467,11 @@ button, input, select, textarea {
    ========================================================================== */
 .testimonials-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 340px));
+  grid-template-columns: repeat(auto-fill, minmax(290px, 350px));
   justify-content: center;
   gap: 1.25rem;
+  width: 100%;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -1476,8 +1485,8 @@ button, input, select, textarea {
   flex-direction: column;
   justify-content: space-between;
   width: 100%;
-  max-width: 350px;
-  margin: 0 auto;
+  max-width: 360px;
+  box-sizing: border-box;
   transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
@@ -1960,8 +1969,8 @@ button, input, select, textarea {
    ========================================================================== */
 .floating-actions-bar {
   position: fixed;
-  bottom: 1.5rem;
-  right: 1.5rem;
+  bottom: 84px;
+  right: 1.25rem;
   z-index: 999;
   display: flex;
   flex-direction: column;
@@ -2303,6 +2312,34 @@ button, input, select, textarea {
   .footer-grid {
     grid-template-columns: 1fr;
     gap: 2rem;
+  }
+
+  /* Auto-responsive Testimonials & Reviews for Mobile */
+  .testimonials-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    max-width: 100%;
+    gap: 1.15rem;
+    margin: 0 auto;
+    padding: 0;
+  }
+
+  .review-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 1.35rem 1.2rem !important;
+    border-radius: 14px;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+  }
+
+  .empty-reviews-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 2.25rem 1rem !important;
+    box-sizing: border-box !important;
   }
 }
 
@@ -2881,8 +2918,29 @@ button, input, select, textarea {
   align-items: stretch;
 }
 @media (max-width: 640px) {
+  .container {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
   .address-input-action-wrap {
     flex-direction: column;
+  }
+  .floating-actions-bar {
+    bottom: 74px;
+    right: 14px;
+  }
+  .floating-btn {
+    width: 48px;
+    height: 48px;
+    font-size: 1.3rem;
+  }
+  .ai-widget-wrapper {
+    bottom: 14px;
+    right: 14px;
+  }
+  .ai-widget-toggle {
+    padding: 7px 12px;
+    font-size: 0.85rem;
   }
 }
 .btn-scan-satellite-trigger {
@@ -3081,8 +3139,8 @@ button, input, select, textarea {
    ======================================================== */
 .ai-widget-wrapper {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
+  bottom: 18px;
+  right: 1.25rem;
   z-index: 9999;
   font-family: inherit;
 }

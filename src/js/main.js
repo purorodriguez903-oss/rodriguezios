@@ -770,7 +770,7 @@ async function initReviews() {
       const photosHtml = (Array.isArray(r.photos) && r.photos.length > 0) ? `
         <div class="review-photos-grid">
           ${r.photos.map(p => `
-            <img src="${p}" alt="Yard Photo" loading="lazy" onclick="openReviewPhotoLightbox('${p}')" title="Click to view full photo">
+            <img src="${p}" alt="Yard Photo" loading="lazy" onerror="this.style.display='none'" onclick="openReviewPhotoLightbox('${p}')" title="Click to view full photo">
           `).join('')}
         </div>
       ` : '';
