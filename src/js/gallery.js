@@ -156,9 +156,10 @@
   }
 
   function updateCategoryCounts(items) {
-    const counts = { all: items.length };
+    const activeItems = (items || []).filter(it => !it.hidden);
+    const counts = { all: activeItems.length };
 
-    items.forEach(item => {
+    activeItems.forEach(item => {
       const cat = item.category || 'General LawnCare';
       counts[cat] = (counts[cat] || 0) + 1;
     });
@@ -231,7 +232,7 @@
   function renderGalleryCards(container, items, filter, cityFilter) {
     const now = Date.now();
 
-    let filtered = items;
+    let filtered = (items || []).filter(it => !it.hidden);
 
     // Filter by Category
     if (filter && filter !== 'all') {
@@ -260,11 +261,10 @@
 
     if (filtered.length === 0) {
       container.innerHTML = `
-        <div class="gallery-empty-state" style="grid-column: 1 / -1; text-align: center; padding: 3rem 1.5rem; background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: 16px;">
-          <span class="empty-icon" style="font-size: 2.8rem; display: block; margin-bottom: 0.8rem;">🌿</span>
-          <h3 style="color: #fff; margin-bottom: 0.5rem; font-size: 1.3rem;">No photos found for this filter</h3>
-          <p style="color: #94a3b8; max-width: 460px; margin: 0 auto 1.2rem;">No projects found in <strong>"${escapeHtml(cityFilter !== 'all' ? cityFilter : filter)}"</strong>. Please select "All Cities" or "All Projects".</p>
-          <button type="button" class="btn btn-outline btn-sm" onclick="document.querySelector('[data-city=all]')?.click(); document.querySelector('[data-filter=all]')?.click();" style="border-radius: 9999px; font-weight: 600;">View All Projects ✨</button>
+        <div class="gallery-empty-state" style="grid-column: 1 / -1; text-align: center; padding: 3.5rem 1.5rem; background: #ffffff; border: 1.5px dashed #cbd5e1; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.03);">
+          <span class="empty-icon" style="font-size: 2.8rem; display: block; margin-bottom: 0.8rem;">📸</span>
+          <h3 style="color: #0f172a; margin-bottom: 0.4rem; font-size: 1.35rem; font-weight: 800;">Real Work Photos Coming Up!</h3>
+          <p style="color: #64748b; max-width: 480px; margin: 0 auto 1.25rem; font-size: 0.95rem; line-height: 1.5;">Our operations crew uploads high-resolution before & after photos from client yards across Killeen, Fort Cavazos, Harker Heights, Copperas Cove & Belton directly from the field. Stay tuned!</p>
         </div>
       `;
       return;

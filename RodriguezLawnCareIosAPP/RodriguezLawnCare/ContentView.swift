@@ -248,6 +248,7 @@ struct GalleryPhoto: Identifiable, Codable, Equatable {
     var location: String?
     var verified: Bool?
     var uploaded_at: Int?
+    var hidden: Bool?
 
     var categorySpanish: String {
         LawnCareStore.categoryInSpanish(category)
@@ -460,8 +461,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "2.6.0"
-    let currentAppBuild: Int = 33
+    let currentAppVersion: String = "2.6.1"
+    let currentAppBuild: Int = 34
 
     @Published var geocodedCache: [String: [Double]] = [:]
     private let RECURRING_CACHE_KEY = "cached_recurring_clients_v2"
@@ -1263,6 +1264,25 @@ class LawnCareStore: ObservableObject {
     }
 
     @MainActor
+    func toggleGalleryPhotoVisibility(id: Int, hidden: Bool) async {
+        if let idx = gallery.firstIndex(where: { $0.id == id }) {
+            gallery[idx].hidden = hidden
+        }
+        guard let url = URL(string: "\(cleanURL)/api/gallery/update") else { return }
+        let payload: [String: Any] = ["id": id, "hidden": hidden]
+        do {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            _ = try await URLSession.shared.data(for: req)
+            await fetchGallery()
+        } catch {
+            print("Toggle hidden error: \(error)")
+        }
+    }
+
+    @MainActor
     func updateHeroBackground(type: String, videoURL: String, posterURL: String, presetId: String) async {
         if settings == nil {
             settings = WebSettings(hero_type: type, hero_video_url: videoURL, hero_poster_url: posterURL)
@@ -1928,23 +1948,29 @@ struct ContentView: View {
                             }
                             .tag(1)
 
+                        GalleryAdminView(store: store)
+                            .tabItem {
+                                Label("Trabajos Web", systemImage: "photo.stack.fill")
+                            }
+                            .tag(2)
+
                         IAEstimateView(store: store)
                             .tabItem {
                                 Label("IA Estimate", systemImage: "sparkles")
                             }
-                            .tag(2)
+                            .tag(3)
 
                         FlashPromotionsView(store: store)
                             .tabItem {
                                 Label("Promociones", systemImage: "megaphone.fill")
                             }
-                            .tag(3)
+                            .tag(4)
 
                         WebAdminView(store: store)
                             .tabItem {
                                 Label("Ajustes & Web", systemImage: "gearshape.2.fill")
                             }
-                            .tag(4)
+                            .tag(5)
                     }
                 }
             }
@@ -2064,8 +2090,8 @@ struct ContentView: View {
             selectedTab = 0
         case "clientes":
             showRecurringSheet = true
-        case "trabajos":
-            showCommercialProposalSheet = true
+        case "trabajos", "galeria", "fotos":
+            selectedTab = 2
         case "calendario":
             selectedTab = 1
         case "enruta":
@@ -2081,13 +2107,13 @@ struct ContentView: View {
         case "reportes":
             showVipLoyaltySheet = true
         case "promos":
-            selectedTab = 3
+            selectedTab = 4
         case "reviews":
             showReviewsManagerSheet = true
         case "subir_fotos":
-            showUploadWorkSheet = true
+            selectedTab = 2
         case "ajustes":
-            selectedTab = 4
+            selectedTab = 5
         default:
             handleDrawerAction(action)
         }
@@ -2100,7 +2126,7 @@ struct ContentView: View {
         case "checklist": showChecklistSheet = true
         case "rain": showRainAlertSheet = true
         case "fleet": showFleetMaintenanceSheet = true
-        case "estimate": selectedTab = 2
+        case "estimate": selectedTab = 3
         case "truck": showTruckCalcSheet = true
         case "tree": showTreeEstimatorSheet = true
         case "proposal": showCommercialProposalSheet = true
@@ -2114,8 +2140,8 @@ struct ContentView: View {
         case "google_review": showGoogleReviewSheet = true
         case "digitalcard": showDigitalCardSheet = true
         case "beforeafter": showBeforeAfterSheet = true
-        case "promos": selectedTab = 3
-        case "settings": selectedTab = 4
+        case "promos": selectedTab = 4
+        case "settings": selectedTab = 5
         default: break
         }
     }
@@ -3568,18 +3594,52 @@ struct GalleryAdminView: View {
 
                     // 2-Column Grid matching website layout
                     ScrollView {
-                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 14) {
-                            ForEach(filteredPhotos) { photo in
-                                GalleryWorkCard(photo: photo, store: store)
-                                    .onTapGesture {
-                                        selectedPhotoForAction = photo
-                                        showPhotoActionDialog = true
+                        if filteredPhotos.isEmpty {
+                            VStack(spacing: 16) {
+                                Image(systemName: "photo.badge.plus")
+                                    .font(.system(size: 46))
+                                    .foregroundStyle(Brand.primary)
+                                    .padding(.top, 40)
+                                Text("No hay fotos en esta sección")
+                                    .font(.headline.bold())
+                                    .foregroundStyle(.white)
+                                Text("Los trabajos de prueba fueron eliminados de la web. Puedes subir tus trabajos reales directamente con fotos desde tu galería.")
+                                    .font(.caption)
+                                    .foregroundStyle(.gray)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 32)
+                                Button {
+                                    showAddPhotoSheet = true
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "plus.circle.fill")
+                                        Text("Subir Mi Primer Trabajo")
                                     }
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(.black)
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 12)
+                                    .background(Brand.primary)
+                                    .clipShape(Capsule())
+                                }
+                                .padding(.top, 8)
                             }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 30)
+                        } else {
+                            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 14) {
+                                ForEach(filteredPhotos) { photo in
+                                    GalleryWorkCard(photo: photo, store: store)
+                                        .onTapGesture {
+                                            selectedPhotoForAction = photo
+                                            showPhotoActionDialog = true
+                                        }
+                                }
+                            }
+                            .padding(.horizontal)
+                            .padding(.top, 8)
+                            .padding(.bottom, 80)
                         }
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-                        .padding(.bottom, 80)
                     }
                     .refreshable {
                         await store.refreshAll()
@@ -3611,6 +3671,10 @@ struct GalleryAdminView: View {
                 titleVisibility: .visible
             ) {
                 if let photo = selectedPhotoForAction {
+                    let isHidden = (photo.hidden ?? false)
+                    Button(isHidden ? "👁️ Mostrar en la Web (Hacer Visible)" : "🙈 Ocultar de la Web") {
+                        Task { await store.toggleGalleryPhotoVisibility(id: photo.id, hidden: !isHidden) }
+                    }
                     Button("🔄 Reemplazar Foto de la Web") {
                         showEditPhotoSheet = true
                     }
@@ -3702,17 +3766,31 @@ struct GalleryWorkCard: View {
 
                     Spacer()
 
-                    HStack(spacing: 3) {
-                        Text(photo.categoryIcon)
-                            .font(.system(size: 9))
-                        Text(photo.categorySpanish)
-                            .font(.system(size: 9, weight: .bold))
+                    if photo.hidden == true {
+                        HStack(spacing: 3) {
+                            Image(systemName: "eye.slash.fill")
+                                .font(.system(size: 8))
+                            Text("Oculto")
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.red.opacity(0.85))
+                        .clipShape(Capsule())
+                    } else {
+                        HStack(spacing: 3) {
+                            Text(photo.categoryIcon)
+                                .font(.system(size: 9))
+                            Text(photo.categorySpanish)
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.black.opacity(0.75))
+                        .clipShape(Capsule())
                     }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.black.opacity(0.75))
-                    .clipShape(Capsule())
                 }
                 .padding(6)
             }
@@ -3747,18 +3825,33 @@ struct GalleryWorkCard: View {
 
                     Spacer()
 
-                    HStack(spacing: 2) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 8))
-                            .foregroundStyle(Brand.primary)
-                        Text("Verificado")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(Brand.primary)
+                    if photo.hidden == true {
+                        HStack(spacing: 2) {
+                            Image(systemName: "eye.slash.fill")
+                                .font(.system(size: 8))
+                                .foregroundStyle(.red)
+                            Text("Oculto")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(.red)
+                        }
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.red.opacity(0.15))
+                        .clipShape(Capsule())
+                    } else {
+                        HStack(spacing: 2) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 8))
+                                .foregroundStyle(Brand.primary)
+                            Text("En Web")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(Brand.primary)
+                        }
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Brand.primary.opacity(0.15))
+                        .clipShape(Capsule())
                     }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(Brand.primary.opacity(0.15))
-                    .clipShape(Capsule())
                 }
             }
             .padding(8)

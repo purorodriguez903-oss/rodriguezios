@@ -103,6 +103,8 @@ def load_gallery():
         except Exception as e:
             print(f"[Notice] Error reading persistent gallery backup: {e}")
 
+    # Purge old fake demo items (<= 18)
+    items = [it for it in items if isinstance(it, dict) and int(it.get("id", 0)) > 18]
     return items
 
 def save_gallery(data):
@@ -2138,6 +2140,8 @@ async def handle_api_update_gallery(request):
                     item["url"] = data["url"].strip()
                 if "verified" in data:
                     item["verified"] = bool(data["verified"])
+                if "hidden" in data:
+                    item["hidden"] = bool(data["hidden"])
                 updated = True
                 target_item = item
                 break
