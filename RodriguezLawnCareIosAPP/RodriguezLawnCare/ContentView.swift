@@ -9847,6 +9847,7 @@ struct TacticalLiveRadarMapView: UIViewRepresentable {
         }
         
         // Update annotations if list or pin locations changed
+        let currentCustom = mapView.annotations.filter { !($0 is MKUserLocation) }
         var shouldUpdate = currentCustom.count != pins.count
         if !shouldUpdate {
             for pin in pins {
