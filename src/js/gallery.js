@@ -280,7 +280,7 @@
         : `<span class="gallery-badge badge-num">#${idFormatted}</span>`;
 
       const beforeAfterBadge = item.is_before_after
-        ? `<span class="gallery-badge" style="background: linear-gradient(135deg, #10b981, #059669); color: white; font-weight: 700;">✨ Antes & Después</span>`
+        ? `<span class="gallery-badge" style="background: linear-gradient(135deg, #10b981, #059669); color: white; font-weight: 700;">✨ Before & After</span>`
         : '';
 
       const category = item.category || detectCategory(item.title);

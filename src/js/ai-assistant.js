@@ -7,11 +7,7 @@
 (function () {
   'use strict';
 
-  let currentLang = 'en'; // default Spanish or detect from navigator
-
-  if (navigator.language && navigator.language.startsWith('en')) {
-    currentLang = 'en';
-  }
+  let currentLang = 'en'; // Strictly default to English
 
   const KNOWLEDGE_BASE = {
     es: {
@@ -173,8 +169,8 @@
         const actionRow = document.createElement('div');
         actionRow.className = 'ai-msg-actions';
         actionRow.innerHTML = `
-          <a href="tel:2546121399" class="ai-act-btn ai-call-btn">📞 Llamar (254) 612-1399</a>
-          <a href="https://wa.me/12546121399?text=Hola%20Rodriguez%20Lawn%20Care,%20me%20gustaria%20una%20cotizacion" target="_blank" class="ai-act-btn ai-wa-btn">💬 WhatsApp</a>
+          <a href="tel:2546121399" class="ai-act-btn ai-call-btn">📞 Call (254) 612-1399</a>
+          <a href="https://wa.me/12546121399?text=Hello%20Rodriguez%20Lawn%20Care,%20I%20would%20like%20a%20free%20quote" target="_blank" class="ai-act-btn ai-wa-btn">💬 WhatsApp</a>
         `;
         msg.appendChild(actionRow);
       }
