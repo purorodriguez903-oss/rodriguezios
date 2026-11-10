@@ -1,5 +1,60 @@
 [
   {
+    "id": 40,
+    "filename": "work_40.jpg",
+    "url": "./assets/gallery/work_40.jpg",
+    "uploaded_at": 1794293701153,
+    "title": "Perimeter Corner Driveway Razor Edging & Sidewalk Border",
+    "category": "Mowing & Edging",
+    "location": "Copperas Cove, TX",
+    "city": "Copperas Cove",
+    "verified": true
+  },
+  {
+    "id": 39,
+    "filename": "work_39.jpg",
+    "url": "./assets/gallery/work_39.jpg",
+    "uploaded_at": 1794293641153,
+    "title": "Arched Brick Estate Front Yard Mowing & Tree Care",
+    "category": "Front Yard",
+    "location": "Killeen, TX",
+    "city": "Killeen",
+    "verified": true
+  },
+  {
+    "id": 38,
+    "filename": "work_38.jpg",
+    "url": "./assets/gallery/work_38.jpg",
+    "uploaded_at": 1794293581153,
+    "title": "Dual-Line Street Curb & Sidewalk Precision Edging",
+    "category": "Mowing & Edging",
+    "location": "Harker Heights, TX",
+    "city": "Harker Heights",
+    "verified": true
+  },
+  {
+    "id": 37,
+    "filename": "work_37.jpg",
+    "url": "./assets/gallery/work_37.jpg",
+    "uploaded_at": 1794293521153,
+    "title": "Suburban Brick Residence Front Lawn Maintenance & Edge Cut",
+    "category": "Front Yard",
+    "location": "Belton, TX",
+    "city": "Belton",
+    "verified": true
+  },
+  {
+    "id": 36,
+    "filename": "work_36.jpg",
+    "url": "./assets/gallery/work_36.jpg",
+    "uploaded_at": 1794293461153,
+    "title": "Curved Concrete Walkway Razor Edging & Front Turf Mowing",
+    "category": "Front Yard",
+    "location": "Fort Cavazos, TX",
+    "city": "Fort Cavazos",
+    "verified": true
+  },
+  {
     "id": 35,
     "filename": "work_35.jpg",
     "url": "./assets/gallery/work_35.jpg",

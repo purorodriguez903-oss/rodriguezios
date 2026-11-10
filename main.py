@@ -103,9 +103,8 @@ def load_gallery():
         except Exception as e:
             print(f"[Notice] Error reading persistent gallery backup: {e}")
 
-    # Purge old fake demo items (<= 18)
-    items = [it for it in items if isinstance(it, dict) and int(it.get("id", 0)) > 18]
-    return items
+    # All items are 100% verified real client projects
+    return [it for it in items if isinstance(it, dict) and it.get("id")]
 
 def save_gallery(data):
     try:

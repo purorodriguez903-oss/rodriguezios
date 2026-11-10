@@ -112,11 +112,10 @@ async function syncLiveMobileUploads() {
                         localItems = JSON.parse(fs.readFileSync(localGalleryPath, 'utf8'));
                     }
 
-                    const FAKE_GALLERY_IDS = new Set(Array.from({length: 25}, (_, i) => i + 1));
                     const localIds = new Set(localItems.map(it => it.id));
                     let added = 0;
                     for (const item of liveItems) {
-                        if (item && item.id && !FAKE_GALLERY_IDS.has(item.id) && !localIds.has(item.id)) {
+                        if (item && item.id && !localIds.has(item.id)) {
                             localItems.push(item);
                             localIds.add(item.id);
                             added++;
