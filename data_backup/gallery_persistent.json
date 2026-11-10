@@ -1,5 +1,49 @@
 [
   {
+    "id": 44,
+    "filename": "work_44.jpg",
+    "url": "./assets/gallery/work_44.jpg",
+    "uploaded_at": 1794294126415,
+    "title": "Evening Driveway & Sidewalk Precision Edging Along Suburban Homes",
+    "category": "Mowing & Edging",
+    "location": "Belton, TX",
+    "city": "Belton",
+    "verified": true
+  },
+  {
+    "id": 43,
+    "filename": "work_43.jpg",
+    "url": "./assets/gallery/work_43.jpg",
+    "uploaded_at": 1794294096415,
+    "title": "Texas Limestone Home Front Lawn Care & Mature Canopy Shade Trees",
+    "category": "Front Yard",
+    "location": "Copperas Cove, TX",
+    "city": "Copperas Cove",
+    "verified": true
+  },
+  {
+    "id": 42,
+    "filename": "work_42.jpg",
+    "url": "./assets/gallery/work_42.jpg",
+    "uploaded_at": 1794294066415,
+    "title": "Cul-de-Sac Corner Lot Razor Edging & Concrete Driveway Line",
+    "category": "Mowing & Edging",
+    "location": "Harker Heights, TX",
+    "city": "Harker Heights",
+    "verified": true
+  },
+  {
+    "id": 41,
+    "filename": "work_41.jpg",
+    "url": "./assets/gallery/work_41.jpg",
+    "uploaded_at": 1794294036415,
+    "title": "Duplex Residential Lawn Mowing, Sidewalk Edge & Concrete Trim",
+    "category": "Front Yard",
+    "location": "Killeen, TX",
+    "city": "Killeen",
+    "verified": true
+  },
+  {
     "id": 40,
     "filename": "work_40.jpg",
     "url": "./assets/gallery/work_40.jpg",
