@@ -236,8 +236,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function pingVisitorAnalytics() {
   try {
-    fetch('/api/analytics/visit', { method: 'POST' }).catch(() => {});
-  } catch (e) {}
+    fetch('/api/analytics/visit', { method: 'POST' }).catch(() => { });
+  } catch (e) { }
 }
 
 async function initLiveHeroSettings() {
@@ -265,14 +265,14 @@ async function initLiveHeroSettings() {
         if (source && s.hero_video_url && !source.src.endsWith(s.hero_video_url.replace('./', ''))) {
           source.src = s.hero_video_url;
           video.load();
-          video.play().catch(() => {});
+          video.play().catch(() => { });
         }
       }
     }
 
     // Sync Background Music dynamically from iOS / settings
     handleLiveWebMusic(s.music);
-  } catch (e) {}
+  } catch (e) { }
 }
 
 // --- BACKGROUND MUSIC WIDGET CONTROLLER ---
@@ -334,7 +334,7 @@ function setupMusicEngine() {
     if (audio && audio.src && audio.paused && audio.dataset.shouldPlay === 'true') {
       audio.play().then(() => {
         console.log('✅ Background music started on user gesture');
-      }).catch(() => {});
+      }).catch(() => { });
     }
   };
 
@@ -528,7 +528,7 @@ function initPriceCalculator() {
   serviceItems.forEach(item => {
     const chk = item.querySelector('input[type="checkbox"]');
     const srvKey = item.getAttribute('data-srv');
-    
+
     // Core base mowing is always included in the base rate
     if (srvKey === 'mowing') {
       item.style.cursor = 'default';
@@ -539,7 +539,7 @@ function initPriceCalculator() {
       // Toggle checked state cleanly
       chk.checked = !chk.checked;
       calcState.services[srvKey] = chk.checked;
-      
+
       if (chk.checked) {
         item.classList.add('active');
       } else {
@@ -742,7 +742,7 @@ async function initReviews() {
     const res = await fetch('/api/reviews');
     if (!res.ok) return;
     const reviews = await res.json();
-    
+
     // If no reviews yet, show clean invitation placeholder
     if (!Array.isArray(reviews) || reviews.length === 0) {
       container.innerHTML = `
@@ -767,7 +767,7 @@ async function initReviews() {
       const stars = '★'.repeat(starCount);
       const initials = r.initials || (r.name ? r.name.substring(0, 2).toUpperCase() : 'RC');
       const badgeText = r.badge || 'Verified Homeowner';
-      
+
       const photosHtml = (Array.isArray(r.photos) && r.photos.length > 0) ? `
         <div class="review-photos-grid">
           ${r.photos.map(p => `
@@ -1019,10 +1019,10 @@ function checkDirectReviewLink() {
   const urlParams = new URLSearchParams(window.location.search);
   const hash = window.location.hash.toLowerCase();
   const isReviewIntent = urlParams.has('review') ||
-                         hash === '#review' ||
-                         hash === '#reviews?new=true' ||
-                         hash === '#leave-review' ||
-                         hash.includes('review');
+    hash === '#review' ||
+    hash === '#reviews?new=true' ||
+    hash === '#leave-review' ||
+    hash.includes('review');
 
   if (isReviewIntent) {
     setTimeout(() => {
@@ -1350,16 +1350,16 @@ function initBookingForms() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       })
-      .then(res => res.json())
-      .then(res => console.log('Lead registered successfully:', res))
-      .catch(err => {
-        console.warn('Lead endpoint retry via /api/leads:', err);
-        fetch('/api/leads', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        }).catch(e => console.warn('Fallback lead endpoint failed:', e));
-      });
+        .then(res => res.json())
+        .then(res => console.log('Lead registered successfully:', res))
+        .catch(err => {
+          console.warn('Lead endpoint retry via /api/leads:', err);
+          fetch('/api/leads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          }).catch(e => console.warn('Fallback lead endpoint failed:', e));
+        });
     } catch (e) {
       console.warn('Fetch lead failed:', e);
     }
@@ -1518,7 +1518,7 @@ function initHeroVideo() {
     playPromise.catch(() => {
       // If browser blocked initial autoplay, retry on first user tap/scroll anywhere
       const resumeOnInteraction = () => {
-        video.play().catch(() => {});
+        video.play().catch(() => { });
         window.removeEventListener('click', resumeOnInteraction);
         window.removeEventListener('touchstart', resumeOnInteraction);
         window.removeEventListener('scroll', resumeOnInteraction);

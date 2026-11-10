@@ -313,6 +313,8 @@ async function runBuild() {
     html = html.replace(/src="\.\/js\/ai-assistant\.js(\?v=[^"]*)?"/g, `src="./js/ai-assistant.js?v=${stamp}"`);
     html = html.replace(/src="\.\/security\/anti-bot\.js(\?v=[^"]*)?"/g, `src="./security/anti-bot.js?v=${stamp}"`);
     html = html.replace(/src="\.\/security\/web-shield\.js(\?v=[^"]*)?"/g, `src="./security/web-shield.js?v=${stamp}"`);
+    html = html.replace(/src="\.\/assets\/images\/before_real\.jpg(\?v=[^"]*)?"/g, `src="./assets/images/before_real.jpg?v=${stamp}"`);
+    html = html.replace(/src="\.\/assets\/images\/after_real\.jpg(\?v=[^"]*)?"/g, `src="./assets/images/after_real.jpg?v=${stamp}"`);
 
     fs.writeFileSync('index.html', html, 'utf8');
     console.log(`  ✓ index.html updated with cache token: v=${stamp}`);
