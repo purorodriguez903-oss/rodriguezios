@@ -2663,7 +2663,7 @@ async def handle_api_app_version(request):
         "trollstore_url": trollstore_url,
         "esign_url": esign_url,
         "web_install_url": f"{base_url}/instalar",
-        "has_update": True,
+        "has_update": False,
         "server_time": time.time()
     })
 

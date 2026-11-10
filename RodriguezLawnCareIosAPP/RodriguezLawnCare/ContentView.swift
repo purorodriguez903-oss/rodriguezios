@@ -474,7 +474,7 @@ class LawnCareStore: ObservableObject {
     @Published var cloudConfig: CloudConfig? = nil
 
     let currentAppVersion: String = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.7.0"
-    let currentAppBuild: Int = Int(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "") ?? 40
+    let currentAppBuild: Int = Int(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "") ?? 41
 
     @Published var geocodedCache: [String: [Double]] = [:]
     private let RECURRING_CACHE_KEY = "cached_recurring_clients_v2"
@@ -811,9 +811,11 @@ class LawnCareStore: ObservableObject {
                 self.availableUpdate = info
                 let serverBuild = info.build ?? 0
                 if serverBuild > self.currentAppBuild {
-                    self.showUpdateModal = true
+                    if manual {
+                        self.showUpdateModal = true
+                        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                    }
                     self.updateCheckStatus = "¡Nueva versión \(info.version ?? "") disponible!"
-                    UINotificationFeedbackGenerator().notificationOccurred(.warning)
                 } else {
                     self.updateCheckStatus = "Estás en la última versión (\(currentAppVersion))"
                     if manual {
@@ -2223,7 +2225,6 @@ struct ContentView: View {
             if newPhase == .active {
                 Task {
                     await store.refreshAll(silent: true)
-                    await store.checkOTAUpdate(manual: false)
                 }
             }
         }
