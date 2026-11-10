@@ -446,7 +446,8 @@ function initBeforeAfterSlider() {
     if (percentage < 5) percentage = 5;
     if (percentage > 95) percentage = 95;
 
-    afterImage.style.width = `${percentage}%`;
+    afterImage.style.clipPath = `polygon(0 0, ${percentage}% 0, ${percentage}% 100%, 0 100%)`;
+    afterImage.style.webkitClipPath = `polygon(0 0, ${percentage}% 0, ${percentage}% 100%, 0 100%)`;
     handle.style.left = `${percentage}%`;
   }
 
