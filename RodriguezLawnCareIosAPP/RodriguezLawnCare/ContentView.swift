@@ -148,12 +148,19 @@ struct WeatherInfo: Codable {
     }
 }
 
+struct ServiceLogEntry: Identifiable, Codable, Hashable {
+    var id: String
+    var completed_at: String
+    var next_due: String
+    var notes: String?
+}
+
 struct RecurringClient: Identifiable, Codable {
     var id: Int
     var name: String
     var phone: String
     var address: String
-    var frequency: String // "weekly", "biweekly", "monthly"
+    var frequency: String // "weekly", "biweekly", "every3weeks", "monthly"
     var service_day: String // "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"
     var price: Double
     var status: String // "paid", "pending"
@@ -162,6 +169,10 @@ struct RecurringClient: Identifiable, Codable {
     var last_serviced: String?
     var lat: Double?
     var lng: Double?
+    var is_in_progress: Bool?
+    var service_started_at: String?
+    var next_service_due: String?
+    var service_logs: [ServiceLogEntry]?
 }
 
 struct SoundManager {
@@ -461,8 +472,8 @@ class LawnCareStore: ObservableObject {
     @Published var updateCheckStatus: String = "Al día"
     @Published var cloudConfig: CloudConfig? = nil
 
-    let currentAppVersion: String = "2.6.1"
-    let currentAppBuild: Int = 34
+    let currentAppVersion: String = "2.7.0"
+    let currentAppBuild: Int = 35
 
     @Published var geocodedCache: [String: [Double]] = [:]
     private let RECURRING_CACHE_KEY = "cached_recurring_clients_v2"
@@ -1724,6 +1735,87 @@ class LawnCareStore: ObservableObject {
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["id": id])
         _ = try? await URLSession.shared.data(for: req)
         await fetchRecurringClients()
+    }
+
+    func calculateNextServiceDueDate(from date: Date, frequency: String) -> (date: Date, formatted: String) {
+        let daysToAdd: Int
+        let freqDesc: String
+        let normalized = frequency.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        if normalized.contains("weekly") || normalized.contains("semanal") || normalized.contains("1") {
+            daysToAdd = 7
+            freqDesc = "Cada 1 semana (Semanal)"
+        } else if normalized.contains("biweekly") || normalized.contains("quincenal") || normalized.contains("2") {
+            daysToAdd = 14
+            freqDesc = "Cada 2 semanas (Quincenal)"
+        } else if normalized.contains("every3weeks") || normalized.contains("3") {
+            daysToAdd = 21
+            freqDesc = "Cada 3 semanas"
+        } else if normalized.contains("monthly") || normalized.contains("mensual") || normalized.contains("mes") {
+            daysToAdd = 30
+            freqDesc = "Cada mes (Mensual)"
+        } else {
+            daysToAdd = 14
+            freqDesc = "Quincenal"
+        }
+        
+        let target = Calendar.current.date(byAdding: .day, value: daysToAdd, to: date) ?? date.addingTimeInterval(Double(daysToAdd * 86400))
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "es_US")
+        df.dateFormat = "EEEE d 'de' MMMM, yyyy"
+        let datePart = df.string(from: target).capitalized
+        return (target, "\(datePart) • \(freqDesc)")
+    }
+    
+    func formatServiceDateTime(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "es_US")
+        df.dateFormat = "d 'de' MMMM, yyyy - h:mm a"
+        return df.string(from: date)
+    }
+
+    func startRecurringService(clientId: Int) async {
+        guard let idx = self.recurringClients.firstIndex(where: { $0.id == clientId }) else { return }
+        let now = Date()
+        let nowStr = formatServiceDateTime(now)
+        
+        DispatchQueue.main.async {
+            self.recurringClients[idx].is_in_progress = true
+            self.recurringClients[idx].service_started_at = nowStr
+            self.persistRecurringClients()
+            SoundManager.playLeadAlert()
+        }
+        let client = self.recurringClients[idx]
+        await updateRecurringClient(client)
+    }
+    
+    func finishRecurringService(clientId: Int, customNotes: String? = nil) async {
+        guard let idx = self.recurringClients.firstIndex(where: { $0.id == clientId }) else { return }
+        let now = Date()
+        let nowStr = formatServiceDateTime(now)
+        let (_, nextDueFormatted) = calculateNextServiceDueDate(from: now, frequency: self.recurringClients[idx].frequency)
+        
+        let newLog = ServiceLogEntry(
+            id: UUID().uuidString,
+            completed_at: nowStr,
+            next_due: nextDueFormatted,
+            notes: (customNotes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false) ? customNotes : "Servicio de corte y orillado completado"
+        )
+        
+        var logs = self.recurringClients[idx].service_logs ?? []
+        logs.insert(newLog, at: 0)
+        
+        DispatchQueue.main.async {
+            self.recurringClients[idx].is_in_progress = false
+            self.recurringClients[idx].service_started_at = nil
+            self.recurringClients[idx].last_serviced = nowStr
+            self.recurringClients[idx].next_service_due = nextDueFormatted
+            self.recurringClients[idx].service_logs = logs
+            self.persistRecurringClients()
+            SoundManager.playSuccessTone()
+        }
+        let client = self.recurringClients[idx]
+        await updateRecurringClient(client)
     }
 
     func fetchWeather() async {
@@ -8960,7 +9052,14 @@ struct RecurringClientCard: View {
                     Text("$\(String(format: "%.0f", client.price))/visita")
                         .font(.subheadline.bold())
                         .foregroundStyle(Brand.primary)
-                    Text(client.frequency == "weekly" ? "Semanal" : (client.frequency == "biweekly" ? "Quincenal" : "Mensual"))
+                    Text({
+                        let f = client.frequency.lowercased()
+                        if f.contains("weekly") || f.contains("1") { return "Semanal (1 sem)" }
+                        if f.contains("biweekly") || f.contains("2") { return "Quincenal (2 sem)" }
+                        if f.contains("every3weeks") || f.contains("3") { return "Cada 3 sem" }
+                        if f.contains("monthly") || f.contains("mes") { return "Mensual (1 mes)" }
+                        return "Frecuente"
+                    }())
                         .font(.caption2.bold())
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -8997,6 +9096,9 @@ struct RecurringClientCard: View {
                     .clipShape(Capsule())
                 }
             }
+            
+            // Interactive Recurring Service Tracker & Logs
+            RecurringServiceTrackerCard(clientId: client.id, store: store)
             
             Divider().background(Color.gray.opacity(0.2))
             
@@ -9076,6 +9178,324 @@ Por favor asegúrate de:
     }
 }
 
+// MARK: - RECURRING APPOINTMENT SERVICE TRACKER & LOGS
+struct RecurringServiceTrackerCard: View {
+    let clientId: Int
+    @ObservedObject var store: LawnCareStore
+    
+    @State private var showLogs: Bool = false
+    @State private var showingFinishSheet: Bool = false
+    @State private var isStarting: Bool = false
+    
+    var client: RecurringClient? {
+        store.recurringClients.first(where: { $0.id == clientId })
+    }
+    
+    var body: some View {
+        if let c = client {
+            VStack(spacing: 8) {
+                // In-Progress Status Banner OR Last Serviced / Next Due Schedule
+                if c.is_in_progress == true {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            HStack(spacing: 5) {
+                                Image(systemName: "bolt.fill")
+                                    .foregroundStyle(.yellow)
+                                    .font(.caption.bold())
+                                Text("CLIENTE EN PROCESO")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.yellow)
+                            }
+                            Spacer()
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(Color.yellow)
+                                    .frame(width: 6, height: 6)
+                                Text("EN SERVICIO ⏱️")
+                                    .font(.system(size: 9, weight: .heavy))
+                                    .foregroundStyle(.yellow)
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.yellow.opacity(0.18))
+                            .clipShape(Capsule())
+                        }
+                        
+                        if let started = c.service_started_at, !started.isEmpty {
+                            Text("Iniciado: \(started)")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.85))
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.yellow.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.yellow.opacity(0.4), lineWidth: 1)
+                    )
+                    
+                    // Big RED Button to finish
+                    Button {
+                        showingFinishSheet = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "stop.circle.fill")
+                                .font(.subheadline)
+                            Text("Finalizar Cita")
+                                .font(.subheadline.bold())
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.red)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .shadow(color: Color.red.opacity(0.35), radius: 4, x: 0, y: 2)
+                    }
+                } else {
+                    // Not in progress: Show Last Serviced and Calculated Next Service Due
+                    if (c.last_serviced != nil && !c.last_serviced!.isEmpty) || (c.next_service_due != nil && !c.next_service_due!.isEmpty) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            if let last = c.last_serviced, !last.isEmpty {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .foregroundStyle(Brand.primary)
+                                        .font(.caption2)
+                                    Text("Último servicio: \(last)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.white.opacity(0.85))
+                                }
+                            }
+                            if let next = c.next_service_due, !next.isEmpty {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "calendar.badge.clock")
+                                        .foregroundStyle(Color.cyan)
+                                        .font(.caption2)
+                                    Text("Próxima cita: \(next)")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(Color.cyan)
+                                }
+                            }
+                        }
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.black.opacity(0.3))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    
+                    // Big GREEN Button to start appointment
+                    Button {
+                        Task {
+                            isStarting = true
+                            await store.startRecurringService(clientId: c.id)
+                            isStarting = false
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            if isStarting {
+                                ProgressView()
+                                    .tint(.black)
+                                    .scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.subheadline)
+                            }
+                            Text("Iniciar Cita")
+                                .font(.subheadline.bold())
+                        }
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Brand.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .shadow(color: Brand.primary.opacity(0.35), radius: 4, x: 0, y: 2)
+                    }
+                    .disabled(isStarting)
+                }
+                
+                // Service Logs History
+                if let logs = c.service_logs, !logs.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Button {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                showLogs.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .font(.caption2)
+                                Text("Logs de Servicios (\(logs.count) realizados)")
+                                    .font(.caption2.bold())
+                                Spacer()
+                                Image(systemName: showLogs ? "chevron.up" : "chevron.down")
+                                    .font(.caption2)
+                            }
+                            .foregroundStyle(.gray)
+                            .padding(.vertical, 2)
+                        }
+                        
+                        if showLogs {
+                            VStack(spacing: 6) {
+                                ForEach(logs) { log in
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        HStack {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "checkmark.circle.fill")
+                                                    .foregroundStyle(Brand.primary)
+                                                    .font(.system(size: 10))
+                                                Text("Realizado: \(log.completed_at)")
+                                                    .font(.system(size: 11, weight: .semibold))
+                                                    .foregroundStyle(.white)
+                                            }
+                                            Spacer()
+                                        }
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "arrow.right.circle.fill")
+                                                .foregroundStyle(Color.cyan)
+                                                .font(.system(size: 10))
+                                            Text("Próxima cita: \(log.next_due)")
+                                                .font(.system(size: 11))
+                                                .foregroundStyle(Color.cyan)
+                                        }
+                                        if let note = log.notes, !note.isEmpty {
+                                            Text(note)
+                                                .font(.system(size: 10))
+                                                .foregroundStyle(.gray)
+                                                .padding(.leading, 14)
+                                        }
+                                    }
+                                    .padding(7)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.white.opacity(0.04))
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showingFinishSheet) {
+                FinishServiceSheet(client: c, store: store)
+            }
+        }
+    }
+}
+
+// MARK: - FINISH SERVICE SHEET
+struct FinishServiceSheet: View {
+    let client: RecurringClient
+    @ObservedObject var store: LawnCareStore
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var notes: String = "Corte regular frontal y trasero + orillado completo"
+    @State private var isSubmitting: Bool = false
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Brand.background.ignoresSafeArea()
+                
+                VStack(spacing: 16) {
+                    // Header card
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Image(systemName: "checkmark.circle.badge.questionmark.fill")
+                                .font(.title2)
+                                .foregroundStyle(Brand.primary)
+                            Text("Finalizar Servicio de Jardinería")
+                                .font(.headline.bold())
+                                .foregroundStyle(.white)
+                        }
+                        
+                        Divider().background(Color.gray.opacity(0.3))
+                        
+                        Text("Cliente: \(client.name)")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.white)
+                        if !client.address.isEmpty {
+                            Text(client.address)
+                                .font(.caption)
+                                .foregroundStyle(.gray)
+                        }
+                        
+                        let (_, nextFormatted) = store.calculateNextServiceDueDate(from: Date(), frequency: client.frequency)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Próxima cita calculada automáticamente:")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.gray)
+                            HStack(spacing: 5) {
+                                Image(systemName: "calendar.badge.clock")
+                                    .foregroundStyle(Color.cyan)
+                                Text(nextFormatted)
+                                    .font(.caption.bold())
+                                    .foregroundStyle(Color.cyan)
+                            }
+                        }
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.cyan.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .padding(14)
+                    .background(Brand.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    
+                    // Notes field
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("NOTAS DEL SERVICIO HOY (OPCIONAL):")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.gray)
+                        TextField("Ej: Corte, orillado, soplado de aceras...", text: $notes)
+                            .padding(12)
+                            .background(Brand.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .foregroundStyle(.white)
+                    }
+                    
+                    Spacer()
+                    
+                    // Confirm Red Button
+                    Button {
+                        Task {
+                            isSubmitting = true
+                            await store.finishRecurringService(clientId: client.id, customNotes: notes)
+                            isSubmitting = false
+                            dismiss()
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isSubmitting {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Image(systemName: "stop.circle.fill")
+                            }
+                            Text("Confirmar y Finalizar Cita")
+                        }
+                        .font(.headline.bold())
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(14)
+                        .background(Color.red)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .shadow(color: Color.red.opacity(0.4), radius: 6, x: 0, y: 3)
+                    }
+                    .disabled(isSubmitting)
+                }
+                .padding()
+            }
+            .navigationTitle("Finalizar Cita")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancelar") { dismiss() }
+                        .foregroundStyle(.gray)
+                }
+            }
+        }
+    }
+}
+
 struct AddRecurringClientSheet: View {
     @ObservedObject var store: LawnCareStore
     @Environment(\.dismiss) var dismiss
@@ -9106,9 +9526,10 @@ struct AddRecurringClientSheet: View {
                     
                     Section(header: Text("FRECUENCIA Y HORARIO").foregroundStyle(Brand.primary)) {
                         Picker("Frecuencia", selection: $frequency) {
-                            Text("Semanal").tag("weekly")
-                            Text("Quincenal").tag("biweekly")
-                            Text("Mensual").tag("monthly")
+                            Text("Cada 1 semana (Semanal)").tag("weekly")
+                            Text("Cada 2 semanas (Quincenal)").tag("biweekly")
+                            Text("Cada 3 semanas").tag("every3weeks")
+                            Text("Cada 1 mes (Mensual)").tag("monthly")
                         }
                         Picker("Día de Servicio", selection: $serviceDay) {
                             ForEach(days, id: \.self) { d in
@@ -9777,6 +10198,16 @@ struct TacticalHouseClientPin: Identifiable {
     let price: Double
     let coordinate: CLLocationCoordinate2D
     let isRecurring: Bool
+    var recurringClientId: Int? = nil
+    var isInProgress: Bool = false
+    var nextServiceDue: String? = nil
+    var lastServiced: String? = nil
+}
+
+class TacticalHouseAnnotation: MKPointAnnotation {
+    var pinId: String = ""
+    var isInProgress: Bool = false
+    var isRecurring: Bool = false
 }
 
 // MARK: - TACTICAL USER LOCATION & GPS NAVIGATION MANAGER
@@ -9899,9 +10330,15 @@ struct TacticalLiveRadarMapView: UIViewRepresentable {
                 marker?.annotation = annotation
             }
             
-            marker?.glyphImage = UIImage(systemName: "house.fill")
-            marker?.markerTintColor = UIColor(red: 0.13, green: 0.77, blue: 0.36, alpha: 1.0)
-            marker?.glyphTintColor = .black
+            if let house = annotation as? TacticalHouseAnnotation, house.isInProgress {
+                marker?.glyphImage = UIImage(systemName: "bolt.fill")
+                marker?.markerTintColor = UIColor(red: 1.0, green: 0.72, blue: 0.05, alpha: 1.0)
+                marker?.glyphTintColor = .black
+            } else {
+                marker?.glyphImage = UIImage(systemName: "house.fill")
+                marker?.markerTintColor = UIColor(red: 0.13, green: 0.77, blue: 0.36, alpha: 1.0)
+                marker?.glyphTintColor = .black
+            }
             marker?.displayPriority = .required
             return marker
         }
@@ -9939,12 +10376,16 @@ struct TacticalLiveRadarMapView: UIViewRepresentable {
             mapView.mapType = mapType
         }
         
-        // Update annotations if list or pin locations changed
+        // Update annotations if list, pin locations, or in-progress status changed
         let currentCustom = mapView.annotations.filter { !($0 is MKUserLocation) }
         var shouldUpdate = currentCustom.count != pins.count
         if !shouldUpdate {
             for pin in pins {
-                if let match = currentCustom.first(where: { $0.title == pin.name }) {
+                if let match = currentCustom.first(where: { ($0 as? TacticalHouseAnnotation)?.pinId == pin.id || $0.title == pin.name }) {
+                    if let house = match as? TacticalHouseAnnotation, house.isInProgress != pin.isInProgress {
+                        shouldUpdate = true
+                        break
+                    }
                     if abs(match.coordinate.latitude - pin.coordinate.latitude) > 0.00005 ||
                        abs(match.coordinate.longitude - pin.coordinate.longitude) > 0.00005 {
                         shouldUpdate = true
@@ -9960,10 +10401,13 @@ struct TacticalLiveRadarMapView: UIViewRepresentable {
         if shouldUpdate {
             mapView.removeAnnotations(currentCustom)
             let newAnnotations = pins.map { pin -> MKPointAnnotation in
-                let a = MKPointAnnotation()
+                let a = TacticalHouseAnnotation()
                 a.coordinate = pin.coordinate
                 a.title = pin.name
                 a.subtitle = "\(pin.serviceDay) • $\(Int(pin.price)) USD • \(pin.address)"
+                a.pinId = pin.id
+                a.isInProgress = pin.isInProgress
+                a.isRecurring = pin.isRecurring
                 return a
             }
             mapView.addAnnotations(newAnnotations)
@@ -10045,7 +10489,11 @@ struct TacticalTerritoryRadarView: View {
                     serviceDay: client.service_day,
                     price: client.price,
                     coordinate: coord,
-                    isRecurring: true
+                    isRecurring: true,
+                    recurringClientId: client.id,
+                    isInProgress: client.is_in_progress ?? false,
+                    nextServiceDue: client.next_service_due,
+                    lastServiced: client.last_serviced
                 )
             )
         }
@@ -10427,6 +10875,11 @@ struct TacticalTerritoryRadarView: View {
                                                 .tint(Brand.primary)
                                                 .scaleEffect(0.8)
                                         }
+                                    }
+                                    
+                                    // Interactive Recurring Service Tracker & Logs
+                                    if pin.isRecurring, let recId = pin.recurringClientId ?? (pin.id.hasPrefix("rec_") ? Int(pin.id.replacingOccurrences(of: "rec_", with: "")) : nil) {
+                                        RecurringServiceTrackerCard(clientId: recId, store: store)
                                     }
                                     
                                     // Action Buttons: Trazar Ruta en App, Google Maps, Apple Maps, WhatsApp
@@ -14614,9 +15067,10 @@ struct EditRecurringClientSheetView: View {
     
     let days = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
     let frequencies = [
-        ("weekly", "Semanal (4 cortes/mes)"),
-        ("biweekly", "Quincenal (2 cortes/mes)"),
-        ("monthly", "Mensual (1 corte/mes)")
+        ("weekly", "Cada 1 sem (Semanal)"),
+        ("biweekly", "Cada 2 sem (Quincenal)"),
+        ("every3weeks", "Cada 3 sem"),
+        ("monthly", "Cada 1 mes (Mensual)")
     ]
     
     var body: some View {
@@ -14716,7 +15170,11 @@ struct EditRecurringClientSheetView: View {
                                         Text(freq.1).tag(freq.0)
                                     }
                                 }
-                                .pickerStyle(.segmented)
+                                .pickerStyle(.menu)
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Brand.cardLight)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
                             }
                             
                             Divider().background(Color.gray.opacity(0.3))

@@ -3266,7 +3266,11 @@ async def handle_api_save_recurring(request):
             "notes": (data.get("notes") or "").strip(),
             "last_serviced": data.get("last_serviced", ""),
             "lat": lat,
-            "lng": lng
+            "lng": lng,
+            "is_in_progress": bool(data.get("is_in_progress", False)),
+            "service_started_at": data.get("service_started_at", ""),
+            "next_service_due": data.get("next_service_due", ""),
+            "service_logs": data.get("service_logs", [])
         }
         if existing:
             existing.update(item)
