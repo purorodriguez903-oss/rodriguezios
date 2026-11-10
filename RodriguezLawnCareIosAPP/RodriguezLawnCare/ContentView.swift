@@ -1569,7 +1569,7 @@ class LawnCareStore: ObservableObject {
     // MARK: - FLASH PROMOTIONS API METHODS
     @MainActor
     func fetchPromo() async {
-        guard let url = URL(string: "\(cleanURL)/api/promo") else { return }
+        guard let url = URL(string: "\(cleanURL)/api/promo?client=app") else { return }
         do {
             var req = URLRequest(url: url)
             req.timeoutInterval = 6

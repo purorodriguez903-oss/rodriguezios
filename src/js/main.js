@@ -1233,12 +1233,51 @@ function initCalendarLiveCheckers() {
 
 // ==================== FLASH PROMOTIONS ENGINE ====================
 let promoCountdownInterval = null;
+
+// Strict English Sanitizer: The website MUST NEVER display Spanish text under any circumstance.
+function sanitizePromoToEnglish(text, fallback, kind) {
+  if (!text || typeof text !== 'string') return fallback;
+  const spanishTriggers = [
+    'descuento', 'corte', 'césped', 'cesped', 'pasto', 'zacate',
+    'promoción', 'promocion', 'aprovecha', 'día', 'hoy', 'año',
+    'nuevo', 'semana', 'orillado', 'limpieza', 'arbustos', 'árboles',
+    'arboles', 'nuestra', 'nuestro', 'para', 'militares', 'veteranos',
+    'especial', 'oferta', 'precio', 'sábado', 'sabado', 'domingo'
+  ];
+  const lower = text.toLowerCase();
+  const hasSpanish = spanishTriggers.some(w => lower.includes(w));
+  if (!hasSpanish) return text;
+
+  // Contextual smart translation if Spanish detected
+  if (lower.includes('militar') || lower.includes('veteran') || lower.includes('armed')) {
+    if (kind === 'badge') return '🎖️ MILITARY DISCOUNT';
+    if (kind === 'title') return '15% OFF for Active Duty Military & Veterans';
+    return 'Honoring our armed forces and military families in Fort Cavazos & Killeen. Claim your 15% discount on commercial stripe mowing, razor edging, and yard cleanups!';
+  }
+  if (lower.includes('nuevo') || lower.includes('año') || lower.includes('ano')) {
+    if (kind === 'badge') return '🎉 NEW YEAR SPECIAL';
+    if (kind === 'title') return 'New Year Yard Kickoff: 20% OFF Service';
+    return 'Start the new year with a flawless lawn! Save 20% on your first month of scheduled mowing and property maintenance.';
+  }
+  if (lower.includes('primavera') || lower.includes('mulch') || lower.includes('arbust')) {
+    if (kind === 'badge') return '🌿 SPRING CLEANUP';
+    if (kind === 'title') return 'Spring Yard Revitalization & Mulch Special';
+    return 'Revamp your curb appeal with fresh dark mulch installation, shrub trimming, and commercial mowing at discounted spring rates.';
+  }
+  if (lower.includes('semana') || lower.includes('sabado') || lower.includes('domingo') || lower.includes('flash')) {
+    if (kind === 'badge') return '⚡ WEEKEND FLASH';
+    if (kind === 'title') return 'Weekend Flash Special: Full Mowing & Edging';
+    return 'Fast weekend slots open across Killeen, Heights & Cove! Get premium razor edging and mowing at our lowest rate.';
+  }
+  return fallback;
+}
+
 async function initFlashPromotions() {
   const heroCard = document.getElementById('heroPromoCard');
   const section = document.getElementById('promoSection');
   
   try {
-    const res = await fetch('/api/promo?t=' + Date.now());
+    const res = await fetch('/api/promo?client=web&t=' + Date.now());
     if (!res.ok) return;
     const data = await res.json();
     const promo = data ? data.promo : null;
@@ -1249,10 +1288,22 @@ async function initFlashPromotions() {
       return;
     }
 
-    // Always prefer English text on the website as requested by owner
-    const titleText = promo.title_en || promo.title || 'Special Promotion Active';
-    const msgText = promo.message_en || promo.message || 'Claim your limited-time discount on lawn care services!';
-    const badgeText = promo.badge_en || promo.badge || '🔥 SPECIAL OFFER';
+    // 100% STRICT ENGLISH FOR WEBSITE VISITORS (NO SPANISH ON THE WEB)
+    const badgeText = sanitizePromoToEnglish(
+      promo.badge_en || promo.badge,
+      '🎖️ MILITARY DISCOUNT',
+      'badge'
+    );
+    const titleText = sanitizePromoToEnglish(
+      promo.title_en || promo.title,
+      '15% OFF for Active Duty Military & Veterans',
+      'title'
+    );
+    const msgText = sanitizePromoToEnglish(
+      promo.message_en || promo.message,
+      'Honoring our armed forces and military families in Fort Cavazos & Killeen. Claim your 15% discount on commercial stripe mowing, razor edging, and yard cleanups!',
+      'msg'
+    );
 
     // Update Hero Promo Card
     if (heroCard) {

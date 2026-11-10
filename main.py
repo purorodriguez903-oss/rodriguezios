@@ -440,7 +440,71 @@ def save_calendar(data):
         print(f"[Error] Guardando calendar.json: {e}")
         return False
 
+def translate_promo_to_english(raw_title, raw_msg, raw_badge):
+    """Translates or maps Spanish promotional text into professional commercial English for the website.
+    The web will ALWAYS display in 100% English, while the iOS app keeps Spanish for the owner.
+    """
+    raw_title = (raw_title or "").strip()
+    raw_msg = (raw_msg or "").strip()
+    raw_badge = (raw_badge or "").strip()
+    combined = f"{raw_title} {raw_msg} {raw_badge}".lower()
+
+    # 1. Preset: Military & Veterans Discount
+    if any(k in combined for k in ["militar", "veteran", "armed", "ejercito", "ejército", "soldado", "cavazos"]):
+        return (
+            "🎖️ MILITARY DISCOUNT",
+            "15% OFF for Active Duty Military & Veterans",
+            "Honoring our armed forces and military families in Fort Cavazos & Killeen. Claim your 15% discount on commercial stripe mowing, razor edging, and yard cleanups!"
+        )
+
+    # 2. Preset: New Year Kickoff
+    if any(k in combined for k in ["nuevo ano", "año nuevo", "new year", "enero", "2026", "kickoff"]):
+        return (
+            "🎉 NEW YEAR SPECIAL",
+            "New Year Yard Kickoff: 20% OFF Service",
+            "Start the new year with a flawless lawn! Save 20% on your first month of scheduled mowing and property maintenance."
+        )
+
+    # 3. Preset: Spring Cleanup & Mulch
+    if any(k in combined for k in ["primavera", "spring", "mulch", "arbusto", "arbustos", "poda"]):
+        return (
+            "🌿 SPRING CLEANUP",
+            "Spring Yard Revitalization & Mulch Special",
+            "Revamp your curb appeal with fresh dark mulch installation, shrub trimming, and commercial mowing at discounted spring rates."
+        )
+
+    # 4. Preset: Weekend Flash Deal
+    if any(k in combined for k in ["fin de semana", "weekend", "sabado", "sábado", "domingo", "flash"]):
+        return (
+            "⚡ WEEKEND FLASH",
+            "Weekend Flash Special: Full Mowing & Edging",
+            "Fast weekend slots open across Killeen, Harker Heights & Cove! Get premium razor concrete edging and stripe mowing at our lowest rate."
+        )
+
+    # 5. Preset: Commercial / Contractor
+    if any(k in combined for k in ["comercial", "commercial", "contratista", "empresa", "negocio"]):
+        return (
+            "🏢 COMMERCIAL PROPERTY SPECIAL",
+            "Commercial Grounds Maintenance & Mowing",
+            "Reliable commercial stripe mowing, perimeter edging, and property grounds care for local businesses and contractors."
+        )
+
+    # 6. Intelligent Fallback for custom Spanish promotions typed by owner
+    price_match = re.search(r"(\$\s*\d+|\d+\s*%)", combined)
+    promo_value = price_match.group(1).replace(" ", "") if price_match else None
+
+    badge_en = f"🔥 SPECIAL OFFER: {promo_value}" if promo_value else "🔥 LIMITED TIME OFFER"
+    title_en = f"Special Promotional Deal: {promo_value} Lawn Care" if promo_value else "Exclusive Limited-Time Lawn Care Special"
+    message_en = f"Take advantage of today's special promotional offer! Professional commercial stripe mowing, crisp concrete edging, and yard maintenance at our best rates."
+
+    return (badge_en, title_en, message_en)
+
 def load_promotions():
+    default_badge_en, default_title_en, default_msg_en = translate_promo_to_english(
+        "🎖️ Descuento Especial Militar & Killeen",
+        "¡El día de hoy aprovecha nuestra promoción para militares: corte de césped profesional a $35 con orillado impecable!",
+        "OFERTA MILITAR FLASH"
+    )
     default_promo = {
         "active": {
             "id": 1,
@@ -448,6 +512,9 @@ def load_promotions():
             "title": "🎖️ Descuento Especial Militar & Killeen",
             "message": "¡El día de hoy aprovecha nuestra promoción para militares: corte de césped profesional a $35 con orillado impecable!",
             "badge": "OFERTA MILITAR FLASH",
+            "title_en": default_title_en,
+            "message_en": default_msg_en,
+            "badge_en": default_badge_en,
             "created_at": int(time.time()),
             "duration_hours": 24,
             "expires_at": int(time.time()) + 24 * 3600
@@ -466,6 +533,16 @@ def load_promotions():
                     active["enabled"] = False
                     data.setdefault("history", []).insert(0, dict(active))
                     save_promotions(data)
+                else:
+                    # Guarantee English fields for web
+                    b_en, t_en, m_en = translate_promo_to_english(
+                        active.get("title", ""),
+                        active.get("message", ""),
+                        active.get("badge", "")
+                    )
+                    active["badge_en"] = b_en
+                    active["title_en"] = t_en
+                    active["message_en"] = m_en
             return data
     except Exception as e:
         print(f"[Error] Cargando promotions.json: {e}")
@@ -3568,9 +3645,31 @@ async def handle_api_calendar_availability(request):
 
 # ----------------- PROMOTIONS API -----------------
 async def handle_api_get_promo(request):
-    """Returns active flash promotion for web and app."""
+    """Returns active flash promotion for web and app.
+    Web clients get 100% professional English; iOS app gets Spanish for the owner.
+    """
     promos = load_promotions()
-    return cors_json_response({"success": True, "promo": promos.get("active"), "history": promos.get("history", [])})
+    active = promos.get("active")
+    if active and active.get("enabled"):
+        badge_en, title_en, message_en = translate_promo_to_english(
+            active.get("title", ""),
+            active.get("message", ""),
+            active.get("badge", "")
+        )
+        active["badge_en"] = badge_en
+        active["title_en"] = title_en
+        active["message_en"] = message_en
+        
+        # If requested by web client (?client=web or default), ensure title, message, badge are ALSO strictly in English
+        client = request.query.get("client", "web")
+        if client != "app":
+            web_promo = dict(active)
+            web_promo["title"] = title_en
+            web_promo["message"] = message_en
+            web_promo["badge"] = badge_en
+            return cors_json_response({"success": True, "promo": web_promo, "history": promos.get("history", [])})
+
+    return cors_json_response({"success": True, "promo": active, "history": promos.get("history", [])})
 
 async def handle_api_publish_promo(request):
     """Publishes a new promo to the website with expiration and automatic English translation for the web."""
@@ -3584,43 +3683,31 @@ async def handle_api_publish_promo(request):
         duration_hours = max(1, int(data.get("duration_hours", 24)))
         now = int(time.time())
         
-        raw_title = data.get("title", "Special Promotion").strip()
-        raw_msg = data.get("message", "Limited-time savings on professional lawn care services.").strip()
-        raw_badge = data.get("badge", "SPECIAL OFFER").strip()
+        raw_title = data.get("title", "Descuento Especial").strip()
+        raw_msg = data.get("message", "Promoción especial activa en servicios de jardinería.").strip()
+        raw_badge = data.get("badge", "OFERTA ESPECIAL").strip()
         
-        # Auto-detect presets and provide flawless English text for the website
-        combined_lower = (raw_title + " " + raw_msg + " " + raw_badge).lower()
-        title_en = data.get("title_en", raw_title)
-        message_en = data.get("message_en", raw_msg)
-        badge_en = data.get("badge_en", raw_badge)
-        
-        if "militar" in combined_lower or "armed" in combined_lower or "veteran" in combined_lower:
-            badge_en = "🎖️ MILITARY DISCOUNT"
-            title_en = "15% OFF for Active Duty Military & Veterans"
-            message_en = "Honoring our armed forces and military families in Fort Cavazos & Killeen. Claim your 15% discount on commercial stripe mowing, razor edging, and yard cleanups!"
-        elif "nuevo ano" in combined_lower or "año nuevo" in combined_lower or "new year" in combined_lower:
-            badge_en = "🎉 NEW YEAR SPECIAL"
-            title_en = "New Year Yard Kickoff: 20% OFF Service"
-            message_en = "Start the new year with a flawless lawn! Save 20% on your first month of scheduled mowing and property maintenance."
-        elif "primavera" in combined_lower or "spring" in combined_lower:
-            badge_en = "🌿 SPRING CLEANUP"
-            title_en = "Spring Yard Revitalization & Mulch Special"
-            message_en = "Revamp your curb appeal with fresh dark mulch installation, shrub trimming, and commercial mowing at discounted spring rates."
-        elif "fin de semana" in combined_lower or "weekend" in combined_lower:
-            badge_en = "⚡ WEEKEND FLASH"
-            title_en = "Weekend Flash Special: Full Mowing & Edging"
-            message_en = "Fast weekend slots open in Killeen, Heights & Cove! Get premium razor edging and mowing at our lowest rate."
+        # Translate to 100% English for the website
+        badge_en, title_en, message_en = translate_promo_to_english(raw_title, raw_msg, raw_badge)
 
         new_active = {
             "id": int(now * 1000),
             "enabled": True,
-            "title": raw_title,
-            "message": raw_msg,
-            "badge": raw_badge,
-            "title_en": title_en,
-            "message_en": message_en,
-            "badge_en": badge_en,
+            "title": raw_title,       # Spanish for iOS App
+            "message": raw_msg,       # Spanish for iOS App
+            "badge": raw_badge,       # Spanish for iOS App
+            "title_en": title_en,     # 100% English for Website
+            "message_en": message_en, # 100% English for Website
+            "badge_en": badge_en,     # 100% English for Website
             "created_at": now,
+            "duration_hours": duration_hours,
+            "expires_at": now + (duration_hours * 3600)
+        }
+        promos["active"] = new_active
+        save_promotions(promos)
+        return cors_json_response({"success": True, "promo": new_active, "history": promos.get("history", [])})
+    except Exception as e:
+        return cors_json_response({"success": False, "error": str(e)}, status=400)
             "duration_hours": duration_hours,
             "expires_at": now + (duration_hours * 3600)
         }
