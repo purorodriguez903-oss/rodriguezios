@@ -3573,7 +3573,7 @@ async def handle_api_get_promo(request):
     return cors_json_response({"success": True, "promo": promos.get("active"), "history": promos.get("history", [])})
 
 async def handle_api_publish_promo(request):
-    """Publishes a new promo to the website with expiration."""
+    """Publishes a new promo to the website with expiration and automatic English translation for the web."""
     try:
         data = await request.json()
         promos = load_promotions()
@@ -3583,12 +3583,43 @@ async def handle_api_publish_promo(request):
 
         duration_hours = max(1, int(data.get("duration_hours", 24)))
         now = int(time.time())
+        
+        raw_title = data.get("title", "Special Promotion").strip()
+        raw_msg = data.get("message", "Limited-time savings on professional lawn care services.").strip()
+        raw_badge = data.get("badge", "SPECIAL OFFER").strip()
+        
+        # Auto-detect presets and provide flawless English text for the website
+        combined_lower = (raw_title + " " + raw_msg + " " + raw_badge).lower()
+        title_en = data.get("title_en", raw_title)
+        message_en = data.get("message_en", raw_msg)
+        badge_en = data.get("badge_en", raw_badge)
+        
+        if "militar" in combined_lower or "armed" in combined_lower or "veteran" in combined_lower:
+            badge_en = "🎖️ MILITARY DISCOUNT"
+            title_en = "15% OFF for Active Duty Military & Veterans"
+            message_en = "Honoring our armed forces and military families in Fort Cavazos & Killeen. Claim your 15% discount on commercial stripe mowing, razor edging, and yard cleanups!"
+        elif "nuevo ano" in combined_lower or "año nuevo" in combined_lower or "new year" in combined_lower:
+            badge_en = "🎉 NEW YEAR SPECIAL"
+            title_en = "New Year Yard Kickoff: 20% OFF Service"
+            message_en = "Start the new year with a flawless lawn! Save 20% on your first month of scheduled mowing and property maintenance."
+        elif "primavera" in combined_lower or "spring" in combined_lower:
+            badge_en = "🌿 SPRING CLEANUP"
+            title_en = "Spring Yard Revitalization & Mulch Special"
+            message_en = "Revamp your curb appeal with fresh dark mulch installation, shrub trimming, and commercial mowing at discounted spring rates."
+        elif "fin de semana" in combined_lower or "weekend" in combined_lower:
+            badge_en = "⚡ WEEKEND FLASH"
+            title_en = "Weekend Flash Special: Full Mowing & Edging"
+            message_en = "Fast weekend slots open in Killeen, Heights & Cove! Get premium razor edging and mowing at our lowest rate."
+
         new_active = {
             "id": int(now * 1000),
             "enabled": True,
-            "title": data.get("title", "🎖️ Descuento Flash").strip(),
-            "message": data.get("message", "Promoción especial activa").strip(),
-            "badge": data.get("badge", "OFERTA LIMITADA").strip(),
+            "title": raw_title,
+            "message": raw_msg,
+            "badge": raw_badge,
+            "title_en": title_en,
+            "message_en": message_en,
+            "badge_en": badge_en,
             "created_at": now,
             "duration_hours": duration_hours,
             "expires_at": now + (duration_hours * 3600)

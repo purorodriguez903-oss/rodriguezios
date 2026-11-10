@@ -7820,6 +7820,101 @@ struct FlashPromotionsView: View {
                                 .font(.caption.bold())
                                 .foregroundStyle(Brand.primary)
 
+                            // One-Tap Fast Presets
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("PLANTILLAS RÁPIDAS (1-TOQUE):")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.gray)
+
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        // Preset 1: Military Discount
+                                        Button {
+                                            promoBadge = "🎖️ DESCUENTO MILITAR"
+                                            promoTitle = "🎖️ Descuento Militar Especial (15% OFF)"
+                                            promoMessage = "Promoción especial para militares activos y veteranos: 15% de descuento en corte, orillado y mantenimiento de yarda."
+                                            durationHours = 48
+                                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                        } label: {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "shield.fill")
+                                                Text("🎖️ Militar 15% OFF")
+                                            }
+                                            .font(.caption2.bold())
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 6)
+                                            .background(Brand.cardLight)
+                                            .foregroundStyle(Brand.primary)
+                                            .clipShape(Capsule())
+                                            .overlay(Capsule().stroke(Brand.primary.opacity(0.4), lineWidth: 1))
+                                        }
+
+                                        // Preset 2: New Year Special
+                                        Button {
+                                            promoBadge = "🎉 AÑO NUEVO 2026"
+                                            promoTitle = "🎉 Especial de Año Nuevo: 20% Descuento"
+                                            promoMessage = "Comienza el año con tu yarda impecable: 20% de descuento en tu primer mes de mantenimiento programado."
+                                            durationHours = 72
+                                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                        } label: {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "sparkles")
+                                                Text("🎉 Año Nuevo 20% OFF")
+                                            }
+                                            .font(.caption2.bold())
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 6)
+                                            .background(Brand.cardLight)
+                                            .foregroundStyle(Color.yellow)
+                                            .clipShape(Capsule())
+                                            .overlay(Capsule().stroke(Color.yellow.opacity(0.4), lineWidth: 1))
+                                        }
+
+                                        // Preset 3: Spring Cleanup & Mulch
+                                        Button {
+                                            promoBadge = "🌿 PRIMAVERA REVIVE"
+                                            promoTitle = "🌿 Paquete Limpieza de Primavera & Mulch"
+                                            promoMessage = "Renueva tu propiedad para la primavera: instalación de mulch oscuro, recorte de arbustos y orillado con descuento de temporada."
+                                            durationHours = 48
+                                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                        } label: {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "leaf.fill")
+                                                Text("🌿 Primavera & Mulch")
+                                            }
+                                            .font(.caption2.bold())
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 6)
+                                            .background(Brand.cardLight)
+                                            .foregroundStyle(Color.green)
+                                            .clipShape(Capsule())
+                                            .overlay(Capsule().stroke(Color.green.opacity(0.4), lineWidth: 1))
+                                        }
+
+                                        // Preset 4: Weekend Flash
+                                        Button {
+                                            promoBadge = "⚡ FIN DE SEMANA FLASH"
+                                            promoTitle = "⚡ Flash Weekend: Corte y Orillado Navaja"
+                                            promoMessage = "Espacios de fin de semana disponibles en Killeen, Heights y Cove. Corte comercial y orillado de concreto con tarifa especial flash."
+                                            durationHours = 24
+                                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                        } label: {
+                                            HStack(spacing: 4) {
+                                                Image(systemName: "bolt.fill")
+                                                Text("⚡ Fin de Semana Flash")
+                                            }
+                                            .font(.caption2.bold())
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 6)
+                                            .background(Brand.cardLight)
+                                            .foregroundStyle(Color.orange)
+                                            .clipShape(Capsule())
+                                            .overlay(Capsule().stroke(Color.orange.opacity(0.4), lineWidth: 1))
+                                        }
+                                    }
+                                }
+                            }
+
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Insignia / Badge:").font(.caption2).foregroundStyle(.gray)
                                 TextField("Ej: OFERTA MILITAR FLASH", text: $promoBadge)
@@ -10778,6 +10873,33 @@ struct TacticalTerritoryRadarView: View {
                     }
                     .background(Color.black.opacity(0.7))
                     
+                    // Quick Launch Full Day Route in Apple Maps
+                    if !filteredPins.isEmpty {
+                        HStack {
+                            Button {
+                                openFullDayRouteInAppleMaps(pins: filteredPins)
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "map.circle.fill")
+                                        .font(.subheadline)
+                                    Text("🗺️ Iniciar Ruta en Apple Maps (\(selectedDayFilter): \(filteredPins.count) Casas)")
+                                        .font(.caption.bold())
+                                    Spacer()
+                                    Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
+                                        .font(.caption2.bold())
+                                }
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .background(Brand.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.black.opacity(0.85))
+                    }
+                    
                     // Main Map View with Polyline Overlay and User Location
                     ZStack(alignment: .top) {
                         TacticalLiveRadarMapView(
@@ -11201,6 +11323,21 @@ struct TacticalTerritoryRadarView: View {
         item.openInMaps(launchOptions: [
             MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
         ])
+    }
+
+    private func openFullDayRouteInAppleMaps(pins: [TacticalHouseClientPin]) {
+        guard !pins.isEmpty else { return }
+        let maxItems = min(pins.count, 20)
+        let slice = pins.prefix(maxItems)
+        let mapItems = slice.map { p -> MKMapItem in
+            let item = MKMapItem(placemark: MKPlacemark(coordinate: p.coordinate))
+            item.name = "\(p.name) (\(p.address))"
+            return item
+        }
+        MKMapItem.openMaps(with: Array(mapItems), launchOptions: [
+            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
+        ])
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
     }
 }
 

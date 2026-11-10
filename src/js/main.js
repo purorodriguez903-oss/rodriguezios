@@ -1234,24 +1234,47 @@ function initCalendarLiveCheckers() {
 // ==================== FLASH PROMOTIONS ENGINE ====================
 let promoCountdownInterval = null;
 async function initFlashPromotions() {
+  const heroCard = document.getElementById('heroPromoCard');
   const section = document.getElementById('promoSection');
-  if (!section) return;
+  
   try {
-    const res = await fetch('/api/promo');
+    const res = await fetch('/api/promo?t=' + Date.now());
     if (!res.ok) return;
-    const promo = await res.json();
-    if (!promo || !promo.active) {
-      section.style.display = 'none';
+    const data = await res.json();
+    const promo = data ? data.promo : null;
+
+    if (!promo || !promo.enabled) {
+      if (heroCard) heroCard.style.display = 'none';
+      if (section) section.style.display = 'none';
       return;
     }
 
-    const titleEl = document.getElementById('promoTitle');
-    const msgEl = document.getElementById('promoMessage');
-    const timerEl = document.getElementById('promoTimer');
+    // Always prefer English text on the website as requested by owner
+    const titleText = promo.title_en || promo.title || 'Special Promotion Active';
+    const msgText = promo.message_en || promo.message || 'Claim your limited-time discount on lawn care services!';
+    const badgeText = promo.badge_en || promo.badge || '🔥 SPECIAL OFFER';
 
-    if (titleEl) titleEl.textContent = promo.title || '🔥 Promoción Especial';
-    if (msgEl) msgEl.textContent = promo.message || '';
-    section.style.display = 'block';
+    // Update Hero Promo Card
+    if (heroCard) {
+      const hTitle = document.getElementById('heroPromoTitle');
+      const hMsg = document.getElementById('heroPromoMessage');
+      const hBadge = document.getElementById('heroPromoBadge');
+      if (hTitle) hTitle.textContent = titleText;
+      if (hMsg) hMsg.textContent = msgText;
+      if (hBadge) hBadge.textContent = badgeText;
+      heroCard.style.display = 'block';
+    }
+
+    // Update Legacy Section if present
+    if (section) {
+      const titleEl = document.getElementById('promoTitle');
+      const msgEl = document.getElementById('promoMessage');
+      const badgeEl = document.getElementById('promoBadge');
+      if (titleEl) titleEl.textContent = titleText;
+      if (msgEl) msgEl.textContent = msgText;
+      if (badgeEl) badgeEl.textContent = badgeText;
+      section.style.display = 'block';
+    }
 
     if (promoCountdownInterval) clearInterval(promoCountdownInterval);
 
@@ -1259,22 +1282,33 @@ async function initFlashPromotions() {
       const now = Math.floor(Date.now() / 1000);
       const remaining = (promo.expires_at || 0) - now;
       if (remaining <= 0) {
-        section.style.display = 'none';
+        if (heroCard) heroCard.style.display = 'none';
+        if (section) section.style.display = 'none';
         clearInterval(promoCountdownInterval);
         return;
       }
       const hrs = Math.floor(remaining / 3600);
       const mins = Math.floor((remaining % 3600) / 60);
       const secs = remaining % 60;
-      if (timerEl) {
-        timerEl.textContent = `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-      }
+      const formatted = `⏳ Ends in: ${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      
+      const heroTimer = document.getElementById('heroPromoTimer');
+      if (heroTimer) heroTimer.textContent = formatted;
+
+      const secTimer = document.getElementById('promoTimer');
+      if (secTimer) secTimer.textContent = formatted;
     }
     updateTimer();
     promoCountdownInterval = setInterval(updateTimer, 1000);
   } catch (e) {
     console.warn('Promo init notice:', e);
   }
+}
+
+// Auto-check for newly published promotions every 8 seconds
+if (!window._promoPollingSet) {
+  window._promoPollingSet = true;
+  setInterval(initFlashPromotions, 8000);
 }
 
 function initBookingForms() {
