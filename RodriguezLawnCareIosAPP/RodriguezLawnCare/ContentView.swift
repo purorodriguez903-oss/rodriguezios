@@ -3631,6 +3631,7 @@ struct GalleryAdminView: View {
     @ObservedObject var store: LawnCareStore
     @State private var selectedFilter = "all"
     @State private var showAddPhotoSheet = false
+    @State private var isHorizontalLayout: Bool = true
 
     // Action dialog state
     @State private var selectedPhotoForAction: GalleryPhoto? = nil
@@ -3654,17 +3655,36 @@ struct GalleryAdminView: View {
                 Brand.background.ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    // Header Title & Section
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("PORTAFOLIO OFICIAL")
-                            .font(.caption.bold())
+                    // Header Title & Section with Layout Toggle
+                    HStack(alignment: .center) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("PORTAFOLIO OFICIAL")
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                            Text("Real Work in Killeen & Central Texas")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.white)
+                            Text(isHorizontalLayout ? "👉 Desliza a la derecha para ver más trabajos" : "Vista en cuadrícula completa.")
+                                .font(.caption2)
+                                .foregroundStyle(.gray)
+                        }
+                        Spacer()
+                        Button {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                isHorizontalLayout.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: isHorizontalLayout ? "arrow.left.and.right.square.fill" : "square.grid.2x2.fill")
+                                Text(isHorizontalLayout ? "Lado ➔" : "Abajo ↓")
+                            }
+                            .font(.caption2.bold())
                             .foregroundStyle(Brand.primary)
-                        Text("Real Work in Killeen & Central Texas")
-                            .font(.title3.bold())
-                            .foregroundStyle(.white)
-                        Text("Toca cualquier foto para reemplazarla, editar detalles, moverla o eliminarla.")
-                            .font(.caption2)
-                            .foregroundStyle(.gray)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(Brand.primary.opacity(0.15))
+                            .clipShape(Capsule())
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
@@ -3718,7 +3738,26 @@ struct GalleryAdminView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 30)
+                        } else if isHorizontalLayout {
+                            // Horizontal Swipe Mode (Moves to the right)
+                            ScrollView(.horizontal, showsIndicators: true) {
+                                LazyHStack(spacing: 14) {
+                                    ForEach(filteredPhotos) { photo in
+                                        GalleryWorkCard(photo: photo, store: store)
+                                            .frame(width: 270)
+                                            .onTapGesture {
+                                                selectedPhotoForAction = photo
+                                                showPhotoActionDialog = true
+                                            }
+                                    }
+                                }
+                                .padding(.horizontal)
+                                .padding(.top, 10)
+                                .padding(.bottom, 24)
+                            }
+                            .frame(minHeight: 270)
                         } else {
+                            // Vertical 2-Column Grid Mode
                             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 14) {
                                 ForEach(filteredPhotos) { photo in
                                     GalleryWorkCard(photo: photo, store: store)

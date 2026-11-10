@@ -231,6 +231,7 @@
 
   function renderGalleryCards(container, items, filter, cityFilter) {
     const now = Date.now();
+    try { container.scrollLeft = 0; } catch (e) {}
 
     let filtered = (items || []).filter(it => !it.hidden);
 

@@ -46,8 +46,8 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
 
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="./css/styles.css?v=5.2.rafa_mwacf6ys">
-  <link rel="stylesheet" href="./security/security.css?v=5.2.rafa_mwacf6ys">
+  <link rel="stylesheet" href="./css/styles.css?v=5.2.rafa_mwacvkgr">
+  <link rel="stylesheet" href="./security/security.css?v=5.2.rafa_mwacvkgr">
 </head>
 
 <body oncontextmenu="return false;" ondragstart="return false;"
@@ -344,14 +344,14 @@
           <!-- Background: Before Image -->
           <div class="ba-image ba-image-before">
             <span class="ba-badge ba-badge-before" data-i18n="ba_tag_before">Before: Overgrown</span>
-            <img src="./assets/images/before_real.jpg?v=5.2.rafa_mwacf6ys"
+            <img src="./assets/images/before_real.jpg?v=5.2.rafa_mwacvkgr"
               alt="Overgrown yard before landscaping service" loading="lazy">
           </div>
 
           <!-- Foreground: After Image (clipped) -->
           <div class="ba-image ba-image-after" id="baAfterImg">
             <span class="ba-badge ba-badge-after" data-i18n="ba_tag_after">After: Rodriguez LawnCare</span>
-            <img src="./assets/images/after_real.jpg?v=5.2.rafa_mwacf6ys"
+            <img src="./assets/images/after_real.jpg?v=5.2.rafa_mwacvkgr"
               alt="Pristine green lawn and fresh mulch after Rodriguez LawnCare service" loading="lazy">
           </div>
 
@@ -461,6 +461,18 @@
           <button class="gallery-city-btn" data-city="Harker Heights">🌲 Harker Heights</button>
           <button class="gallery-city-btn" data-city="Copperas Cove">🌄 Copperas Cove</button>
           <button class="gallery-city-btn" data-city="Belton">🔔 Belton</button>
+        </div>
+      </div>
+
+      <!-- Mobile Swipe Guidance & Quick Nav (Only shows on mobile) -->
+      <div class="gallery-mobile-nav-hint">
+        <span class="hint-text">
+          <span class="hint-icon">👉</span>
+          <span data-i18n="gallery_swipe_hint">Swipe right to view more projects</span>
+        </span>
+        <div class="hint-arrows">
+          <button class="gallery-nav-btn" id="galleryPrevBtn" aria-label="Previous Project" onclick="document.getElementById('galleryGrid')?.scrollBy({ left: -294, behavior: 'smooth' })">‹</button>
+          <button class="gallery-nav-btn" id="galleryNextBtn" aria-label="Next Project" onclick="document.getElementById('galleryGrid')?.scrollBy({ left: 294, behavior: 'smooth' })">›</button>
         </div>
       </div>
 
@@ -1588,12 +1600,12 @@
   </div>
 
   <!-- Scripts & Military-Grade Security Shield -->
-  <script src="./js/main.js?v=5.2.rafa_mwacf6ys"></script>
-  <script src="./js/gallery.js?v=5.2.rafa_mwacf6ys"></script>
-  <script src="./js/satellite-scanner.js?v=5.2.rafa_mwacf6ys"></script>
-  <script src="./js/ai-assistant.js?v=5.2.rafa_mwacf6ys"></script>
-  <script src="./security/anti-bot.js?v=5.2.rafa_mwacf6ys" data-security-allow="true"></script>
-  <script src="./security/web-shield.js?v=5.2.rafa_mwacf6ys" data-security-allow="true"></script>
+  <script src="./js/main.js?v=5.2.rafa_mwacvkgr"></script>
+  <script src="./js/gallery.js?v=5.2.rafa_mwacvkgr"></script>
+  <script src="./js/satellite-scanner.js?v=5.2.rafa_mwacvkgr"></script>
+  <script src="./js/ai-assistant.js?v=5.2.rafa_mwacvkgr"></script>
+  <script src="./security/anti-bot.js?v=5.2.rafa_mwacvkgr" data-security-allow="true"></script>
+  <script src="./security/web-shield.js?v=5.2.rafa_mwacvkgr" data-security-allow="true"></script>
 
 
 

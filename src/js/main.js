@@ -65,6 +65,7 @@ const translations = {
     gallery_badge: 'Live Project Feed',
     gallery_title: 'Real Work in Killeen & Central Texas',
     gallery_sub: 'Fresh snapshots directly from our active job sites. Photos with the <strong style="color: #16a34a;">🔥 NEW</strong> badge were finished within the last 3 days!',
+    gallery_swipe_hint: 'Swipe right to view more projects',
     filter_all: 'All Projects',
     filter_front: 'Front Yard',
     filter_back: 'Back Yard',
