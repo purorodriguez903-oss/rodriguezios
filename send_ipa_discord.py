@@ -26,17 +26,25 @@ if os.path.exists(cloud_cfg_path):
         pass
 
 IPA_CANDIDATES = [
+    os.path.join(BASE_DIR, "ultima actu", f"RodriguezLawnCare_version_ultima_xd_{build_num}.ipa"),
     os.path.join(BASE_DIR, "ultima actu", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
     os.path.join(BASE_DIR, "ultima actu", "rodriguezlawncareios.ipa"),
     os.path.join(BASE_DIR, "ultima actu", "RodriguezLawnCare.ipa"),
+    os.path.join(BASE_DIR, "ipa nuevo", f"RodriguezLawnCare_version_ultima_xd_{build_num}.ipa"),
     os.path.join(BASE_DIR, "ipa nuevo", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
+    os.path.join(BASE_DIR, "ipa online", f"RodriguezLawnCare_version_ultima_xd_{build_num}.ipa"),
     os.path.join(BASE_DIR, "ipa online", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
+    os.path.join(BASE_DIR, "ipa here", f"RodriguezLawnCare_version_ultima_xd_{build_num}.ipa"),
     os.path.join(BASE_DIR, "ipa here", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
     os.path.join(BASE_DIR, "ipa nuevo", "rodriguezlawncareios.ipa"),
     os.path.join(BASE_DIR, "ipa online", "rodriguezlawncareios.ipa"),
+    os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ultima actu", f"RodriguezLawnCare_version_ultima_xd_{build_num}.ipa"),
     os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ultima actu", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
+    os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa nuevo", f"RodriguezLawnCare_version_ultima_xd_{build_num}.ipa"),
     os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa nuevo", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
+    os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa online", f"RodriguezLawnCare_version_ultima_xd_{build_num}.ipa"),
     os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa online", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
+    os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa here", f"RodriguezLawnCare_version_ultima_xd_{build_num}.ipa"),
     os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "ipa here", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
 ]
 
@@ -50,9 +58,7 @@ if not ipa_file_path:
     print("ERROR: Could not find any valid IPA file to upload!")
     sys.exit(1)
 
-file_name_display = os.path.basename(ipa_file_path)
-if file_name_display == "rodriguezlawncareios.ipa" or file_name_display == "RodriguezLawnCare.ipa":
-    file_name_display = f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"
+file_name_display = f"RodriguezLawnCare_version_ultima_xd_{build_num}.ipa"
 
 file_size_bytes = os.path.getsize(ipa_file_path)
 file_size_mb = file_size_bytes / (1024 * 1024)
