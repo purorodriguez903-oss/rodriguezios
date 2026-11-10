@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "id": 1,
+    "filename": "work_1.jpg",
+    "url": "./assets/gallery/work_1.jpg",
+    "uploaded_at": 1794289800000,
+    "title": "Front Yard Clean Mowing, Razor Edging & Fresh Mulch Tree Ring",
+    "category": "Mowing & Edging",
+    "location": "Copperas Cove, TX",
+    "city": "Copperas Cove",
+    "verified": true
+  }
+]
