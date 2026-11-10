@@ -127,6 +127,11 @@
       const q = query.toLowerCase();
       const kb = KNOWLEDGE_BASE[currentLang];
 
+      if (q.includes('review') || q.includes('reseña') || q.includes('google') || q.includes('rating') || q.includes('opinion') || q.includes('star')) {
+        return currentLang === 'es'
+          ? "⭐ **Reseñas 5 Estrellas en Google Maps:**\n¡Rodriguez LawnCare es un negocio local verificado en Killeen y Central Texas con calificaciones de 5 estrellas! Puedes ver nuestras reseñas o dejarnos tu calificación en nuestro perfil oficial de Google:\n👉 [Ver Perfil de Google Maps](https://maps.app.goo.gl/CHztAdGFJZAW69qQ8?g_st=ic)"
+          : "⭐ **Google Maps 5-Star Reviews:**\nRodriguez LawnCare is a verified local service provider in Killeen & Central Texas! You can inspect our reviews or leave your 5-star rating on our official Google Maps profile:\n👉 [Open Google Maps Profile](https://maps.app.goo.gl/CHztAdGFJZAW69qQ8?g_st=ic)";
+      }
       if (q.includes('precio') || q.includes('price') || q.includes('cost') || q.includes('cuanto') || q.includes('how much') || q.includes('rate') || q.includes('cut')) {
         return kb.pricing;
       }

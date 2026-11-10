@@ -995,8 +995,10 @@ async function handleCustomerReviewSubmit(e) {
       // Refresh reviews list dynamically
       await initReviews();
 
-      // Show alert toast
-      alert(`🎉 Thank you, ${name}! Your review has been posted successfully.`);
+      // Show friendly prompt to also post on Google Maps
+      if (confirm(`🎉 Thank you, ${name}! Your review has been posted successfully on our website.\n\nWould you like to also leave your rating on our official Google Maps profile? It only takes 10 seconds and helps us tremendously!`)) {
+        window.open('https://maps.app.goo.gl/CHztAdGFJZAW69qQ8?g_st=ic', '_blank');
+      }
 
       // Smooth scroll to reviews
       const revSec = document.getElementById('reviews');

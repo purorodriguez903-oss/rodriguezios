@@ -122,13 +122,31 @@ async function syncLiveMobileUploads() {
                         }
                     }
 
-                    localItems.sort((a, b) => (b.id || 0) - (a.id || 0));
-                    fs.writeFileSync(localGalleryPath, JSON.stringify(localItems, null, 2), 'utf8');
-
                     // Also backup to data_backup
                     const backupDir = path.join(__dirname, 'data_backup');
                     if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+
+                    // Permanent Archive Safety Lock: Never allow count to drop below 44
+                    const archivePath = path.join(backupDir, 'gallery_permanent_archive.json');
+                    if (fs.existsSync(archivePath)) {
+                        try {
+                            const archiveItems = JSON.parse(fs.readFileSync(archivePath, 'utf8'));
+                            for (const aItem of archiveItems) {
+                                if (aItem && aItem.id && !localIds.has(aItem.id)) {
+                                    localItems.push(aItem);
+                                    localIds.add(aItem.id);
+                                    added++;
+                                }
+                            }
+                        } catch (e) {}
+                    }
+
+                    localItems.sort((a, b) => (b.id || 0) - (a.id || 0));
+                    fs.writeFileSync(localGalleryPath, JSON.stringify(localItems, null, 2), 'utf8');
                     fs.writeFileSync(path.join(backupDir, 'gallery_persistent.json'), JSON.stringify(localItems, null, 2), 'utf8');
+                    if (localItems.length >= 44) {
+                        fs.writeFileSync(archivePath, JSON.stringify(localItems, null, 2), 'utf8');
+                    }
 
                     console.log(`  ✓ Gallery sync complete: ${added} new items merged from phone. Total gallery records: ${localItems.length}`);
                 } catch (err) {

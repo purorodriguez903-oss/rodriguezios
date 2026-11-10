@@ -7953,6 +7953,33 @@ struct ReviewsManagerView: View {
                     .padding()
                     .background(Brand.card)
 
+                    // Google Maps Direct Access Bar
+                    HStack(spacing: 8) {
+                        Image(systemName: "map.fill")
+                            .foregroundStyle(Brand.primary)
+                        Text("Perfil en Google Maps (Reseñas 5★)")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.white)
+                        Spacer()
+                        if let gUrl = URL(string: "https://maps.app.goo.gl/CHztAdGFJZAW69qQ8?g_st=ic") {
+                            Link(destination: gUrl) {
+                                HStack(spacing: 4) {
+                                    Text("Ver Perfil")
+                                    Image(systemName: "arrow.up.right")
+                                }
+                                .font(.caption2.bold())
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Brand.primary)
+                                .clipShape(Capsule())
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.06))
+
                     // List
                     ScrollView {
                         LazyVStack(spacing: 12) {
@@ -12582,7 +12609,7 @@ struct GoogleReviewBoosterSheetView: View {
     @State private var clientName: String = ""
     @State private var selectedRating: Int = 5
     
-    let googleReviewURL = "https://rodriguezlawncare.xyz/review"
+    let googleReviewURL = "https://maps.app.goo.gl/CHztAdGFJZAW69qQ8?g_st=ic"
     
     var body: some View {
         NavigationView {
@@ -12659,6 +12686,39 @@ struct GoogleReviewBoosterSheetView: View {
                         .padding(14)
                         .background(Color.green)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .padding(.horizontal)
+
+                    HStack(spacing: 10) {
+                        Button {
+                            UIPasteboard.general.string = googleReviewURL
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "doc.on.doc.fill")
+                                Text("Copiar Link")
+                            }
+                            .font(.caption.bold())
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(12)
+                            .background(Color.white.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+
+                        if let gUrl = URL(string: googleReviewURL) {
+                            Link(destination: gUrl) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "arrow.up.right.square.fill")
+                                    Text("Abrir Google Maps")
+                                }
+                                .font(.caption.bold())
+                                .foregroundStyle(Brand.primary)
+                                .frame(maxWidth: .infinity)
+                                .padding(12)
+                                .background(Brand.primary.opacity(0.15))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+                        }
                     }
                     .padding(.horizontal)
                     

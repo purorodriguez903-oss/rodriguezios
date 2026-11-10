@@ -76,6 +76,7 @@ os.makedirs(GALLERY_FOLDER, exist_ok=True)
 DATA_BACKUP_DIR = os.path.join(BASE_DIR, "data_backup")
 os.makedirs(DATA_BACKUP_DIR, exist_ok=True)
 GALLERY_BACKUP_PATH = os.path.join(DATA_BACKUP_DIR, "gallery_persistent.json")
+GALLERY_ARCHIVE_PATH = os.path.join(DATA_BACKUP_DIR, "gallery_permanent_archive.json")
 LEADS_BACKUP_PATH = os.path.join(DATA_BACKUP_DIR, "leads_persistent.json")
 REVIEWS_BACKUP_PATH = os.path.join(DATA_BACKUP_DIR, "reviews_persistent.json")
 RECURRING_BACKUP_PATH = os.path.join(DATA_BACKUP_DIR, "recurring_persistent.json")
@@ -90,18 +91,19 @@ def load_gallery():
             print(f"[Error] Cargando gallery.json: {e}")
 
     # Auto-merge with persistent backup to prevent any mobile uploads from being reset
-    if os.path.exists(GALLERY_BACKUP_PATH):
-        try:
-            with open(GALLERY_BACKUP_PATH, "r", encoding="utf-8") as f:
-                backup_items = json.load(f)
-                existing_ids = {item.get("id") for item in items if isinstance(item, dict) and "id" in item}
-                for b_item in backup_items:
-                    if isinstance(b_item, dict) and b_item.get("id") not in existing_ids:
-                        items.append(b_item)
-                        existing_ids.add(b_item.get("id"))
-                items.sort(key=lambda x: x.get("id", 0), reverse=True)
-        except Exception as e:
-            print(f"[Notice] Error reading persistent gallery backup: {e}")
+    for b_path in (GALLERY_BACKUP_PATH, GALLERY_ARCHIVE_PATH):
+        if os.path.exists(b_path):
+            try:
+                with open(b_path, "r", encoding="utf-8") as f:
+                    backup_items = json.load(f)
+                    existing_ids = {item.get("id") for item in items if isinstance(item, dict) and "id" in item}
+                    for b_item in backup_items:
+                        if isinstance(b_item, dict) and b_item.get("id") not in existing_ids:
+                            items.append(b_item)
+                            existing_ids.add(b_item.get("id"))
+                    items.sort(key=lambda x: x.get("id", 0), reverse=True)
+            except Exception as e:
+                print(f"[Notice] Error reading persistent gallery backup: {e}")
 
     # All items are 100% verified real client projects
     return [it for it in items if isinstance(it, dict) and it.get("id")]
@@ -113,6 +115,9 @@ def save_gallery(data):
         try:
             with open(GALLERY_BACKUP_PATH, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
+            if len(data) >= 44:
+                with open(GALLERY_ARCHIVE_PATH, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception:
             pass
         return True
@@ -3607,6 +3612,10 @@ async def handle_api_deactivate_promo(request):
     except Exception as e:
         return cors_json_response({"success": False, "error": str(e)}, status=400)
 
+async def handle_google_review_redirect(request):
+    """Redirects to Rodriguez LawnCare Official Google Maps Review Profile."""
+    raise web.HTTPFound("https://maps.app.goo.gl/CHztAdGFJZAW69qQ8?g_st=ic")
+
 def create_web_app():
     app = web.Application(client_max_size=50 * 1024 * 1024)
     # Website static & pages
@@ -3615,6 +3624,12 @@ def create_web_app():
     app.router.add_get('/gallery.json', handle_gallery_json)
     app.router.add_get('/health', handle_health)
     app.router.add_get('/ping', handle_health)
+
+    # Google Maps Review Quick Redirects
+    app.router.add_get('/review', handle_google_review_redirect)
+    app.router.add_get('/reviews/google', handle_google_review_redirect)
+    app.router.add_get('/google-review', handle_google_review_redirect)
+    app.router.add_get('/maps', handle_google_review_redirect)
 
     # Lead Submission (Web form)
     app.router.add_post('/api/lead', handle_lead_submission)

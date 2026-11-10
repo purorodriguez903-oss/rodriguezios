@@ -46,8 +46,8 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
 
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="./css/styles.css?v=5.2.rafa_mwacvkgr">
-  <link rel="stylesheet" href="./security/security.css?v=5.2.rafa_mwacvkgr">
+  <link rel="stylesheet" href="./css/styles.css?v=5.2.rafa_mwadd8jr">
+  <link rel="stylesheet" href="./security/security.css?v=5.2.rafa_mwadd8jr">
 </head>
 
 <body oncontextmenu="return false;" ondragstart="return false;"
@@ -344,14 +344,14 @@
           <!-- Background: Before Image -->
           <div class="ba-image ba-image-before">
             <span class="ba-badge ba-badge-before" data-i18n="ba_tag_before">Before: Overgrown</span>
-            <img src="./assets/images/before_real.jpg?v=5.2.rafa_mwacvkgr"
+            <img src="./assets/images/before_real.jpg?v=5.2.rafa_mwadd8jr"
               alt="Overgrown yard before landscaping service" loading="lazy">
           </div>
 
           <!-- Foreground: After Image (clipped) -->
           <div class="ba-image ba-image-after" id="baAfterImg">
             <span class="ba-badge ba-badge-after" data-i18n="ba_tag_after">After: Rodriguez LawnCare</span>
-            <img src="./assets/images/after_real.jpg?v=5.2.rafa_mwacvkgr"
+            <img src="./assets/images/after_real.jpg?v=5.2.rafa_mwadd8jr"
               alt="Pristine green lawn and fresh mulch after Rodriguez LawnCare service" loading="lazy">
           </div>
 
@@ -461,6 +461,18 @@
           <button class="gallery-city-btn" data-city="Harker Heights">🌲 Harker Heights</button>
           <button class="gallery-city-btn" data-city="Copperas Cove">🌄 Copperas Cove</button>
           <button class="gallery-city-btn" data-city="Belton">🔔 Belton</button>
+        </div>
+      </div>
+
+      <!-- Mobile Swipe Guidance & Quick Nav (Only shows on mobile) -->
+      <div class="gallery-mobile-nav-hint">
+        <span class="hint-text">
+          <span class="hint-icon">👉</span>
+          <span data-i18n="gallery_swipe_hint">Swipe right to view more projects</span>
+        </span>
+        <div class="hint-arrows">
+          <button class="gallery-nav-btn" id="galleryPrevBtn" aria-label="Previous Project" onclick="document.getElementById('galleryGrid')?.scrollBy({ left: -294, behavior: 'smooth' })">‹</button>
+          <button class="gallery-nav-btn" id="galleryNextBtn" aria-label="Next Project" onclick="document.getElementById('galleryGrid')?.scrollBy({ left: 294, behavior: 'smooth' })">›</button>
         </div>
       </div>
 
@@ -916,6 +928,19 @@
           Texas.
         </p>
         <div style="margin-top: 1.25rem; display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;">
+          <a href="https://maps.app.goo.gl/CHztAdGFJZAW69qQ8?g_st=ic" target="_blank" rel="noopener noreferrer"
+            class="btn-google-review"
+            style="display:inline-flex; align-items:center; gap:10px; font-weight:700; border-radius:12px; padding:11px 22px; background:#ffffff; color:#0f172a; border:1.5px solid #cbd5e1; box-shadow: 0 4px 14px rgba(0,0,0,0.06); text-decoration:none; transition: all 0.2s ease;">
+            <svg width="20" height="20" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            <span>Review Us on Google</span>
+            <span style="color:#f59e0b; font-size:1rem;">★★★★★</span>
+          </a>
+
           <button type="button" class="btn btn-primary" id="openReviewModalBtn" onclick="openReviewModal()"
             style="display:inline-flex; align-items:center; gap:8px; font-weight:700; border-radius:12px; padding:11px 24px; box-shadow: 0 4px 16px rgba(34,197,94,0.35);">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -942,6 +967,14 @@
             <span>✓ 100% Real Feedback</span>
             <span>✓ Photo Uploads Supported</span>
             <span>✓ Homeowners & Builders Welcome</span>
+          </div>
+
+          <div style="margin-top: 1.25rem; display: flex; justify-content: center;">
+            <a href="https://maps.app.goo.gl/CHztAdGFJZAW69qQ8?g_st=ic" target="_blank" rel="noopener noreferrer"
+              style="display: inline-flex; align-items: center; gap: 9px; background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 999px; padding: 8px 20px; font-size: 0.88rem; font-weight: 700; color: #0f172a; text-decoration: none; box-shadow: 0 2px 8px rgba(0,0,0,0.05); transition: all 0.2s ease;">
+              <span>📍 View Rodriguez LawnCare on Google Maps</span>
+              <span style="color: #f59e0b; letter-spacing: 1px;">★★★★★</span>
+            </a>
           </div>
         </div>
       </div>
@@ -1315,6 +1348,23 @@
         </p>
       </div>
 
+      <!-- Direct Google Maps Review Option -->
+      <div style="margin-bottom: 1.25rem; padding: 10px 14px; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg width="20" height="20" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          <span style="font-size: 0.82rem; color: #334155; font-weight: 700;">Prefer Google Maps?</span>
+        </div>
+        <a href="https://maps.app.goo.gl/CHztAdGFJZAW69qQ8?g_st=ic" target="_blank" rel="noopener noreferrer"
+          style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 800; color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 5px 12px; text-decoration: none;">
+          Review on Google Maps ➔
+        </a>
+      </div>
+
       <form id="customerReviewForm" onsubmit="handleCustomerReviewSubmit(event)">
         <!-- Star Rating Selector -->
         <div class="form-group" style="text-align: center; margin-bottom: 1.25rem;">
@@ -1600,12 +1650,12 @@
   </div>
 
   <!-- Scripts & Military-Grade Security Shield -->
-  <script src="./js/main.js?v=5.2.rafa_mwacvkgr"></script>
-  <script src="./js/gallery.js?v=5.2.rafa_mwacvkgr"></script>
-  <script src="./js/satellite-scanner.js?v=5.2.rafa_mwacvkgr"></script>
-  <script src="./js/ai-assistant.js?v=5.2.rafa_mwacvkgr"></script>
-  <script src="./security/anti-bot.js?v=5.2.rafa_mwacvkgr" data-security-allow="true"></script>
-  <script src="./security/web-shield.js?v=5.2.rafa_mwacvkgr" data-security-allow="true"></script>
+  <script src="./js/main.js?v=5.2.rafa_mwadd8jr"></script>
+  <script src="./js/gallery.js?v=5.2.rafa_mwadd8jr"></script>
+  <script src="./js/satellite-scanner.js?v=5.2.rafa_mwadd8jr"></script>
+  <script src="./js/ai-assistant.js?v=5.2.rafa_mwadd8jr"></script>
+  <script src="./security/anti-bot.js?v=5.2.rafa_mwadd8jr" data-security-allow="true"></script>
+  <script src="./security/web-shield.js?v=5.2.rafa_mwadd8jr" data-security-allow="true"></script>
 
 
 

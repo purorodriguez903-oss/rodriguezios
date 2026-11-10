@@ -150,7 +150,7 @@
             updateCategoryCounts(fresh);
             renderGalleryCards(grid, fresh, currentFilter, currentCityFilter);
           }
-        } catch(e) {}
+        } catch (e) { }
       }, 8000);
     }
   }
@@ -231,14 +231,14 @@
 
   function renderGalleryCards(container, items, filter, cityFilter) {
     const now = Date.now();
-    try { container.scrollLeft = 0; } catch (e) {}
+    try { container.scrollLeft = 0; } catch (e) { }
 
     let filtered = (items || []).filter(it => !it.hidden);
 
     // Filter by Category
     if (filter && filter !== 'all') {
       if (filter === 'Other') {
-        filtered = filtered.filter(item => 
+        filtered = filtered.filter(item =>
           !['Front Yard', 'Back Yard', 'Mulch', 'Tree Care'].includes(item.category)
         );
       } else {
