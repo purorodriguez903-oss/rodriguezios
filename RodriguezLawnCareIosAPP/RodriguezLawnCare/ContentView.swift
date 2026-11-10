@@ -260,6 +260,7 @@ struct GalleryPhoto: Identifiable, Codable, Equatable {
     var verified: Bool?
     var uploaded_at: Int?
     var hidden: Bool?
+    var city: String?
 
     var categorySpanish: String {
         LawnCareStore.categoryInSpanish(category)
@@ -683,13 +684,50 @@ class LawnCareStore: ObservableObject {
         leads = []
 
         gallery = [
-            GalleryPhoto(id: 8, filename: "work_8.jpg", url: "./assets/gallery/work_8.jpg", title: "Builder Duplex", category: "General LawnCare", location: "Killeen & Central TX", verified: true),
-            GalleryPhoto(id: 7, filename: "work_7.jpg", url: "./assets/gallery/work_7.jpg", title: "Front Yard Clean & Sharp Mowing", category: "Front Yard", location: "Killeen & Central TX", verified: true),
-            GalleryPhoto(id: 6, filename: "work_6.jpg", url: "./assets/gallery/work_6.jpg", title: "7 duplex", category: "General LawnCare", location: "Killeen & Central TX", verified: true),
-            GalleryPhoto(id: 5, filename: "work_5.jpg", url: "./assets/gallery/work_5.jpg", title: "Front and back", category: "Front Yard", location: "Killeen & Central TX", verified: true),
-            GalleryPhoto(id: 4, filename: "work_4.jpg", url: "./assets/gallery/work_4.jpg", title: "Fresh Dark Mulch Installation", category: "Mulch", location: "Killeen & Central TX", verified: true),
-            GalleryPhoto(id: 3, filename: "work_3.jpg", url: "./assets/gallery/work_3.jpg", title: "Hedge Trimming & Shrub Shaping", category: "Shrubs & Bushes", location: "Killeen & Central TX", verified: true),
-            GalleryPhoto(id: 2, filename: "work_2.jpg", url: "./assets/gallery/work_2.jpg", title: "Front Yard Renovation & Razor Edging", category: "Front Yard", location: "Killeen & Central TX", verified: true)
+            GalleryPhoto(id: 44, filename: "work_44.jpg", url: "./assets/gallery/work_44.jpg", title: "Evening Driveway & Sidewalk Precision Edging Along Suburban Homes", category: "Mowing & Edging", location: "Belton, TX", verified: true),
+            GalleryPhoto(id: 43, filename: "work_43.jpg", url: "./assets/gallery/work_43.jpg", title: "Texas Limestone Home Front Lawn Care & Mature Canopy Shade Trees", category: "Front Yard", location: "Copperas Cove, TX", verified: true),
+            GalleryPhoto(id: 42, filename: "work_42.jpg", url: "./assets/gallery/work_42.jpg", title: "Cul-de-Sac Corner Lot Razor Edging & Concrete Driveway Line", category: "Mowing & Edging", location: "Harker Heights, TX", verified: true),
+            GalleryPhoto(id: 41, filename: "work_41.jpg", url: "./assets/gallery/work_41.jpg", title: "Duplex Residential Lawn Mowing, Sidewalk Edge & Concrete Trim", category: "Front Yard", location: "Killeen, TX", verified: true),
+            GalleryPhoto(id: 40, filename: "work_40.jpg", url: "./assets/gallery/work_40.jpg", title: "Perimeter Corner Driveway Razor Edging & Sidewalk Border", category: "Mowing & Edging", location: "Copperas Cove, TX", verified: true),
+            GalleryPhoto(id: 39, filename: "work_39.jpg", url: "./assets/gallery/work_39.jpg", title: "Arched Brick Estate Front Yard Mowing & Tree Care", category: "Front Yard", location: "Killeen, TX", verified: true),
+            GalleryPhoto(id: 38, filename: "work_38.jpg", url: "./assets/gallery/work_38.jpg", title: "Dual-Line Street Curb & Sidewalk Precision Edging", category: "Mowing & Edging", location: "Harker Heights, TX", verified: true),
+            GalleryPhoto(id: 37, filename: "work_37.jpg", url: "./assets/gallery/work_37.jpg", title: "Suburban Brick Residence Front Lawn Maintenance & Edge Cut", category: "Front Yard", location: "Belton, TX", verified: true),
+            GalleryPhoto(id: 36, filename: "work_36.jpg", url: "./assets/gallery/work_36.jpg", title: "Curved Concrete Walkway Razor Edging & Front Turf Mowing", category: "Front Yard", location: "Fort Cavazos, TX", verified: true),
+            GalleryPhoto(id: 35, filename: "work_35.jpg", url: "./assets/gallery/work_35.jpg", title: "Complete Residential Setup: Full Equipment Deployment & Front Yard Trim", category: "Front Yard", location: "Killeen, TX", verified: true),
+            GalleryPhoto(id: 34, filename: "work_34.jpg", url: "./assets/gallery/work_34.jpg", title: "Back Patio Lawn Maintenance, BBQ Area & Fence Line Detailing", category: "Back Yard", location: "Copperas Cove, TX", verified: true),
+            GalleryPhoto(id: 33, filename: "work_33.jpg", url: "./assets/gallery/work_33.jpg", title: "Modern Subdivision Sidewalk Razor Edging & Curb Trimming", category: "Mowing & Edging", location: "Harker Heights, TX", verified: true),
+            GalleryPhoto(id: 32, filename: "work_32.jpg", url: "./assets/gallery/work_32.jpg", title: "Corner Lot Precision Curb Edging & Street Line Detailing", category: "Mowing & Edging", location: "Fort Cavazos, TX", verified: true),
+            GalleryPhoto(id: 31, filename: "work_31.jpg", url: "./assets/gallery/work_31.jpg", title: "Single-Family Residential Mowing, Concrete Edging & Clean Walkway", category: "Front Yard", location: "Copperas Cove, TX", verified: true),
+            GalleryPhoto(id: 30, filename: "work_30.jpg", url: "./assets/gallery/work_30.jpg", title: "Spacious Fenced Backyard Overhaul & Clean Cut Lawn", category: "Back Yard", location: "Killeen, TX", verified: true),
+            GalleryPhoto(id: 29, filename: "work_29.jpg", url: "./assets/gallery/work_29.jpg", title: "Full Backyard Maintenance, Mature Shade Tree & Fence Perimeter", category: "Back Yard", location: "Belton, TX", verified: true),
+            GalleryPhoto(id: 28, filename: "work_28.jpg", url: "./assets/gallery/work_28.jpg", title: "Lush Green Bermuda Turf Maintenance & Solar Path Lighting Edging", category: "Front Yard", location: "Copperas Cove, TX", verified: true),
+            GalleryPhoto(id: 27, filename: "work_27.jpg", url: "./assets/gallery/work_27.jpg", title: "Professional Operations: Service Box Truck & Neighborhood Sidewalk Edging", category: "Mowing & Edging", location: "Killeen, TX", verified: true),
+            GalleryPhoto(id: 26, filename: "work_26.jpg", url: "./assets/gallery/work_26.jpg", title: "New Construction Model Home: Mowing, Blowing & Tree Mulch Ring", category: "Front Yard", location: "Harker Heights, TX", verified: true),
+            GalleryPhoto(id: 25, filename: "work_25.jpg", url: "./assets/gallery/work_25.jpg", title: "Expansive Residential Lawn Cut with Red Bagger Mower - Field View", category: "Back Yard", location: "Fort Cavazos, TX", verified: true),
+            GalleryPhoto(id: 24, filename: "work_24.jpg", url: "./assets/gallery/work_24.jpg", title: "Commercial Bagger Mower Striping & Clean Cut (POV)", category: "Back Yard", location: "Killeen, TX", verified: true),
+            GalleryPhoto(id: 23, filename: "work_23.jpg", url: "./assets/gallery/work_23.jpg", title: "Luxury Poolside Lawn Care: Perimeter Turf Mowing & Deck Edging", category: "Back Yard", location: "Belton, TX", verified: true),
+            GalleryPhoto(id: 22, filename: "work_22.jpg", url: "./assets/gallery/work_22.jpg", title: "Texas Ranch Estate: Curved Concrete Driveway, Stone Arches & Rolling Turf", category: "Front Yard", location: "Copperas Cove, TX", verified: true),
+            GalleryPhoto(id: 21, filename: "work_21.jpg", url: "./assets/gallery/work_21.jpg", title: "Sunset Luxury Estate: Curved Walkway, River Rock & White Marble Garden Bed", category: "Front Yard", location: "Harker Heights, TX", verified: true),
+            GalleryPhoto(id: 20, filename: "work_20.jpg", url: "./assets/gallery/work_20.jpg", title: "Professional String Trimming, Hedge Shaping & Tree Ring Detailing", category: "Tree Care", location: "Killeen, TX", verified: true),
+            GalleryPhoto(id: 19, filename: "work_19.jpg", url: "./assets/gallery/work_19.jpg", title: "Front Yard Lawn Service & Concrete Driveway Clean Edge Trim", category: "Front Yard", location: "Belton, TX", verified: true),
+            GalleryPhoto(id: 18, filename: "work_18.jpg", url: "./assets/gallery/work_18.jpg", title: "Street-Facing Turf Maintenance, Clean Curb Edging & Sidewalk Border", category: "Front Yard", location: "Copperas Cove, TX", verified: true),
+            GalleryPhoto(id: 17, filename: "work_17.jpg", url: "./assets/gallery/work_17.jpg", title: "Backyard Turf Striping in Progress with Commercial Mower (POV)", category: "Back Yard", location: "Harker Heights, TX", verified: true),
+            GalleryPhoto(id: 16, filename: "work_16.jpg", url: "./assets/gallery/work_16.jpg", title: "Dual-Side Sidewalk Precision Edging & Full Surface Debris Blowing", category: "Mowing & Edging", location: "Fort Cavazos, TX", verified: true),
+            GalleryPhoto(id: 15, filename: "work_15.jpg", url: "./assets/gallery/work_15.jpg", title: "Full Backyard Lawn Cut, Fence Perimeter Line & Mower Service", category: "Back Yard", location: "Killeen, TX", verified: true),
+            GalleryPhoto(id: 14, filename: "work_14.jpg", url: "./assets/gallery/work_14.jpg", title: "Crisp Driveway Edge Definition & Healthy Green Turf Mowing", category: "Front Yard", location: "Copperas Cove, TX", verified: true),
+            GalleryPhoto(id: 13, filename: "work_13.jpg", url: "./assets/gallery/work_13.jpg", title: "Perimeter Sidewalk & Curb Line Razor Edging", category: "Mowing & Edging", location: "Belton, TX", verified: true),
+            GalleryPhoto(id: 12, filename: "work_12.jpg", url: "./assets/gallery/work_12.jpg", title: "Overgrown Perimeter Hedge Trimming & Pruning Transformation (Before & After)", category: "Shrubs & Bushes", location: "Killeen, TX", verified: true),
+            GalleryPhoto(id: 11, filename: "work_11.jpg", url: "./assets/gallery/work_11.jpg", title: "Full Front Yard Mowing, Curb Edging & Clean Sidewalk Line", category: "Front Yard", location: "Harker Heights, TX", verified: true),
+            GalleryPhoto(id: 10, filename: "work_10.jpg", url: "./assets/gallery/work_10.jpg", title: "Tree Pruning, Canopy Thinning & Fresh Mulch Ring Installation", category: "Mulch", location: "Fort Cavazos, TX", verified: true),
+            GalleryPhoto(id: 9, filename: "work_9.jpg", url: "./assets/gallery/work_9.jpg", title: "Weekly Residential Maintenance & Sidewalk Trim", category: "Front Yard", location: "Copperas Cove, TX", verified: true),
+            GalleryPhoto(id: 8, filename: "work_8.jpg", url: "./assets/gallery/work_8.jpg", title: "Commercial Estate Lawn Care & Precision Street Edging", category: "Mowing & Edging", location: "Killeen, TX", verified: true),
+            GalleryPhoto(id: 7, filename: "work_7.jpg", url: "./assets/gallery/work_7.jpg", title: "Sidewalk Edge Definition & Tree Line Maintenance", category: "Tree Care", location: "Harker Heights, TX", verified: true),
+            GalleryPhoto(id: 6, filename: "work_6.jpg", url: "./assets/gallery/work_6.jpg", title: "Duplex Residential Lawn Care & Crisp Concrete Border", category: "Mowing & Edging", location: "Killeen, TX", verified: true),
+            GalleryPhoto(id: 5, filename: "work_5.jpg", url: "./assets/gallery/work_5.jpg", title: "Full Front Yard Overhaul, Clean Edging & Blowing", category: "Front Yard", location: "Copperas Cove, TX", verified: true),
+            GalleryPhoto(id: 4, filename: "work_4.jpg", url: "./assets/gallery/work_4.jpg", title: "Hedge Trimming, Shrub Shaping & Overgrowth Clearing with ECHO HC-2020 Trimmer", category: "Shrubs & Bushes", location: "Killeen, TX", verified: true),
+            GalleryPhoto(id: 3, filename: "work_3.jpg", url: "./assets/gallery/work_3.jpg", title: "Neighborhood Sidewalk Razor Edging & Perimeter Detailing", category: "Mowing & Edging", location: "Harker Heights, TX", verified: true),
+            GalleryPhoto(id: 2, filename: "work_2.jpg", url: "./assets/gallery/work_2.jpg", title: "Precision Concrete Driveway Razor Edging & Front Turf", category: "Front Yard", location: "Killeen, TX", verified: true),
+            GalleryPhoto(id: 1, filename: "work_1.jpg", url: "./assets/gallery/work_1.jpg", title: "Front Yard Clean Mowing, Razor Edging & Fresh Mulch Tree Ring", category: "Front Yard", location: "Copperas Cove, TX", verified: true)
         ]
 
         settings = WebSettings(
@@ -882,19 +920,36 @@ class LawnCareStore: ObservableObject {
 
     @MainActor
     func fetchGallery() async {
-        guard let url = URL(string: "\(cleanURL)/api/gallery") else { return }
-        do {
-            var req = URLRequest(url: url)
-            req.timeoutInterval = 8
-            let (data, resp) = try await URLSession.shared.data(for: req)
-            if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
-                let decoded = try JSONDecoder().decode(GalleryResponse.self, from: data)
-                if !decoded.gallery.isEmpty {
-                    self.gallery = decoded.gallery
+        // 1. Try /api/gallery
+        if let url = URL(string: "\(cleanURL)/api/gallery") {
+            do {
+                var req = URLRequest(url: url)
+                req.timeoutInterval = 8
+                let (data, resp) = try await URLSession.shared.data(for: req)
+                if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
+                    let decoded = try JSONDecoder().decode(GalleryResponse.self, from: data)
+                    if !decoded.gallery.isEmpty {
+                        self.gallery = decoded.gallery
+                        return
+                    }
                 }
-            }
-        } catch {
-            // Keep cache
+            } catch {}
+        }
+
+        // 2. Fallback to direct /gallery.json
+        if let fallbackURL = URL(string: "\(cleanURL)/gallery.json") {
+            do {
+                var req = URLRequest(url: fallbackURL)
+                req.timeoutInterval = 8
+                let (data, resp) = try await URLSession.shared.data(for: req)
+                if let http = resp as? HTTPURLResponse, http.statusCode == 200 {
+                    let items = try JSONDecoder().decode([GalleryPhoto].self, from: data)
+                    if !items.isEmpty {
+                        self.gallery = items
+                        return
+                    }
+                }
+            } catch {}
         }
     }
 

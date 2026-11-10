@@ -94,7 +94,7 @@ const HTML_TROLL_BANNER = `<!--
 
 async function syncLiveMobileUploads() {
     console.log('\n[0/4] Checking and Syncing Live Mobile Uploads from Cloud...');
-    
+
     // 1. Sync Gallery Items
     await new Promise((resolve) => {
         const req = https.get('https://rodriguezlawncare.xyz/api/gallery', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 4000 }, (res) => {
@@ -138,7 +138,7 @@ async function syncLiveMobileUploads() {
                                     added++;
                                 }
                             }
-                        } catch (e) {}
+                        } catch (e) { }
                     }
 
                     localItems.sort((a, b) => (b.id || 0) - (a.id || 0));
