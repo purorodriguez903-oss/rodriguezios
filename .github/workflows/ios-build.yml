@@ -51,7 +51,18 @@ jobs:
           VER_NUM=$(python3 -c "import json; print(json.load(open('cloud_config.json')).get('app_version', '2.7.0'))")
           echo "Building distribution for Version $VER_NUM Build $BUILD_NUM"
           
-          rm -rf "ultima actu" "RodriguezLawnCareIosAPP/ultima actu" "ipa online" "RodriguezLawnCareIosAPP/ipa online" "ipa here" "RodriguezLawnCareIosAPP/ipa here" "ipa nuevo" "RodriguezLawnCareIosAPP/ipa nuevo"
+          rm -rf "ultima actu" "RodriguezLawnCareIosAPP/ultima actu" "ipa online" "RodriguezLawnCareIosAPP/ipa online" "ipa here" "RodriguezLawnCareIosAPP/ipa here" "ipa nuevo" "RodriguezLawnCareIosAPP/ipa nuevo" "version ultima" "RodriguezLawnCareIosAPP/version ultima"
+          mkdir -p "version ultima"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "version ultima/RodriguezLawnCare_version_ultima_${BUILD_NUM}.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "version ultima/RodriguezLawnCare_version_ultima_xd_${BUILD_NUM}.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "version ultima/rodriguezlawncareios.ipa"
+          echo "ESTA ES LA ÚLTIMA VERSIÓN COMPILADA: RodriguezLawnCare_version_ultima_${BUILD_NUM}.ipa (Build ${BUILD_NUM})" > "version ultima/LEEME_CUAL_INSTALAR.txt"
+          
+          mkdir -p "RodriguezLawnCareIosAPP/version ultima"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/version ultima/RodriguezLawnCare_version_ultima_${BUILD_NUM}.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/version ultima/RodriguezLawnCare_version_ultima_xd_${BUILD_NUM}.ipa"
+          cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "RodriguezLawnCareIosAPP/version ultima/rodriguezlawncareios.ipa"
+          
           mkdir -p "ultima actu"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ultima actu/RodriguezLawnCare_version_ultima_xd_${BUILD_NUM}.ipa"
           cp RodriguezLawnCareIosAPP/rodriguezlawncareios-unsigned.ipa "ultima actu/RodriguezLawnCare_v${VER_NUM}_Build${BUILD_NUM}.ipa"
@@ -102,8 +113,8 @@ jobs:
           VER_NUM=$(python3 -c "import json; print(json.load(open('cloud_config.json')).get('app_version', '2.7.0'))")
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add "ultima actu/" "RodriguezLawnCareIosAPP/ultima actu/" "ipa online/" "RodriguezLawnCareIosAPP/ipa online/" "ipa here/" "RodriguezLawnCareIosAPP/ipa here/" "ipa nuevo/" "RodriguezLawnCareIosAPP/ipa nuevo/"
-          git commit -m "Automated build: Update IPAs in 'ultima actu' and 'ipa online' (v${VER_NUM} Build ${BUILD_NUM}) [skip ci]" || echo "No changes to commit"
+          git add "version ultima/" "RodriguezLawnCareIosAPP/version ultima/" "ultima actu/" "RodriguezLawnCareIosAPP/ultima actu/" "ipa online/" "RodriguezLawnCareIosAPP/ipa online/" "ipa here/" "RodriguezLawnCareIosAPP/ipa here/" "ipa nuevo/" "RodriguezLawnCareIosAPP/ipa nuevo/"
+          git commit -m "Automated build: Update IPAs in 'version ultima' and distribution folders (v${VER_NUM} Build ${BUILD_NUM}) [skip ci]" || echo "No changes to commit"
           git push origin main
 
       - name: Upload IPA Artifact

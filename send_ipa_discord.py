@@ -26,6 +26,11 @@ if os.path.exists(cloud_cfg_path):
         pass
 
 IPA_CANDIDATES = [
+    os.path.join(BASE_DIR, "version ultima", f"RodriguezLawnCare_version_ultima_{build_num}.ipa"),
+    os.path.join(BASE_DIR, "version ultima", f"RodriguezLawnCare_version_ultima_xd_{build_num}.ipa"),
+    os.path.join(BASE_DIR, "version ultima", "rodriguezlawncareios.ipa"),
+    os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "version ultima", f"RodriguezLawnCare_version_ultima_{build_num}.ipa"),
+    os.path.join(BASE_DIR, "RodriguezLawnCareIosAPP", "version ultima", f"RodriguezLawnCare_version_ultima_xd_{build_num}.ipa"),
     os.path.join(BASE_DIR, "ultima actu", f"RodriguezLawnCare_version_ultima_xd_{build_num}.ipa"),
     os.path.join(BASE_DIR, "ultima actu", f"RodriguezLawnCare_v{version_str}_Build{build_num}.ipa"),
     os.path.join(BASE_DIR, "ultima actu", "rodriguezlawncareios.ipa"),
@@ -58,7 +63,7 @@ if not ipa_file_path:
     print("ERROR: Could not find any valid IPA file to upload!")
     sys.exit(1)
 
-file_name_display = f"RodriguezLawnCare_version_ultima_xd_{build_num}.ipa"
+file_name_display = f"RodriguezLawnCare_version_ultima_{build_num}.ipa"
 
 file_size_bytes = os.path.getsize(ipa_file_path)
 file_size_mb = file_size_bytes / (1024 * 1024)
@@ -77,10 +82,14 @@ async def main():
     print(f"Target channel found: #{getattr(channel, 'name', channel.id)} (ID: {channel.id})")
     
     embed = discord.Embed(
-        title="🌿 Rodriguez Lawn Care • Nueva Versión iOS IPA Compilada",
+        title=f"🚀 Rodriguez Lawn Care • Versión Última (Build {build_num})",
         description=(
-            "**¡Tu aplicación iOS está lista para instalar!**\n\n"
-            "Puedes instalar este archivo `.ipa` directamente en tu iPhone usando **GBox**, **Scarlet**, **TrollStore**, **AltStore** o **Sideloadly** sin necesidad de computadora."
+            "**¡TU APLICACIÓN ESTÁ ACTUALIZADA Y LISTA PARA INSTALAR!**\n\n"
+            f"✅ **Archivo nuevo**: `{file_name_display}`\n"
+            f"✅ **Aviso de actualización eliminado**: ya sincronizado a Build {build_num}, no volverá a salirte el cartel de actualizar.\n"
+            "✅ **Nombre oficial**: `Rodriguez Lawn Care` en la pantalla de inicio.\n"
+            "✅ **Ubicación en repo**: Guardado en la carpeta `version ultima/`.\n\n"
+            "Puedes instalar este archivo `.ipa` directamente en tu iPhone usando **GBox**, **Scarlet**, **TrollStore** o **ESign**."
         ),
         color=0x22C55E
     )
