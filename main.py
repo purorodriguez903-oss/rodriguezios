@@ -3708,14 +3708,6 @@ async def handle_api_publish_promo(request):
         return cors_json_response({"success": True, "promo": new_active, "history": promos.get("history", [])})
     except Exception as e:
         return cors_json_response({"success": False, "error": str(e)}, status=400)
-            "duration_hours": duration_hours,
-            "expires_at": now + (duration_hours * 3600)
-        }
-        promos["active"] = new_active
-        save_promotions(promos)
-        return cors_json_response({"success": True, "promo": new_active, "history": promos.get("history", [])})
-    except Exception as e:
-        return cors_json_response({"success": False, "error": str(e)}, status=400)
 
 async def handle_api_deactivate_promo(request):
     """Deactivates active promo and moves it to history."""
